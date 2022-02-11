@@ -1,4 +1,4 @@
 from . import optimize
 
 # These modules are part of the public interface.
-__all__ = ['optimize']
+__all__ = ['optimize', 'acquisition_scheme']

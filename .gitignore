@@ -1,2 +1,4 @@
 /.idea
 /venv
+/MICROtool.egg-info
+*.pyc

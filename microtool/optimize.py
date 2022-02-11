@@ -27,7 +27,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], noise_var: float) -> flo
     :param noise_var: Noise variance.
     :return: Estimated total weighted parameter variance.
     """
-    # Calculate the Fisher information matrix on the rescaled Jabocian. The Cramer-Rao lower bound on parameter variance
+    # Calculate the Fisher information matrix on the rescaled Jacobian. The Cramer-Rao lower bound on parameter variance
     # is the inverse of the information matrix. A properly scaled matrix gives an interpretable condition number and a
     # more robust inverse.
     information = fisher_information(jac * scales, noise_var)
