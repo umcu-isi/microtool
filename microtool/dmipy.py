@@ -10,6 +10,9 @@ from microtool.tissue_model import DiffusionModel
 
 @dataclass
 class TissueParameter:
+    """
+    Defines a dmipy scalar tissue parameter and its properties.
+    """
     model: str
     name: str
     scalar: bool
@@ -18,15 +21,17 @@ class TissueParameter:
     scale: float
 
 
-def get_parameters(tissue_model: MultiCompartmentModel) -> List[TissueParameter]:
+def get_parameters(diffusion_model: MultiCompartmentModel) -> List[TissueParameter]:
     """
     Compiles a list of all tissue parameters present in the given multi-compartment model.
 
-    :param tissue_model: A dmipy multi-compartment model.
+    :param diffusion_model: A dmipy multi-compartment model.
     :return: A list with tissue parameters.
     """
+    # Iterate over all tissue models in the MultiCompartmentModel.
     parameters = []
-    for model, model_name in zip(tissue_model.models, tissue_model.model_names):
+    for model, model_name in zip(diffusion_model.models, diffusion_model.model_names):
+        # Iterate over all scalar and vector parameters in the tissue model.
         for parameter_name in model.parameter_names:
             value = np.array(getattr(model, parameter_name), dtype=np.float64, copy=True)
             scale = model.parameter_scales[parameter_name]
@@ -35,7 +40,7 @@ def get_parameters(tissue_model: MultiCompartmentModel) -> List[TissueParameter]
             if value is None:
                 raise ValueError(f'Parameter {parameter_name} of model {model_name} has no value.')
 
-            # Iterate over tissue parameter vectors.
+            # Iterate over vector parameters and add their elements as scalar tissue parameters.
             for i in range(cardinality):
                 parameters.append(
                     TissueParameter(
@@ -54,10 +59,13 @@ def get_parameters(tissue_model: MultiCompartmentModel) -> List[TissueParameter]
 class DmipyDiffusionModel(DiffusionModel):
     """
     Wraps a dmipy MultiCompartmentModel as a MICROtool DiffusionModel.
+
+    :param diffusion_model: A dmipy MultiCompartmentModel
     """
     def __init__(self, diffusion_model: MultiCompartmentModel):
         super().__init__()
 
+        # Extract the scalar tissue parameters.
         self._diffusion_model = diffusion_model
         self._parameters = get_parameters(diffusion_model)
 

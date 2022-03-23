@@ -9,7 +9,7 @@ def fisher_information(jac: np.ndarray, noise_var: float) -> np.ndarray:
     This is the sum of the matrices of squared gradients, for all samples, divided by the noise variance.
     See equation A2 in Alexander, 2008 (DOI 0.1002/mrm.21646)
 
-    :param jac: An n×m Jacobian matrix, where n is the number of samples and m is the number of parameters.
+    :param jac: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
     :param noise_var: Noise variance.
     :return: The m×m information matrix.
     """
@@ -22,7 +22,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], noise_var: float) -> flo
     Objective function for minimizing the total parameter variance (Cramer-Rao lower bounds), as defined in Alexander,
     2008 (DOI 0.1002/mrm.21646)
 
-    :param jac: An n×m Jacobian matrix, where n is the number of samples and m is the number of parameters.
+    :param jac: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
     :param scales: An array with m parameter scales.
     :param noise_var: Noise variance.
     :return: Estimated total weighted parameter variance.

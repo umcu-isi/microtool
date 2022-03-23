@@ -1,11 +1,19 @@
-from typing import Union, List, Tuple, NamedTuple, Dict
+import warnings
+from dataclasses import dataclass
+from os import PathLike
+from typing import Union, List, Tuple, Dict
 
 import numpy as np
+from pathlib import Path
 
 from microtool.tissue_model import TissueModel
 
 
-class AcquisitionParameters(NamedTuple):
+@dataclass
+class AcquisitionParameters:
+    """
+    Defines a series of MR acquisition parameter values, such as a series of b-values.
+    """
     values: np.ndarray
     unit: str
     scale: float
@@ -13,13 +21,17 @@ class AcquisitionParameters(NamedTuple):
 
 
 class AcquisitionScheme:
+    """
+    Base-class for MR acquisition schemes.
+
+    :param parameters: A dictionary with AcquisitionParameters. Try to stick to BIDS nomenclature for the parameter
+     keys.
+    :raise ValueError: Lists have unequal length.
+    """
     _parameters: Dict[str, AcquisitionParameters]
     _parameter_matrix: np.ndarray
 
     def __init__(self, parameters: Dict[str, AcquisitionParameters]):
-        """
-        Try to stick to BIDS nomenclature.
-        """
         # Copy the acquisition parameter values into one matrix. This will raise a ValueError in case the value
         # arrays/lists are inhomogeneous.
         self._parameter_matrix = np.array([val.values for val in parameters.values()], dtype=np.float64).T
@@ -40,29 +52,47 @@ class AcquisitionScheme:
         return f'Acquisition scheme with {n} measurements and {m} parameters: {parameter_names}'
 
     def __call__(self, model: TissueModel) -> np.ndarray:
+        """
+        Calculates the signal attenuation for all measurements in this acquisition scheme as a function of the tissue
+        model.
+
+        :param model: a TissueModel defining the MR tissue properties.
+        :return: An array with signal attenuation values.
+        """
         raise NotImplementedError
 
     def model_jacobian(self, model: TissueModel) -> np.ndarray:
+        """
+        Calculates the change in signal attenuation for all measurements in this acquisition scheme due to a change in
+        the tissue model parameters.
+
+        :param model: a TissueModel defining the MR tissue properties.
+        :return: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
+        """
         raise NotImplementedError
 
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
+    """
+    Defines a diffusion MR acquisition scheme.
+
+    :param b_values: A list or numpy array of b-values in s/mm².
+    :param b_vectors: A list or numpy array of direction cosines.
+    :param pulse_widths: A list or numpy array of pulse widths δ in seconds.
+    :param pulse_intervals: A list or numpy array of pulse intervals Δ in seconds.
+    :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
+    """
     def __init__(self,
                  b_values: Union[List[float], np.ndarray],
                  b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray]):
-        """
-        Creates a MICROtool acquisition scheme.
-
-        :param b_values: A list or numpy array of b-values in s/mm².
-        :param b_vectors: A list or numpy array of direction cosines.
-        :param pulse_widths: A list or numpy array of pulse widths δ in seconds.
-        :param pulse_intervals: A list or numpy array of pulse intervals Δ in seconds.
-        """
-        # Normalize the gradient directions and calculate the spherical coordinates.
+        # Check if the b-vectors are unit vectors.
         b_vectors = np.asarray(b_vectors, dtype=np.float64)
-        b_vectors *= 1 / np.linalg.norm(b_vectors, axis=1).reshape(-1, 1)
+        if not np.allclose(np.linalg.norm(b_vectors, axis=1), 1):
+            raise ValueError('b-vectors are not unit vectors.')
+
+        # Calculate the spherical angles φ and θ.
         phi = np.arctan2(b_vectors[:, 1], b_vectors[:, 0])
         theta = np.arccos(b_vectors[:, 2])
 
@@ -78,7 +108,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         Returns the pulse b-values.
 
-        :return: b-values in s/mm².
+        :return: An array of N b-values in s/mm².
         """
         return self._parameters['DiffusionBValue'].values
 
@@ -86,7 +116,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         Returns the pulse gradient direction angles φ.
 
-        :return: angles in radians.
+        :return: An array of N angles in radians.
         """
         return self._parameters['DiffusionGradientAnglePhi'].values
 
@@ -94,7 +124,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         Returns the pulse gradient direction angles θ.
 
-        :return: angles in radians.
+        :return: An array of N angles in radians.
         """
         return self._parameters['DiffusionGradientAngleTheta'].values
 
@@ -102,7 +132,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         Returns the pulse durations δ.
 
-        :return: Pulse widths in seconds.
+        :return: An array of N pulse widths in seconds.
         """
         return self._parameters['DiffusionPulseWidth'].values
 
@@ -110,7 +140,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         Returns the pulse intervals Δ.
 
-        :return: Pulse interval in seconds.
+        :return: An array of N pulse intervals in seconds.
         """
         return self._parameters['DiffusionPulseInterval'].values
 
@@ -119,7 +149,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         Returns the gradient magnitude of the pulses. Assumes b = γ² G² δ² (Δ - δ/3).
 
-        :return: Gradient magnitudes in mT/m.
+        :return: An array of N gradient magnitudes in mT/m.
         """
         b_values = self.get_b_values() * 1e3  # Convert from s/mm² to s/m².
         pulse_widths = self.get_pulse_widths()  # s
@@ -132,16 +162,30 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         )
 
     def get_b_vectors(self) -> np.ndarray:
+        """
+        Calculates the b-vectors.
+
+        :return: An N×3 array of direction cosines.
+        """
         phi = self._parameters['DiffusionGradientAnglePhi'].values
         theta = self._parameters['DiffusionGradientAngleTheta'].values
         sin_theta = np.sin(theta)
         return np.array([sin_theta * np.cos(phi), sin_theta * np.sin(phi), np.cos(theta)]).T
 
-    def write_bval(self, file):
+    def write_bval(self, file: Union[str, bytes, PathLike]):
         """
         Writes b-values to an FSL [*_]dwi.bval file.
         """
-        raise NotImplementedError("Yet to be implemented.")
+        # An ASCII text file containing a list of b values applied during each volume acquisition. The b values are
+        # assumed to be in s/mm² units. The order of entries in this file must match the order of volumes in the input
+        # data and entries in the gradient directions text file. The format is: b_1 b_2 b_3 ... b_n
+        file = Path(file)
+        if not file.name.endswith('_dwi.bval') and not file.name == 'dwi.bval':
+            warnings.warn('BIDS specifies that FSL b-value files should be named like: [*_]dwi.bval')
+
+        with file.open('w', encoding='latin-1', newline='\n') as f:
+            bval = self.get_b_values()
+            f.write(' '.join(f'{x:.6e}' for x in bval))
 
     def write_bvec(self, file):
         """
@@ -155,7 +199,13 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         # [*_]dwi.bvec specification, the coordinate system of the b vectors MUST be defined with respect to the
         # coordinate system defined by the header of the corresponding _dwi NIfTI file and not the scanner's device
         # coordinate system.
-        raise NotImplementedError("Yet to be implemented.")
+        file = Path(file)
+        if not file.name.endswith('_dwi.bvec') and not file.name == 'dwi.bvec':
+            warnings.warn('BIDS specifies that FSL b-vector files should be named like: [*_]dwi.bvec')
+
+        with file.open('w', encoding='latin-1', newline='\n') as f:
+            for bvec in self.get_b_vectors():
+                f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
     def __call__(self, model: TissueModel) -> np.ndarray:
         b_values = self.get_b_values()
@@ -173,14 +223,23 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
+    """
+    Defines an inversion-recovery MR acquisition scheme. Rather than varying TR to achieve different T1 weightings,
+    Mulkern et al. (2000) incorporate an inversion pulse prior to the 90° pulse in the diffusion-weighted SE sequence
+    for simultaneous D-T1 measurement.
+
+    See section 7.4.2 of 'Advanced Diffusion Encoding Methods in MRI', Topgaard D, editor (2020):
+    https://www.ncbi.nlm.nih.gov/books/NBK567564
+
+    :param repetition_times: A list or numpy array of repetition times TR in seconds.
+    :param echo_times: A list or numpy array of echo times TE in seconds.
+    :param inversion_times: A list or numpy array of inversion times TI in seconds.
+    :raise ValueError: Lists have unequal length.
+    """
     def __init__(self,
                  repetition_times: Union[List[float], np.ndarray],
                  echo_times: Union[List[float], np.ndarray],
                  inversion_times: Union[List[float], np.ndarray]):
-        """
-        Rather than varying TR to achieve different T1 weightings, Mulkern et al. (2000) incorporate an inversion pulse
-        prior to the 90° pulse in the diffusion-weighted SE sequence for simultaneous D-T1 measurement.
-        """
         super().__init__({
             'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='s', scale=1, fixed=False),
             'EchoTime': AcquisitionParameters(values=echo_times, unit='s', scale=1, fixed=False),
@@ -191,7 +250,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         """
         Returns repetition times.
 
-        :return: repetition times in seconds.
+        :return: An array of N repetition times in seconds.
         """
         return self._parameters['RepetitionTimeExcitation'].values
 
@@ -199,7 +258,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         """
         Returns the echo times.
 
-        :return: echo times in seconds.
+        :return: An array of N echo times in seconds.
         """
         return self._parameters['EchoTime'].values
 
@@ -207,19 +266,11 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         """
         Returns the inversion times.
 
-        :return: inversion times in seconds.
+        :return: An array of N inversion times in seconds.
         """
         return self._parameters['InversionTime'].values
 
     def __call__(self, model: TissueModel) -> np.ndarray:
-        """
-        Simulates the acquisition scheme for the given tissue model: S(t1, t2)
-
-        See section 7.4.2 of 'Advanced Diffusion Encoding Methods in MRI', Topgaard D, editor (2020):
-        https://www.ncbi.nlm.nih.gov/books/NBK567564/#ch7.deq4
-
-        :return: Signal attenuation vector.
-        """
         if model.t1 is None:
             raise ValueError('The tissue model does not define a T1.')
         if model.t2 is None:
@@ -240,6 +291,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         tr_t1 = np.exp(-tr / model.t1)
         te_t2 = np.exp(-te / model.t2)
 
+        # Calculate the derivative of the signal attenuation to T1 and to T2.
         return np.array([
             (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (model.t1 ** 2),  # δS(t1, t2) / δt1
             te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (model.t2 ** 2)  # δS(t1, t2) / δt2
