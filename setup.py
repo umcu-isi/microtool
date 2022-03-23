@@ -14,7 +14,7 @@ setuptools.setup(
         "Development Status :: 2 - Pre-Alpha"
     ],
     python_requires='>=3.8',
-    install_requires=['numpy'],
+    install_requires=['numpy', 'scipy'],
     extras_require={
         'dmipy support': ['dmipy']
     }
