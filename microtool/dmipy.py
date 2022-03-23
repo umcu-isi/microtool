@@ -20,6 +20,10 @@ class TissueParameter:
     value: float
     scale: float
 
+    def __str__(self):
+        index = '' if self.scalar else f' ({self.index})'
+        return f'{self.model}, {self.name}{index}: {self.value}'
+
 
 def get_parameters(diffusion_model: MultiCompartmentModel) -> List[TissueParameter]:
     """
@@ -92,7 +96,7 @@ class DmipyDiffusionModel(DiffusionModel):
                  b_values: np.ndarray,
                  b_vectors: np.ndarray,
                  pulse_widths: np.ndarray,
-                 pulse_intervals: np.ndarray):
+                 pulse_intervals: np.ndarray) -> np.ndarray:
         # Create a dmipy acquisition scheme. Convert b-values from s/mm² to s/m².
         acquisition_scheme = acquisition_scheme_from_bvalues(b_values * 1e6, b_vectors, pulse_widths, pulse_intervals)
 
@@ -104,3 +108,12 @@ class DmipyDiffusionModel(DiffusionModel):
         jac = (differences * self._reciprocal_h).T
 
         return jac
+
+    def get_scales(self) -> np.ndarray:
+        return np.array([p.scale for p in self._parameters])
+
+    def __str__(self) -> str:
+        n = len(self._diffusion_model.models)
+        m = len(self._parameters)
+        parameters = '\n'.join(f'    {p}' for p in self._parameters)
+        return f'Wrapped dmipy diffusion model with {n} compartments and {m} scalar parameters:\n{parameters}'

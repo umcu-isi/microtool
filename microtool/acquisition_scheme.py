@@ -19,6 +19,11 @@ class AcquisitionParameters:
     scale: float
     fixed: bool
 
+    def __str__(self):
+        values = ', '.join(str(x) for x in self.values)
+        fixed = ' (fixed parameter)' if self.fixed else ''
+        return f'{values} {self.unit}{fixed}'
+
 
 class AcquisitionScheme:
     """
@@ -34,22 +39,22 @@ class AcquisitionScheme:
     def __init__(self, parameters: Dict[str, AcquisitionParameters]):
         # Copy the acquisition parameter values into one matrix. This will raise a ValueError in case the value
         # arrays/lists are inhomogeneous.
-        self._parameter_matrix = np.array([val.values for val in parameters.values()], dtype=np.float64).T
+        self._parameter_matrix = np.array([val.values for val in parameters.values()], dtype=np.float64)
 
         # Create a new dictionary with parameter values pointing to the _parameter_matrix.
         self._parameters = {
             key: AcquisitionParameters(
-                values=self._parameter_matrix[:, i],
+                values=self._parameter_matrix[i],
                 unit=parameters[key].unit,
                 scale=parameters[key].scale,
                 fixed=False
             ) for i, key in enumerate(parameters.keys())
         }
 
-    def __str__(self):
-        n, m = self._parameter_matrix.shape
-        parameter_names = {key for key in self._parameters.keys()}
-        return f'Acquisition scheme with {n} measurements and {m} parameters: {parameter_names}'
+    def __str__(self) -> str:
+        m, n = self._parameter_matrix.shape
+        parameters = '\n'.join(f'    {key}: {value}' for key, value in self._parameters.items())
+        return f'Acquisition scheme with {n} measurements and {m} scalar parameters:\n{parameters}'
 
     def __call__(self, model: TissueModel) -> np.ndarray:
         """
@@ -70,6 +75,37 @@ class AcquisitionScheme:
         :return: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
         """
         raise NotImplementedError
+
+    def model_scales(self, model: TissueModel) -> np.ndarray:
+        """
+        Returns the parameter scales of the relevant tissue parameters.
+
+        :param model: a TissueModel defining the MR tissue properties.
+        :return: An array with M parameter scales.
+        """
+        raise NotImplementedError
+
+    def get_free_parameters(self):
+        """
+        Returns the free acquisition parameters as an M×N matrix, where M is the number of parameters and N is the
+        number of measurements in the acquisition scheme.
+
+        :return: An M×N matrix with acquisition parameters.
+        """
+        mask = np.array([not p.fixed for p in self._parameters.values()])
+        return self._parameter_matrix[mask]
+
+    def set_free_parameters(self, parameters: np.ndarray) -> None:
+        """
+        Sets the free acquisition parameters from an M×N matrix, where M is the number of parameters and N is the
+        number of measurements in the acquisition scheme. The M×N matrix may be flattened.
+
+        :param parameters: An M×N matrix with acquisition parameters.
+        """
+        m, n = self._parameter_matrix.shape
+        mask = np.array([not p.fixed for p in self._parameters.values()])
+        mask = np.broadcast_to(mask, [n, m]).T
+        np.place(self._parameter_matrix, mask, parameters)
 
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
@@ -172,7 +208,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         sin_theta = np.sin(theta)
         return np.array([sin_theta * np.cos(phi), sin_theta * np.sin(phi), np.cos(theta)]).T
 
-    def write_bval(self, file: Union[str, bytes, PathLike]):
+    def write_bval(self, file: Union[str, bytes, PathLike]) -> None:
         """
         Writes b-values to an FSL [*_]dwi.bval file.
         """
@@ -187,7 +223,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             bval = self.get_b_values()
             f.write(' '.join(f'{x:.6e}' for x in bval))
 
-    def write_bvec(self, file):
+    def write_bvec(self, file) -> None:
         """
         Writes b-vectors to an FSL [*_]dwi.bvec file.
         """
@@ -220,6 +256,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         pulse_widths = self.get_pulse_widths()
         pulse_intervals = self.get_pulse_intervals()
         return model.diffusion_model.jacobian(b_values, b_vectors, pulse_widths, pulse_intervals)
+
+    def model_scales(self, model: TissueModel) -> np.ndarray:
+        return model.diffusion_model.get_scales()
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
@@ -296,3 +335,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
             (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (model.t1 ** 2),  # δS(t1, t2) / δt1
             te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (model.t2 ** 2)  # δS(t1, t2) / δt2
         ]).T
+
+    def model_scales(self, model: TissueModel) -> np.ndarray:
+        # Use the T1 and T2 parameter values as scale.
+        return np.array([model.t1, model.t2])

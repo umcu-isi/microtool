@@ -42,6 +42,14 @@ class DiffusionModel:
         """
         raise NotImplementedError()
 
+    def get_scales(self) -> np.ndarray:
+        """
+        Returns the parameter scales of the diffusion parameters.
+
+        :return: An array with parameter scales.
+        """
+        raise NotImplementedError()
+
 
 @dataclass
 class TissueModel:
