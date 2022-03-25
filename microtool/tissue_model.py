@@ -51,11 +51,21 @@ class DiffusionModel:
         raise NotImplementedError()
 
 
+# TODO: Take T2* and relaxation parameter distributions into account. See eq. 5 and 6 in
+#  https://www.ncbi.nlm.nih.gov/books/NBK567564/
+# TODO: Specify fixed tissue parameters? Or let the AcquisitionScheme deal with that?
 @dataclass
 class TissueModel:
+    # noinspection PyUnresolvedReferences
     """
-    Defines a tissue by T1 and T2 relaxation parameters and/or an MR diffusion model.
+    Defines a tissue by relaxation parameters and/or an MR diffusion model.
+
+    :param s0: MR signal from fully recovered magnetisation, just before the 90° RF pulse.
+    :param t1: Longitudinal relaxation time constant T1 in seconds.
+    :param t2: Transverse relaxation time constant T2 in seconds.
+    :param diffusion_model: A DiffusionModel that describes diffusion MR tissue properties.
     """
+    s0: float = 1.0
     t1: Optional[float] = None
     t2: Optional[float] = None
     diffusion_model: Optional[DiffusionModel] = None

@@ -1,10 +1,11 @@
 setuptools  # Packaging and installation
-numpy  # Requirement for MICROtool
 
-scipy  # Optimization routines
+numpy  # Requirement for MICROtool
+scipy  # Requirement for MICROtool
+
+dmipy  # Optional requirement for MICROtool
+numba  # Optional though preferred requirement for dmipy
+pathos  # Optional though preferred requirement for dmipy
+
 notebook  # Provides Jupyter Notebook
 matplotlib  # Plotting
-
-dmipy
-numba  # Preferred for DMIpy
-pathos  # Preferred for DMIpy

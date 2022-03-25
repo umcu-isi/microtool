@@ -10,8 +10,16 @@ from microtool.tissue_model import DiffusionModel
 
 @dataclass
 class TissueParameter:
+    # noinspection PyUnresolvedReferences
     """
     Defines a dmipy scalar tissue parameter and its properties.
+
+    :param model: The name of the dmipy model that the parameter belongs to.
+    :param name: The name of the dmipy parameter.
+    :param scalar: True for scalar parameters, False if the parameter is part of a vector.
+    :param index: The position in the vector.
+    :param value: Parameter value.
+    :param scale: The typical parameter value scale (order of magnitude).
     """
     model: str
     name: str

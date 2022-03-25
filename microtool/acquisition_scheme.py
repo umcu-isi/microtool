@@ -1,7 +1,7 @@
 import warnings
 from dataclasses import dataclass
 from os import PathLike
-from typing import Union, List, Tuple, Dict
+from typing import Union, List, Tuple, Dict, Optional
 
 import numpy as np
 from pathlib import Path
@@ -9,15 +9,26 @@ from pathlib import Path
 from microtool.tissue_model import TissueModel
 
 
+# TODO: Linear constraints? For example: Δ > δ  and TR > TI + TE
 @dataclass
 class AcquisitionParameters:
+    # noinspection PyUnresolvedReferences
     """
-    Defines a series of MR acquisition parameter values, such as a series of b-values.
+    Defines a series of N MR acquisition parameter values, such as a series of b-values.
+
+    :param values: A numpy array with N parameter values.
+    :param unit: The parameter unit as a string, e.g. 's/mm²'.s
+    :param scale: The typical parameter value scale (order of magnitude).
+    :param lower_bound: Lower constraint. None is used to specify no bound. Default: 0.
+    :param upper_bound: Upper constraint. None is used to specify no bound. Default: None.
+    :param fixed: Boolean indicating if the parameter is considered fixed or not (default: false).
     """
     values: np.ndarray
     unit: str
     scale: float
-    fixed: bool
+    lower_bound: Optional[float] = 0.0
+    upper_bound: Optional[float] = None
+    fixed: bool = False
 
     def __str__(self):
         values = ', '.join(str(x) for x in self.values)
@@ -25,6 +36,7 @@ class AcquisitionParameters:
         return f'{values} {self.unit}{fixed}'
 
 
+# TODO: Add function to check if all required tissue parameters are present.
 class AcquisitionScheme:
     """
     Base-class for MR acquisition schemes.
@@ -47,7 +59,9 @@ class AcquisitionScheme:
                 values=self._parameter_matrix[i],
                 unit=parameters[key].unit,
                 scale=parameters[key].scale,
-                fixed=False
+                lower_bound=parameters[key].lower_bound,
+                upper_bound=parameters[key].upper_bound,
+                fixed=parameters[key].fixed
             ) for i, key in enumerate(parameters.keys())
         }
 
@@ -76,7 +90,7 @@ class AcquisitionScheme:
         """
         raise NotImplementedError
 
-    def model_scales(self, model: TissueModel) -> np.ndarray:
+    def get_model_scales(self, model: TissueModel) -> np.ndarray:
         """
         Returns the parameter scales of the relevant tissue parameters.
 
@@ -93,7 +107,7 @@ class AcquisitionScheme:
         :return: An M×N matrix with acquisition parameters.
         """
         mask = np.array([not p.fixed for p in self._parameters.values()])
-        return self._parameter_matrix[mask]
+        return self._parameter_matrix[mask].ravel()
 
     def set_free_parameters(self, parameters: np.ndarray) -> None:
         """
@@ -106,6 +120,26 @@ class AcquisitionScheme:
         mask = np.array([not p.fixed for p in self._parameters.values()])
         mask = np.broadcast_to(mask, [n, m]).T
         np.place(self._parameter_matrix, mask, parameters)
+
+    def get_free_parameter_scales(self) -> np.ndarray:
+        """
+        Returns the bounds on the free tissue parameters.
+
+        :return: A list of M×N (min, max) pairs, where M is the number of parameters and N is the
+         number of measurements in the acquisition scheme. . None is used to specify no bound.
+        """
+        m, n = self._parameter_matrix.shape
+        return np.array([p.scale for p in self._parameters.values() if not p.fixed for _ in range(n)])
+
+    def get_free_parameter_bounds(self) -> List[Tuple[Optional[float], Optional[float]]]:
+        """
+        Returns the bounds on the free tissue parameters.
+
+        :return: A list of M×N (min, max) pairs, where M is the number of parameters and N is the
+         number of measurements in the acquisition scheme. . None is used to specify no bound.
+        """
+        m, n = self._parameter_matrix.shape
+        return [(p.lower_bound, p.upper_bound) for p in self._parameters.values() if not p.fixed for _ in range(n)]
 
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
@@ -123,19 +157,23 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray]):
-        # Check if the b-vectors are unit vectors.
+        # Check if the b-vectors are unit vectors and set b=0 'vectors' to (0, 0, 0) as per convention.
+        b0 = b_values == 0
         b_vectors = np.asarray(b_vectors, dtype=np.float64)
-        if not np.allclose(np.linalg.norm(b_vectors, axis=1), 1):
+        if not np.allclose(np.linalg.norm(b_vectors[~b0], axis=1), 1):
             raise ValueError('b-vectors are not unit vectors.')
+        b_vectors[b0] = 0
 
         # Calculate the spherical angles φ and θ.
         phi = np.arctan2(b_vectors[:, 1], b_vectors[:, 0])
         theta = np.arccos(b_vectors[:, 2])
 
         super().__init__({
-            'DiffusionBValue': AcquisitionParameters(values=b_values, unit='s/mm²', scale=1e3, fixed=False),
-            'DiffusionGradientAnglePhi': AcquisitionParameters(values=phi, unit='rad', scale=1, fixed=True),
-            'DiffusionGradientAngleTheta': AcquisitionParameters(values=theta, unit='rad', scale=1, fixed=True),
+            'DiffusionBValue': AcquisitionParameters(values=b_values, unit='s/mm²', scale=1e3),
+            'DiffusionGradientAnglePhi': AcquisitionParameters(
+                values=phi, unit='rad', scale=1, lower_bound=None, fixed=True),
+            'DiffusionGradientAngleTheta': AcquisitionParameters(
+                values=theta, unit='rad', scale=1, lower_bound=None, fixed=True),
             'DiffusionPulseWidth': AcquisitionParameters(values=pulse_widths, unit='s', scale=1, fixed=True),
             'DiffusionPulseInterval': AcquisitionParameters(values=pulse_intervals, unit='s', scale=1, fixed=True),
         })
@@ -203,10 +241,16 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         :return: An N×3 array of direction cosines.
         """
-        phi = self._parameters['DiffusionGradientAnglePhi'].values
-        theta = self._parameters['DiffusionGradientAngleTheta'].values
+        phi = self.get_phi()
+        theta = self.get_theta()
         sin_theta = np.sin(theta)
-        return np.array([sin_theta * np.cos(phi), sin_theta * np.sin(phi), np.cos(theta)]).T
+        b_vectors = np.array([sin_theta * np.cos(phi), sin_theta * np.sin(phi), np.cos(theta)]).T
+
+        # Set b=0 'vectors' to (0, 0, 0) as per convention.
+        b_values = self.get_b_values()
+        b_vectors[b_values == 0] = 0
+
+        return b_vectors
 
     def write_bval(self, file: Union[str, bytes, PathLike]) -> None:
         """
@@ -248,17 +292,21 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         b_vectors = self.get_b_vectors()
         pulse_widths = self.get_pulse_widths()
         pulse_intervals = self.get_pulse_intervals()
-        return model.diffusion_model(b_values, b_vectors, pulse_widths, pulse_intervals)
+        return model.s0 * model.diffusion_model(b_values, b_vectors, pulse_widths, pulse_intervals)
 
     def model_jacobian(self, model: TissueModel) -> np.ndarray:
         b_values = self.get_b_values()
         b_vectors = self.get_b_vectors()
         pulse_widths = self.get_pulse_widths()
         pulse_intervals = self.get_pulse_intervals()
-        return model.diffusion_model.jacobian(b_values, b_vectors, pulse_widths, pulse_intervals)
 
-    def model_scales(self, model: TissueModel) -> np.ndarray:
-        return model.diffusion_model.get_scales()
+        s0_jac = model.diffusion_model(b_values, b_vectors, pulse_widths, pulse_intervals).reshape((-1, 1))
+        model_jac = model.diffusion_model.jacobian(b_values, b_vectors, pulse_widths, pulse_intervals)
+        return np.concatenate((s0_jac, model.s0 * model_jac), axis=1)
+
+    def get_model_scales(self, model: TissueModel) -> np.ndarray:
+        # Use the S0 parameter value as scale.
+        return np.concatenate(([model.s0], model.diffusion_model.get_scales()))
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
@@ -280,9 +328,9 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
                  echo_times: Union[List[float], np.ndarray],
                  inversion_times: Union[List[float], np.ndarray]):
         super().__init__({
-            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='s', scale=1, fixed=False),
-            'EchoTime': AcquisitionParameters(values=echo_times, unit='s', scale=1, fixed=False),
-            'InversionTime': AcquisitionParameters(values=inversion_times, unit='s', scale=1, fixed=False),
+            'InversionTime': AcquisitionParameters(values=inversion_times, unit='s', scale=1),
+            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='s', scale=1),
+            'EchoTime': AcquisitionParameters(values=echo_times, unit='s', scale=1),
         })
 
     def get_repetition_times(self) -> np.ndarray:
@@ -310,32 +358,32 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         return self._parameters['InversionTime'].values
 
     def __call__(self, model: TissueModel) -> np.ndarray:
-        if model.t1 is None:
-            raise ValueError('The tissue model does not define a T1.')
-        if model.t2 is None:
-            raise ValueError('The tissue model does not define a T2.')
-
-        ti = self._parameters['RepetitionTimeExcitation'].values
-        tr = self._parameters['EchoTime'].values
-        te = self._parameters['InversionTime'].values
-
-        return (1 - 2 * np.exp(-ti / model.t1) + np.exp(-tr / model.t1)) * np.exp(-te / model.t2)
-
-    def model_jacobian(self, model: TissueModel) -> np.ndarray:
-        ti = self._parameters['RepetitionTimeExcitation'].values
-        tr = self._parameters['EchoTime'].values
-        te = self._parameters['InversionTime'].values
+        ti = self._parameters['InversionTime'].values
+        tr = self._parameters['RepetitionTimeExcitation'].values
+        te = self._parameters['EchoTime'].values
 
         ti_t1 = np.exp(-ti / model.t1)
         tr_t1 = np.exp(-tr / model.t1)
         te_t2 = np.exp(-te / model.t2)
 
-        # Calculate the derivative of the signal attenuation to T1 and to T2.
+        return model.s0 * (1 - 2 * ti_t1 + tr_t1) * te_t2
+
+    def model_jacobian(self, model: TissueModel) -> np.ndarray:
+        ti = self._parameters['InversionTime'].values
+        tr = self._parameters['RepetitionTimeExcitation'].values
+        te = self._parameters['EchoTime'].values
+
+        ti_t1 = np.exp(-ti / model.t1)
+        tr_t1 = np.exp(-tr / model.t1)
+        te_t2 = np.exp(-te / model.t2)
+
+        # Calculate the derivative of the signal attenuation to S0, T1 and to T2.
         return np.array([
-            (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (model.t1 ** 2),  # δS(t1, t2) / δt1
-            te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (model.t2 ** 2)  # δS(t1, t2) / δt2
+            (1 - 2 * ti_t1 + tr_t1) * te_t2,   # δS(S0, T1, T2) / δS0
+            model.s0 * (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (model.t1 ** 2),  # δS(S0, T1, T2) / δT1
+            model.s0 * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (model.t2 ** 2)  # δS(S0, T1, T2) / δT2
         ]).T
 
-    def model_scales(self, model: TissueModel) -> np.ndarray:
-        # Use the T1 and T2 parameter values as scale.
-        return np.array([model.t1, model.t2])
+    def get_model_scales(self, model: TissueModel) -> np.ndarray:
+        # Use the S0, T1 and T2 parameter values as scale.
+        return np.array([model.s0, model.t1, model.t2])

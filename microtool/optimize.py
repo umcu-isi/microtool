@@ -27,7 +27,7 @@ def fisher_information(jac: np.ndarray, noise_var: float) -> np.ndarray:
 def crlb_loss(jac: np.ndarray, scales: Sequence[float], noise_var: float) -> float:
     """
     Objective function for minimizing the total parameter variance (Cramer-Rao lower bounds), as defined in Alexander,
-    2008 (DOI 0.1002/mrm.21646)
+    2008 (DOI https://doi.org/10.1002/mrm.21646)
 
     :param jac: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
     :param scales: An array with M parameter scales.
@@ -69,18 +69,20 @@ def optimize_acquisition_scheme(
     :param method: Type of solver. See the documentation for scipy.optimize.minimize
     :return: A scipy.optimize.OptimizeResult object.
     """
-    scales = acquisition_scheme.model_scales(tissue_model)
-    x0 = acquisition_scheme.get_free_parameters()
+    model_scales = acquisition_scheme.get_model_scales(tissue_model)
+    parameter_scales = acquisition_scheme.get_free_parameter_scales()
+    x0 = acquisition_scheme.get_free_parameters() / parameter_scales
+    bounds = acquisition_scheme.get_free_parameter_bounds()
 
     # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue model's
     # Jacobian matrix and evaluating the loss function.
     def calc_loss(x: np.ndarray):
-        acquisition_scheme.set_free_parameters(x)
+        acquisition_scheme.set_free_parameters(x * parameter_scales)
         jac = acquisition_scheme.model_jacobian(tissue_model)
-        return loss(jac, scales, noise_var)
+        return loss(jac, model_scales, noise_var)
 
-    result = minimize(calc_loss, x0, method=method)
+    result = minimize(calc_loss, x0, method=method, bounds=bounds)
     if 'x' in result:
-        acquisition_scheme.set_free_parameters(result['x'])
+        acquisition_scheme.set_free_parameters(result['x'] * parameter_scales)
 
     return result
