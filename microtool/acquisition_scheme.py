@@ -6,8 +6,6 @@ from typing import Union, List, Tuple, Dict, Optional
 import numpy as np
 from pathlib import Path
 
-from microtool.tissue_model import TissueModel
-
 
 # TODO: Linear constraints? For example: Δ > δ  and TR > TI + TE
 @dataclass
@@ -67,37 +65,8 @@ class AcquisitionScheme:
 
     def __str__(self) -> str:
         m, n = self._parameter_matrix.shape
-        parameters = '\n'.join(f'    {key}: {value}' for key, value in self._parameters.items())
+        parameters = '\n'.join(f'    - {key}: {value}' for key, value in self._parameters.items())
         return f'Acquisition scheme with {n} measurements and {m} scalar parameters:\n{parameters}'
-
-    def __call__(self, model: TissueModel) -> np.ndarray:
-        """
-        Calculates the signal attenuation for all measurements in this acquisition scheme as a function of the tissue
-        model.
-
-        :param model: a TissueModel defining the MR tissue properties.
-        :return: An array with signal attenuation values.
-        """
-        raise NotImplementedError
-
-    def model_jacobian(self, model: TissueModel) -> np.ndarray:
-        """
-        Calculates the change in signal attenuation for all measurements in this acquisition scheme due to a change in
-        the tissue model parameters.
-
-        :param model: a TissueModel defining the MR tissue properties.
-        :return: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
-        """
-        raise NotImplementedError
-
-    def get_model_scales(self, model: TissueModel) -> np.ndarray:
-        """
-        Returns the parameter scales of the relevant tissue parameters.
-
-        :param model: a TissueModel defining the MR tissue properties.
-        :return: An array with M parameter scales.
-        """
-        raise NotImplementedError
 
     def get_free_parameters(self):
         """
@@ -287,36 +256,10 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             for bvec in self.get_b_vectors():
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
-    def __call__(self, model: TissueModel) -> np.ndarray:
-        b_values = self.get_b_values()
-        b_vectors = self.get_b_vectors()
-        pulse_widths = self.get_pulse_widths()
-        pulse_intervals = self.get_pulse_intervals()
-        return model.s0 * model.diffusion_model(b_values, b_vectors, pulse_widths, pulse_intervals)
-
-    def model_jacobian(self, model: TissueModel) -> np.ndarray:
-        b_values = self.get_b_values()
-        b_vectors = self.get_b_vectors()
-        pulse_widths = self.get_pulse_widths()
-        pulse_intervals = self.get_pulse_intervals()
-
-        s0_jac = model.diffusion_model(b_values, b_vectors, pulse_widths, pulse_intervals).reshape((-1, 1))
-        model_jac = model.diffusion_model.jacobian(b_values, b_vectors, pulse_widths, pulse_intervals)
-        return np.concatenate((s0_jac, model.s0 * model_jac), axis=1)
-
-    def get_model_scales(self, model: TissueModel) -> np.ndarray:
-        # Use the S0 parameter value as scale.
-        return np.concatenate(([model.s0], model.diffusion_model.get_scales()))
-
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
-    Defines an inversion-recovery MR acquisition scheme. Rather than varying TR to achieve different T1 weightings,
-    Mulkern et al. (2000) incorporate an inversion pulse prior to the 90° pulse in the diffusion-weighted SE sequence
-    for simultaneous D-T1 measurement.
-
-    See section 7.4.2 of 'Advanced Diffusion Encoding Methods in MRI', Topgaard D, editor (2020):
-    https://www.ncbi.nlm.nih.gov/books/NBK567564
+    Defines an inversion-recovery MR acquisition scheme.
 
     :param repetition_times: A list or numpy array of repetition times TR in seconds.
     :param echo_times: A list or numpy array of echo times TE in seconds.
@@ -356,34 +299,3 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         :return: An array of N inversion times in seconds.
         """
         return self._parameters['InversionTime'].values
-
-    def __call__(self, model: TissueModel) -> np.ndarray:
-        ti = self._parameters['InversionTime'].values
-        tr = self._parameters['RepetitionTimeExcitation'].values
-        te = self._parameters['EchoTime'].values
-
-        ti_t1 = np.exp(-ti / model.t1)
-        tr_t1 = np.exp(-tr / model.t1)
-        te_t2 = np.exp(-te / model.t2)
-
-        return model.s0 * (1 - 2 * ti_t1 + tr_t1) * te_t2
-
-    def model_jacobian(self, model: TissueModel) -> np.ndarray:
-        ti = self._parameters['InversionTime'].values
-        tr = self._parameters['RepetitionTimeExcitation'].values
-        te = self._parameters['EchoTime'].values
-
-        ti_t1 = np.exp(-ti / model.t1)
-        tr_t1 = np.exp(-tr / model.t1)
-        te_t2 = np.exp(-te / model.t2)
-
-        # Calculate the derivative of the signal attenuation to S0, T1 and to T2.
-        return np.array([
-            (1 - 2 * ti_t1 + tr_t1) * te_t2,   # δS(S0, T1, T2) / δS0
-            model.s0 * (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (model.t1 ** 2),  # δS(S0, T1, T2) / δT1
-            model.s0 * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (model.t2 ** 2)  # δS(S0, T1, T2) / δT2
-        ]).T
-
-    def get_model_scales(self, model: TissueModel) -> np.ndarray:
-        # Use the S0, T1 and T2 parameter values as scale.
-        return np.array([model.s0, model.t1, model.t2])

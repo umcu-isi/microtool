@@ -1,39 +1,14 @@
-from dataclasses import dataclass
-from typing import List
+from typing import Dict
 
 import numpy as np
-from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues
+from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
 from dmipy.core.modeling_framework import MultiCompartmentModel
 
-from microtool.tissue_model import DiffusionModel
+from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool.tissue_model import TissueModel, TissueParameter
 
 
-@dataclass
-class TissueParameter:
-    # noinspection PyUnresolvedReferences
-    """
-    Defines a dmipy scalar tissue parameter and its properties.
-
-    :param model: The name of the dmipy model that the parameter belongs to.
-    :param name: The name of the dmipy parameter.
-    :param scalar: True for scalar parameters, False if the parameter is part of a vector.
-    :param index: The position in the vector.
-    :param value: Parameter value.
-    :param scale: The typical parameter value scale (order of magnitude).
-    """
-    model: str
-    name: str
-    scalar: bool
-    index: int
-    value: float
-    scale: float
-
-    def __str__(self):
-        index = '' if self.scalar else f' ({self.index})'
-        return f'{self.model}, {self.name}{index}: {self.value}'
-
-
-def get_parameters(diffusion_model: MultiCompartmentModel) -> List[TissueParameter]:
+def get_parameters(diffusion_model: MultiCompartmentModel) -> Dict[str, TissueParameter]:
     """
     Compiles a list of all tissue parameters present in the given multi-compartment model.
 
@@ -41,7 +16,7 @@ def get_parameters(diffusion_model: MultiCompartmentModel) -> List[TissueParamet
     :return: A list with tissue parameters.
     """
     # Iterate over all tissue models in the MultiCompartmentModel.
-    parameters = []
+    parameters = {}
     for model, model_name in zip(diffusion_model.models, diffusion_model.model_names):
         # Iterate over all scalar and vector parameters in the tissue model.
         for parameter_name in model.parameter_names:
@@ -54,74 +29,56 @@ def get_parameters(diffusion_model: MultiCompartmentModel) -> List[TissueParamet
 
             # Iterate over vector parameters and add their elements as scalar tissue parameters.
             for i in range(cardinality):
-                parameters.append(
-                    TissueParameter(
-                        model=model_name,
-                        name=parameter_name,
-                        scalar=cardinality == 1,
-                        index=i,
-                        value=value[i] if cardinality > 1 else value,
-                        scale=scale[i] if cardinality > 1 else scale,
-                    )
+                index_postfix = '' if cardinality == 1 else f'_{i}'
+                parameters[model_name + parameter_name + index_postfix] = TissueParameter(
+                    value=value[i] if cardinality > 1 else value,
+                    scale=scale[i] if cardinality > 1 else scale,
                 )
+
+    # Add S0 as a tissue parameter.
+    parameters['s0'] = TissueParameter(value=1.0, scale=1.0, use=False)
 
     return parameters
 
 
-class DmipyDiffusionModel(DiffusionModel):
-    """
-    Wraps a dmipy MultiCompartmentModel as a MICROtool DiffusionModel.
+def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> DmipyAcquisitionScheme:
+    b_values = scheme.get_b_values()
+    b_vectors = scheme.get_b_vectors()
+    pulse_widths = scheme.get_pulse_widths()
+    pulse_intervals = scheme.get_pulse_intervals()
 
-    :param diffusion_model: A dmipy MultiCompartmentModel
-    """
-    def __init__(self, diffusion_model: MultiCompartmentModel):
-        super().__init__()
+    # Create a dmipy acquisition scheme. Convert b-values from s/mm² to s/m².
+    return acquisition_scheme_from_bvalues(b_values * 1e6, b_vectors, pulse_widths, pulse_intervals)
 
+
+class DmipyTissueModel(TissueModel):
+    def __init__(self, model: MultiCompartmentModel):
         # Extract the scalar tissue parameters.
-        self._diffusion_model = diffusion_model
-        self._parameters = get_parameters(diffusion_model)
+        self._model = model
+        self._parameters = get_parameters(model)
 
-        # Get the baseline parameter vector.
-        self._parameter_baseline = np.array([parameter.value for parameter in self._parameters])
+        # Get the baseline parameter vector, but don't include S0.
+        self._parameter_baseline = np.array([parameter.value for parameter in self._parameters.values()])[:-1]
 
         # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
-        h = np.array([parameter.scale * 1e-6 for parameter in self._parameters])
+        h = np.array([parameter.scale * 1e-6 for parameter in self._parameters.values()])[:-1]
         self._parameter_vectors = self._parameter_baseline + np.diag(h)
         self._reciprocal_h = (1 / h).reshape(-1, 1)
 
-    def __call__(self,
-                 b_values: np.ndarray,
-                 b_vectors: np.ndarray,
-                 pulse_widths: np.ndarray,
-                 pulse_intervals: np.ndarray) -> np.ndarray:
-        # Create a dmipy acquisition scheme. Convert b-values from s/mm² to s/m².
-        acquisition_scheme = acquisition_scheme_from_bvalues(b_values * 1e6, b_vectors, pulse_widths, pulse_intervals)
+    def __call__(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        dmipy_scheme = convert_acquisition_scheme(scheme)
 
         # Evaluate the dmipy model.
-        return self._diffusion_model.simulate_signal(acquisition_scheme, self._parameter_baseline)
+        s0 = self._parameters['s0'].value
+        return s0 * self._model.simulate_signal(dmipy_scheme, self._parameter_baseline)
 
-    def jacobian(self,
-                 b_values: np.ndarray,
-                 b_vectors: np.ndarray,
-                 pulse_widths: np.ndarray,
-                 pulse_intervals: np.ndarray) -> np.ndarray:
-        # Create a dmipy acquisition scheme. Convert b-values from s/mm² to s/m².
-        acquisition_scheme = acquisition_scheme_from_bvalues(b_values * 1e6, b_vectors, pulse_widths, pulse_intervals)
+    def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        dmipy_scheme = convert_acquisition_scheme(scheme)
 
         # Evaluate the dmipy model on the baseline and on the parameter vectors with finite differences.
-        baseline = self._diffusion_model.simulate_signal(acquisition_scheme, self._parameter_baseline)
-        differences = self._diffusion_model.simulate_signal(acquisition_scheme, self._parameter_vectors) - baseline
+        s0 = self._parameters['s0'].value
+        baseline = self._model.simulate_signal(dmipy_scheme, self._parameter_baseline)
+        differences = s0 * (self._model.simulate_signal(dmipy_scheme, self._parameter_vectors) - baseline)
 
-        # Divide by the finite differences to obtain the derivatives.
-        jac = (differences * self._reciprocal_h).T
-
-        return jac
-
-    def get_scales(self) -> np.ndarray:
-        return np.array([p.scale for p in self._parameters])
-
-    def __str__(self) -> str:
-        n = len(self._diffusion_model.models)
-        m = len(self._parameters)
-        parameters = '\n'.join(f'    {p}' for p in self._parameters)
-        return f'Wrapped dmipy diffusion model with {n} compartments and {m} scalar parameters:\n{parameters}'
+        # Divide by the finite differences to obtain the derivatives, and add the derivatives for S0.
+        return np.concatenate((differences * self._reciprocal_h, [baseline])).T
