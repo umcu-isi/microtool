@@ -36,32 +36,34 @@ def get_parameters(diffusion_model: MultiCompartmentModel) -> Dict[str, TissuePa
                 )
 
     # Add S0 as a tissue parameter.
-    parameters['s0'] = TissueParameter(value=1.0, scale=1.0, use=False)
+    parameters['S0'] = TissueParameter(value=1.0, scale=1.0, optimize=False)
 
     return parameters
 
 
 def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> DmipyAcquisitionScheme:
-    b_values = scheme.get_b_values()
-    b_vectors = scheme.get_b_vectors()
-    pulse_widths = scheme.get_pulse_widths()
-    pulse_intervals = scheme.get_pulse_intervals()
-
-    # Create a dmipy acquisition scheme. Convert b-values from s/mm² to s/m².
-    return acquisition_scheme_from_bvalues(b_values * 1e6, b_vectors, pulse_widths, pulse_intervals)
+    # Create a dmipy acquisition scheme.
+    return acquisition_scheme_from_bvalues(
+        scheme.b_values * 1e6,  # Convert from s/mm² to s/m².
+        scheme.b_vectors,
+        scheme.pulse_widths * 1e-3,  # Convert from ms to s.
+        scheme.pulse_intervals * 1e-3,  # Convert from ms to s.
+    )
 
 
 class DmipyTissueModel(TissueModel):
     def __init__(self, model: MultiCompartmentModel):
+        super().__init__()
+
         # Extract the scalar tissue parameters.
+        self.update(get_parameters(model))
         self._model = model
-        self._parameters = get_parameters(model)
 
         # Get the baseline parameter vector, but don't include S0.
-        self._parameter_baseline = np.array([parameter.value for parameter in self._parameters.values()])[:-1]
+        self._parameter_baseline = np.array([parameter.value for parameter in self.values()])[:-1]
 
         # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
-        h = np.array([parameter.scale * 1e-6 for parameter in self._parameters.values()])[:-1]
+        h = np.array([parameter.scale * 1e-6 for parameter in self.values()])[:-1]
         self._parameter_vectors = self._parameter_baseline + np.diag(h)
         self._reciprocal_h = (1 / h).reshape(-1, 1)
 
@@ -69,14 +71,14 @@ class DmipyTissueModel(TissueModel):
         dmipy_scheme = convert_acquisition_scheme(scheme)
 
         # Evaluate the dmipy model.
-        s0 = self._parameters['s0'].value
+        s0 = self['S0'].value
         return s0 * self._model.simulate_signal(dmipy_scheme, self._parameter_baseline)
 
     def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         dmipy_scheme = convert_acquisition_scheme(scheme)
 
         # Evaluate the dmipy model on the baseline and on the parameter vectors with finite differences.
-        s0 = self._parameters['s0'].value
+        s0 = self['S0'].value
         baseline = self._model.simulate_signal(dmipy_scheme, self._parameter_baseline)
         differences = s0 * (self._model.simulate_signal(dmipy_scheme, self._parameter_vectors) - baseline)
 

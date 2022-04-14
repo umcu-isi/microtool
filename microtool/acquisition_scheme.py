@@ -29,13 +29,12 @@ class AcquisitionParameters:
     fixed: bool = False
 
     def __str__(self):
-        values = ', '.join(str(x) for x in self.values)
         fixed = ' (fixed parameter)' if self.fixed else ''
-        return f'{values} {self.unit}{fixed}'
+        return f'{self.values} {self.unit}{fixed}'
 
 
 # TODO: Add function to check if all required tissue parameters are present.
-class AcquisitionScheme:
+class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     """
     Base-class for MR acquisition schemes.
 
@@ -43,29 +42,29 @@ class AcquisitionScheme:
      keys.
     :raise ValueError: Lists have unequal length.
     """
-    _parameters: Dict[str, AcquisitionParameters]
-    _parameter_matrix: np.ndarray
 
     def __init__(self, parameters: Dict[str, AcquisitionParameters]):
+        super().__init__()
+
         # Copy the acquisition parameter values into one matrix. This will raise a ValueError in case the value
         # arrays/lists are inhomogeneous.
-        self._parameter_matrix = np.array([val.values for val in parameters.values()], dtype=np.float64)
+        self._matrix = np.array([val.values for val in parameters.values()], dtype=np.float64)
 
         # Create a new dictionary with parameter values pointing to the _parameter_matrix.
-        self._parameters = {
+        self.update({
             key: AcquisitionParameters(
-                values=self._parameter_matrix[i],
+                values=self._matrix[i],
                 unit=parameters[key].unit,
                 scale=parameters[key].scale,
                 lower_bound=parameters[key].lower_bound,
                 upper_bound=parameters[key].upper_bound,
                 fixed=parameters[key].fixed
             ) for i, key in enumerate(parameters.keys())
-        }
+        })
 
     def __str__(self) -> str:
-        m, n = self._parameter_matrix.shape
-        parameters = '\n'.join(f'    - {key}: {value}' for key, value in self._parameters.items())
+        m, n = self._matrix.shape
+        parameters = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
         return f'Acquisition scheme with {n} measurements and {m} scalar parameters:\n{parameters}'
 
     def get_free_parameters(self):
@@ -75,8 +74,8 @@ class AcquisitionScheme:
 
         :return: An M×N matrix with acquisition parameters.
         """
-        mask = np.array([not p.fixed for p in self._parameters.values()])
-        return self._parameter_matrix[mask].ravel()
+        mask = np.array([not p.fixed for p in self.values()])
+        return self._matrix[mask].ravel()
 
     def set_free_parameters(self, parameters: np.ndarray) -> None:
         """
@@ -85,30 +84,30 @@ class AcquisitionScheme:
 
         :param parameters: An M×N matrix with acquisition parameters.
         """
-        m, n = self._parameter_matrix.shape
-        mask = np.array([not p.fixed for p in self._parameters.values()])
+        m, n = self._matrix.shape
+        mask = np.array([not p.fixed for p in self.values()])
         mask = np.broadcast_to(mask, [n, m]).T
-        np.place(self._parameter_matrix, mask, parameters)
+        np.place(self._matrix, mask, parameters)
 
     def get_free_parameter_scales(self) -> np.ndarray:
         """
         Returns the bounds on the free tissue parameters.
 
         :return: A list of M×N (min, max) pairs, where M is the number of parameters and N is the
-         number of measurements in the acquisition scheme. . None is used to specify no bound.
+         number of measurements in the acquisition scheme. None is used to specify no bound.
         """
-        m, n = self._parameter_matrix.shape
-        return np.array([p.scale for p in self._parameters.values() if not p.fixed for _ in range(n)])
+        m, n = self._matrix.shape
+        return np.array([p.scale for p in self.values() if not p.fixed for _ in range(n)])
 
     def get_free_parameter_bounds(self) -> List[Tuple[Optional[float], Optional[float]]]:
         """
         Returns the bounds on the free tissue parameters.
 
         :return: A list of M×N (min, max) pairs, where M is the number of parameters and N is the
-         number of measurements in the acquisition scheme. . None is used to specify no bound.
+         number of measurements in the acquisition scheme. None is used to specify no bound.
         """
-        m, n = self._parameter_matrix.shape
-        return [(p.lower_bound, p.upper_bound) for p in self._parameters.values() if not p.fixed for _ in range(n)]
+        m, n = self._matrix.shape
+        return [(p.lower_bound, p.upper_bound) for p in self.values() if not p.fixed for _ in range(n)]
 
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
@@ -117,8 +116,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
     :param b_values: A list or numpy array of b-values in s/mm².
     :param b_vectors: A list or numpy array of direction cosines.
-    :param pulse_widths: A list or numpy array of pulse widths δ in seconds.
-    :param pulse_intervals: A list or numpy array of pulse intervals Δ in seconds.
+    :param pulse_widths: A list or numpy array of pulse widths δ in milliseconds.
+    :param pulse_intervals: A list or numpy array of pulse intervals Δ in milliseconds.
     :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
     """
     def __init__(self,
@@ -138,65 +137,59 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         theta = np.arccos(b_vectors[:, 2])
 
         super().__init__({
-            'DiffusionBValue': AcquisitionParameters(values=b_values, unit='s/mm²', scale=1e3),
+            'DiffusionBValue': AcquisitionParameters(values=b_values, unit='s/mm²', scale=1000),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1, lower_bound=None, fixed=True),
             'DiffusionGradientAngleTheta': AcquisitionParameters(
                 values=theta, unit='rad', scale=1, lower_bound=None, fixed=True),
-            'DiffusionPulseWidth': AcquisitionParameters(values=pulse_widths, unit='s', scale=1, fixed=True),
-            'DiffusionPulseInterval': AcquisitionParameters(values=pulse_intervals, unit='s', scale=1, fixed=True),
+            'DiffusionPulseWidth': AcquisitionParameters(values=pulse_widths, unit='ms', scale=10, fixed=True),
+            'DiffusionPulseInterval': AcquisitionParameters(values=pulse_intervals, unit='ms', scale=10, fixed=True),
         })
 
-    def get_b_values(self) -> np.ndarray:
+    @property
+    def b_values(self) -> np.ndarray:
         """
-        Returns the pulse b-values.
+        An array of N b-values in s/mm².
+        """
+        return self['DiffusionBValue'].values
 
-        :return: An array of N b-values in s/mm².
+    @property
+    def phi(self) -> np.ndarray:
         """
-        return self._parameters['DiffusionBValue'].values
+        An array of N angles in radians.
+        """
+        return self['DiffusionGradientAnglePhi'].values
 
-    def get_phi(self) -> np.ndarray:
+    @property
+    def theta(self) -> np.ndarray:
         """
-        Returns the pulse gradient direction angles φ.
+        An array of N angles in radians.
+        """
+        return self['DiffusionGradientAngleTheta'].values
 
-        :return: An array of N angles in radians.
+    @property
+    def pulse_widths(self) -> np.ndarray:
         """
-        return self._parameters['DiffusionGradientAnglePhi'].values
+        An array of N pulse widths in milliseconds.
+        """
+        return self['DiffusionPulseWidth'].values
 
-    def get_theta(self) -> np.ndarray:
+    @property
+    def pulse_intervals(self) -> np.ndarray:
         """
-        Returns the pulse gradient direction angles θ.
-
-        :return: An array of N angles in radians.
+        An array of N pulse intervals in milliseconds.
         """
-        return self._parameters['DiffusionGradientAngleTheta'].values
-
-    def get_pulse_widths(self) -> np.ndarray:
-        """
-        Returns the pulse durations δ.
-
-        :return: An array of N pulse widths in seconds.
-        """
-        return self._parameters['DiffusionPulseWidth'].values
-
-    def get_pulse_intervals(self) -> np.ndarray:
-        """
-        Returns the pulse intervals Δ.
-
-        :return: An array of N pulse intervals in seconds.
-        """
-        return self._parameters['DiffusionPulseInterval'].values
+        return self['DiffusionPulseInterval'].values
 
     # TODO: verify results.
-    def get_pulse_magnitude(self) -> np.ndarray:
+    @property
+    def pulse_magnitude(self) -> np.ndarray:
         """
-        Returns the gradient magnitude of the pulses. Assumes b = γ² G² δ² (Δ - δ/3).
-
-        :return: An array of N gradient magnitudes in mT/m.
+        :return: An array of N gradient magnitudes in mT/m. Assumes b = γ² G² δ² (Δ - δ/3).
         """
-        b_values = self.get_b_values() * 1e3  # Convert from s/mm² to s/m².
-        pulse_widths = self.get_pulse_widths()  # s
-        pulse_intervals = self.get_pulse_intervals()  # s
+        b_values = self.b_values * 1e3  # Convert from s/mm² to s/m².
+        pulse_widths = self.pulse_widths * 1e-3  # Convert from ms to s.
+        pulse_intervals = self.pulse_intervals * 1e-3  # Convert from ms to s.
         gyromagnetic_ratio = 2.6752218744e8 * 1e-3  # Convert from 1/s/T to 1/s/mT.
 
         return np.sqrt(
@@ -204,20 +197,16 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             (np.square(gyromagnetic_ratio * pulse_widths) * (3 * pulse_intervals - pulse_widths))
         )
 
-    def get_b_vectors(self) -> np.ndarray:
+    @property
+    def b_vectors(self) -> np.ndarray:
         """
-        Calculates the b-vectors.
-
-        :return: An N×3 array of direction cosines.
+        An N×3 array of direction cosines.
         """
-        phi = self.get_phi()
-        theta = self.get_theta()
-        sin_theta = np.sin(theta)
-        b_vectors = np.array([sin_theta * np.cos(phi), sin_theta * np.sin(phi), np.cos(theta)]).T
+        sin_theta = np.sin(self.theta)
+        b_vectors = np.array([sin_theta * np.cos(self.phi), sin_theta * np.sin(self.phi), np.cos(self.theta)]).T
 
         # Set b=0 'vectors' to (0, 0, 0) as per convention.
-        b_values = self.get_b_values()
-        b_vectors[b_values == 0] = 0
+        b_vectors[self.b_values == 0] = 0
 
         return b_vectors
 
@@ -233,8 +222,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             warnings.warn('BIDS specifies that FSL b-value files should be named like: [*_]dwi.bval')
 
         with file.open('w', encoding='latin-1', newline='\n') as f:
-            bval = self.get_b_values()
-            f.write(' '.join(f'{x:.6e}' for x in bval))
+            f.write(' '.join(f'{x:.6e}' for x in self.b_values))
 
     def write_bvec(self, file) -> None:
         """
@@ -253,7 +241,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             warnings.warn('BIDS specifies that FSL b-vector files should be named like: [*_]dwi.bvec')
 
         with file.open('w', encoding='latin-1', newline='\n') as f:
-            for bvec in self.get_b_vectors():
+            for bvec in self.b_vectors:
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
 
@@ -261,9 +249,9 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
     Defines an inversion-recovery MR acquisition scheme.
 
-    :param repetition_times: A list or numpy array of repetition times TR in seconds.
-    :param echo_times: A list or numpy array of echo times TE in seconds.
-    :param inversion_times: A list or numpy array of inversion times TI in seconds.
+    :param repetition_times: A list or numpy array of repetition times TR in milliseconds.
+    :param echo_times: A list or numpy array of echo times TE in milliseconds.
+    :param inversion_times: A list or numpy array of inversion times TI in milliseconds.
     :raise ValueError: Lists have unequal length.
     """
     def __init__(self,
@@ -271,31 +259,28 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
                  echo_times: Union[List[float], np.ndarray],
                  inversion_times: Union[List[float], np.ndarray]):
         super().__init__({
-            'InversionTime': AcquisitionParameters(values=inversion_times, unit='s', scale=1),
-            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='s', scale=1),
-            'EchoTime': AcquisitionParameters(values=echo_times, unit='s', scale=1),
+            'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100),
+            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100),
+            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10),
         })
 
-    def get_repetition_times(self) -> np.ndarray:
+    @property
+    def repetition_times(self) -> np.ndarray:
         """
-        Returns repetition times.
+        An array of N repetition times in milliseconds.
+        """
+        return self['RepetitionTimeExcitation'].values
 
-        :return: An array of N repetition times in seconds.
+    @property
+    def echo_times(self) -> np.ndarray:
         """
-        return self._parameters['RepetitionTimeExcitation'].values
+        An array of N echo times in milliseconds.
+        """
+        return self['EchoTime'].values
 
-    def get_echo_times(self) -> np.ndarray:
+    @property
+    def inversion_times(self) -> np.ndarray:
         """
-        Returns the echo times.
-
-        :return: An array of N echo times in seconds.
+        An array of N inversion times in milliseconds.
         """
-        return self._parameters['EchoTime'].values
-
-    def get_inversion_times(self) -> np.ndarray:
-        """
-        Returns the inversion times.
-
-        :return: An array of N inversion times in seconds.
-        """
-        return self._parameters['InversionTime'].values
+        return self['InversionTime'].values
