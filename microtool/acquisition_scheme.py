@@ -187,7 +187,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         :return: An array of N gradient magnitudes in mT/m. Assumes b = γ² G² δ² (Δ - δ/3).
         """
-        b_values = self.b_values * 1e3  # Convert from s/mm² to s/m².
+        b_values = self.b_values * 1e6  # Convert from s/mm² to s/m².
         pulse_widths = self.pulse_widths * 1e-3  # Convert from ms to s.
         pulse_intervals = self.pulse_intervals * 1e-3  # Convert from ms to s.
         gyromagnetic_ratio = 2.6752218744e8 * 1e-3  # Convert from 1/s/T to 1/s/mT.
