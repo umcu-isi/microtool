@@ -9,3 +9,5 @@ pathos  # Optional though preferred requirement for dmipy
 
 notebook  # Provides Jupyter Notebook
 matplotlib  # Plotting
+
+matlab  # Requirement for MISST
