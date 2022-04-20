@@ -12,6 +12,7 @@ matlab_engine_help = 'https://www.mathworks.com/help/matlab/matlab_external/inst
 try:
     import matlab
     import matlab.engine
+    from matlab import double  # Prevents reference errors
 except ImportError:
     raise(ImportError(
         'MISST models require the MATLAB engine API for Python, which was not found. Install it as described in: '
@@ -50,14 +51,14 @@ def set_misst_path(path: str):
         raise ValueError('The given path does not exist.')
 
 
-def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> Dict[str, Union[str, np.ndarray]]:
+def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> Dict[str, Union[str, double, float]]:
     # Create a MISST acquisition scheme.
     return {
         'pulseseq': 'PGSE',  # Standard pulsed-gradient spin-echo. TODO: support more through DiffusionAcquisitionScheme
-        'G': matlab.double((scheme.pulse_magnitude * 1e-3).tolist()),  # Convert from mT/m to T/m.
-        'grad_dirs': matlab.double(scheme.b_vectors.tolist()),
-        'smalldel': matlab.double((scheme.pulse_widths * 1e-3).tolist()),  # Convert from ms to s.
-        'delta': matlab.double((scheme.pulse_intervals * 1e-3).tolist()),  # Convert from ms to s.
+        'G': double((scheme.pulse_magnitude * 1e-3).tolist()),  # Convert from mT/m to T/m.
+        'grad_dirs': double(scheme.b_vectors.tolist()),
+        'smalldel': double((scheme.pulse_widths * 1e-3).tolist()),  # Convert from ms to s.
+        'delta': double((scheme.pulse_intervals * 1e-3).tolist()),  # Convert from ms to s.
         'tau': 1e-4,  # Time interval for waveform discretization in seconds.
     }
 
@@ -72,16 +73,8 @@ class MisstTissueModel(TissueModel):
         # A MISST tissue model is just a MATLAB struct with a name and an array of parameters.
         self._model = {
             'name': name,
-            'params': matlab.double([p.value for p in parameters.values()])
+            'params': double([p.value for p in parameters.values()])
         }
-
-        # Get the baseline parameter vector, but don't include S0.
-        self._parameter_baseline = np.array([parameter.value for parameter in self.values()])[:-1]
-
-        # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
-        h = np.array([parameter.scale * 1e-6 for parameter in self.values()])[:-1]
-        self._parameter_vectors = self._parameter_baseline + np.diag(h)
-        self._reciprocal_h = (1 / h).reshape(-1, 1)
 
     def __call__(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         engine = _get_matlab_engine()
@@ -94,9 +87,35 @@ class MisstTissueModel(TissueModel):
             'tau': misst_scheme['tau'],
         }
 
-        # Add the matrices and other constants necessary for the matrix method (see MISST documentation).
-        protocol = engine.MMConstants(self._model, protocol)
+        if misst_scheme['pulseseq'] != 'PGSE':
+            # Add the matrices and other constants necessary for the matrix method (see MISST documentation).
+            # This is not required for pulsed-gradient spin-echo.
+            protocol = engine.MMConstants(self._model, protocol)
 
         # Evaluate the MISST model.
         s0 = self['S0'].value
         return s0 * np.array(engine.SynthMeas(self._model, protocol)).ravel()
+
+    def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        engine = _get_matlab_engine()
+        misst_scheme = convert_acquisition_scheme(scheme)
+
+        # Create the 'GEN' protocol (see MISST documentation).
+        protocol = {
+            'pulseseq': 'GEN',
+            'G': engine.wave_form(misst_scheme),
+            'tau': misst_scheme['tau'],
+        }
+
+        if misst_scheme['pulseseq'] != 'PGSE':
+            # Add the matrices and other constants necessary for the matrix method (see MISST documentation).
+            # This is not required for pulsed-gradient spin-echo.
+            protocol = engine.MMConstants(self._model, protocol)
+
+        # Evaluate the MISST model and obtain the Jacobian (the SynthMeas function returns the Jacobian as the 2nd
+        # output argument).
+        s0 = self['S0'].value
+        signal, jac = engine.SynthMeas(self._model, protocol, nargout=2)
+
+        # Add the derivative to S0 (the signal itself).
+        return np.concatenate([s0 * np.array(jac), signal], axis=1)
