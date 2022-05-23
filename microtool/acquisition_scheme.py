@@ -44,7 +44,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     :raise ValueError: Lists have unequal length.
     """
 
-    def __init__(self, parameters: Dict[str, AcquisitionParameters]):
+    def __init__(self, parameters: Dict[str, AcquisitionParameters], bounds: List[Tuple[float]] = None):
         super().__init__()
 
         # Copy the acquisition parameter values into one matrix. This will raise a ValueError in case the value
@@ -62,6 +62,11 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
                 fixed=parameters[key].fixed
             ) for i, key in enumerate(parameters.keys())
         })
+
+        # Allows user to provide bounds on parameters when constructing the scheme
+        # bounds need to be provided in order of acquisition parameters
+        if bounds != None:
+            self.set_parameter_bounds(bounds)
 
     def __str__(self) -> str:
         m, n = self._matrix.shape
@@ -117,6 +122,20 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         :return: list of the keys of the free parameters, in the same order as get_free_parameters
         """
         return [key for key,value in self.items() if not value.fixed]
+    
+    def set_parameter_bounds(self, bounds : List[Tuple[float]]) -> None:
+        """ A function for setting the acquisition paramater boundaries 
+
+        :param bounds: A list containing tuples containing the parameter boundries
+        :raises ValueError: If there are more or less boundaries than parameters provided
+        """
+        
+        if len(bounds) != len(self):
+            raise ValueError(" Number of bounds does not match number of acquisition parameters. ")
+        
+        for i,param in enumerate(self.values()):
+            param.lower_bound = bounds[i][0]
+            param.upper_bound = bounds[i][1]
 
     def get_constraints(self) -> LinearConstraint:
         """
@@ -286,19 +305,22 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     :param repetition_times: A list or numpy array of repetition times TR in milliseconds.
     :param echo_times: A list or numpy array of echo times TE in milliseconds.
     :param inversion_times: A list or numpy array of inversion times TI in milliseconds.
+    :param bounds: A list of tuples containing boundaries for the tr,te and ti respectively
     :raise ValueError: Lists have unequal length.
     """
     def __init__(self,
                  repetition_times: Union[List[float], np.ndarray],
                  echo_times: Union[List[float], np.ndarray],
-                 inversion_times: Union[List[float], np.ndarray]):
+                 inversion_times: Union[List[float], np.ndarray],
+                 bounds: List[tuple] = None):
+
         super().__init__(
-            # TODO: Check that initial 0 < -TI + TR - TE is satisfied
             {
-            'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100,lower_bound = 0.5, upper_bound=100),
-            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100,lower_bound = 0.5, upper_bound=100),
-            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10,lower_bound = 0.5, upper_bound=100),
-        })
+            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100),
+            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10),
+            'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100)
+        },bounds)
+        
 
     @property
     def repetition_times(self) -> np.ndarray:
@@ -321,16 +343,19 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         """
         return self['InversionTime'].values
 
-    def get_constraints(self) -> LinearConstraint:
-        
-        pulse_num = len(self.repetition_times)
-        
-        # Matrix defining TR > TI + TE or equivalently 0 < -TI + TR - TE for every pulse
-        TIBlock = np.diag(np.repeat(-1,pulse_num))
-        TRBlock = np.diag(np.repeat(+1,pulse_num))
-        TEBlock = TIBlock
 
-        A = np.concatenate((TIBlock,TRBlock,TEBlock),axis=1)
-        lb = np.repeat(0,pulse_num)
-        ub = np.repeat(np.inf,pulse_num)
-        return LinearConstraint(A,lb,ub)
+
+
+    # def get_constraints(self) -> LinearConstraint:
+        
+    #     pulse_num = len(self.repetition_times)
+        
+    #     # Matrix defining TR > TI + TE or equivalently 0 < -TI + TR - TE for every pulse
+    #     TIBlock = np.diag(np.repeat(-1,pulse_num))
+    #     TRBlock = np.diag(np.repeat(+1,pulse_num))
+    #     TEBlock = TIBlock
+
+    #     A = np.concatenate((TRBlock,TEBlock,TIBlock),axis=1)
+    #     lb = np.repeat(0,pulse_num)
+    #     ub = np.repeat(np.inf,pulse_num)
+    #     return LinearConstraint(A,lb,ub)
