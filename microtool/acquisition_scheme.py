@@ -33,6 +33,9 @@ class AcquisitionParameters:
         fixed = ' (fixed parameter)' if self.fixed else ''
         return f'{self.values} {self.unit}{fixed}'
 
+    def __len__(self):
+        return len(self.values)
+
 
 # TODO: Add function to check if all required tissue parameters are present.
 class AcquisitionScheme(Dict[str, AcquisitionParameters]):
@@ -67,12 +70,13 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         # bounds need to be provided in order of acquisition parameters
         if bounds != None:
             self.set_parameter_bounds(bounds)
-
+    
     def __str__(self) -> str:
         m, n = self._matrix.shape
-        parameters = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
+        parameters = '\n'.join(f'    - {key}: {value} in range ({value.lower_bound}, {value.upper_bound})' for key, value in self.items())
         return f'Acquisition scheme with {n} measurements and {m} scalar parameters:\n{parameters}'
 
+    
     def get_free_parameters(self) -> np.ndarray:
         """
         Returns the free acquisition parameters as an M×N matrix, where M is the number of parameters and N is the
@@ -122,6 +126,9 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         :return: list of the keys of the free parameters, in the same order as get_free_parameters
         """
         return [key for key,value in self.items() if not value.fixed]
+
+    def get_fixed_parameter_keys(self) -> List[str]:
+        return list(set(self.keys()) - set(self.get_free_parameter_keys()))
     
     def set_parameter_bounds(self, bounds : List[Tuple[float]]) -> None:
         """ A function for setting the acquisition paramater boundaries 
@@ -139,11 +146,10 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
     def get_constraints(self) -> LinearConstraint:
         """
-        Returns optimisation constraints on the scheme parameters.
+        Returns optimisation constraints on the scheme parameters. Implementation is child-class specific
 
         :return: A scipy.optimize.LinearConstraint object. None is used to specify no constraints.
         """
-        # TODO: deal with fixed variables! 
         return None
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
@@ -317,7 +323,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         super().__init__(
             {
             'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100),
-            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10),
+            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10,fixed=True),
             'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100)
         },bounds)
         
@@ -343,19 +349,35 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         """
         return self['InversionTime'].values
 
-
-
-
-    # def get_constraints(self) -> LinearConstraint:
+    def get_constraints(self) -> LinearConstraint:
         
-    #     pulse_num = len(self.repetition_times)
+        # To get the number of pulses we first find the free parameters
+        free_param_keys = self.get_free_parameter_keys()
         
-    #     # Matrix defining TR > TI + TE or equivalently 0 < -TI + TR - TE for every pulse
-    #     TIBlock = np.diag(np.repeat(-1,pulse_num))
-    #     TRBlock = np.diag(np.repeat(+1,pulse_num))
-    #     TEBlock = TIBlock
+        pulse_num = len(self[free_param_keys[0]])
+        
+        # Matrix defining TR > TI + TE or equivalently 0 < -TI + TR - TE < \infty for every pulse
+        unit_mat = np.diag(np.repeat(1,pulse_num))
+        allparams = self.keys()
+        paramsigns = {'RepetitionTimeExcitation' : +1, 'EchoTime' : -1, 'InversionTime': -1}
+       
+        # Linear operators to extract the acquisition parameters from the flattened parameter array used in optimization
+        # the sign of the inequality 0 < -TI + TR - TE is included
+        blocks = {param : paramsigns[param] * unit_mat for param in allparams}
+        
+        # We include the linear operators only if the parameter needs to be optimized 
+        include = []
+        for key in free_param_keys:
+            include.append(blocks[key])
 
-    #     A = np.concatenate((TRBlock,TEBlock,TIBlock),axis=1)
-    #     lb = np.repeat(0,pulse_num)
-    #     ub = np.repeat(np.inf,pulse_num)
-    #     return LinearConstraint(A,lb,ub)
+        # If all parameters are included in optimization we simply set the lowerbound to zero
+        # the fixed parameters are substracted from the lowerbound so that for example TI < TR - TE
+        lb = np.repeat(0,pulse_num)
+        for param in self.get_fixed_parameter_keys():
+            lb = lb - paramsigns[param] * self[param].values    
+
+        A = np.concatenate(include,axis=1)
+        ub = np.repeat(np.inf,pulse_num)
+
+        # The constrained is defined by lb < A.x < ub, x being the array of parameters optimized
+        return LinearConstraint(A,lb,ub)

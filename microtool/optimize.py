@@ -51,6 +51,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     return np.linalg.eigvalsh(information)[include].sum()
 
 def brute_wrapper(fun: callable, x0: np.ndarray, args=(), Ns: int = 10, bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints = None,  **options) -> OptimizeResult:
+    check_bounded(bounds)
     ranges = tuple(bounds)
     result = brute(fun, ranges, args=args, Ns=Ns)
     return OptimizeResult(x=result, succes = True) 
@@ -58,7 +59,7 @@ def brute_wrapper(fun: callable, x0: np.ndarray, args=(), Ns: int = 10, bounds: 
 
 
 
-def brute_force(fun: callable, x0: np.ndarray, args=(), Ns: int = 5, bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints = None,  **options) -> OptimizeResult:
+def brute_force(fun: callable, x0: np.ndarray, args=(), Ns: int = 10, bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints = None,  **options) -> OptimizeResult:
     """Practicing with the bruteforce function, this is a custom minimizer used in the scipy.optimize interface
 
     :param fun: The objective function that we wish to minimize
@@ -70,14 +71,8 @@ def brute_force(fun: callable, x0: np.ndarray, args=(), Ns: int = 5, bounds: Lis
     :return: OptimizeResult object to for output
     :raise ValueError: bounds or constraints are not appropriate for brute force optimization
     """
-    # Check for finite boundries
-    if bounds == None:
-        raise ValueError(" No bounds provided in optimize: Brute force optimization can only be executed on a finite domain")
     
-    for bound in bounds:
-        if np.any(np.abs(bound) > 1e4):
-            raise ValueError("brute_force Boundary range is too large for meaningful result")
-
+    check_bounded(bounds)
     # Check for no constraints
     if constraints != None:
         raise ValueError("brute_force cant deal with constraints")
@@ -106,7 +101,21 @@ def brute_force(fun: callable, x0: np.ndarray, args=(), Ns: int = 5, bounds: Lis
     x_optimal = grid[min_index,:]
     y_optimal = loss[min_index]
 
-    return OptimizeResult(fun = y_optimal,x=x_optimal, succes = True) 
+    return OptimizeResult(fun = y_optimal,x=x_optimal, succes = True)
+
+def check_bounded(allbounds : List[Tuple[float]]) -> None:
+    
+    # Check for finite boundries
+    if allbounds == None:
+        raise ValueError(" No bounds provided in optimize: Brute force optimization can only be executed on a finite domain")
+    
+    for bounds in allbounds:
+        for bound in bounds:
+            if bound == None:
+                raise ValueError(" Infinite boundaries not supported for brute force optimizer ")
+            if np.any(np.abs(bound) > 1e3):
+                raise ValueError("Boundary range is too large for meaningful result")
+
 
    
     
