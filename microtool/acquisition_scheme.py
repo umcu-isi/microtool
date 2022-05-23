@@ -5,9 +5,10 @@ from typing import Union, List, Tuple, Dict, Optional
 
 import numpy as np
 from pathlib import Path
+from scipy.optimize import LinearConstraint
 
 
-# TODO: Linear constraints? For example: Δ > δ  and TR > TI + TE
+# TODO: Linear constraints? For example: Δ > δ. Deal with fixed parameters when applying constraints
 @dataclass
 class AcquisitionParameters:
     # noinspection PyUnresolvedReferences
@@ -67,7 +68,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         parameters = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
         return f'Acquisition scheme with {n} measurements and {m} scalar parameters:\n{parameters}'
 
-    def get_free_parameters(self):
+    def get_free_parameters(self) -> np.ndarray:
         """
         Returns the free acquisition parameters as an M×N matrix, where M is the number of parameters and N is the
         number of measurements in the acquisition scheme.
@@ -108,7 +109,23 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         """
         m, n = self._matrix.shape
         return [(p.lower_bound, p.upper_bound) for p in self.values() if not p.fixed for _ in range(n)]
+    
+    def get_free_parameter_keys(self) -> List[str]:
+        """ 
+        Function for extracting the keys of the free parameters
 
+        :return: list of the keys of the free parameters, in the same order as get_free_parameters
+        """
+        return [key for key,value in self.items() if not value.fixed]
+
+    def get_constraints(self) -> LinearConstraint:
+        """
+        Returns optimisation constraints on the scheme parameters.
+
+        :return: A scipy.optimize.LinearConstraint object. None is used to specify no constraints.
+        """
+        # TODO: deal with fixed variables! 
+        return None
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
@@ -125,6 +142,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray]):
+        
+        # TODO: Check on initial pulse variables
+        
         # Check if the b-vectors are unit vectors and set b=0 'vectors' to (0, 0, 0) as per convention.
         b0 = b_values == 0
         b_vectors = np.asarray(b_vectors, dtype=np.float64)
@@ -135,6 +155,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         # Calculate the spherical angles φ and θ.
         phi = np.arctan2(b_vectors[:, 1], b_vectors[:, 0])
         theta = np.arccos(b_vectors[:, 2])
+
+        
 
         super().__init__({
             'DiffusionBValue': AcquisitionParameters(values=b_values, unit='s/mm²', scale=1000),
@@ -244,6 +266,18 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             for bvec in self.b_vectors:
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
+    def get_constraints(self) -> LinearConstraint:
+        # Matrix defining Δ > δ or equivalently 0 < Δ - δ
+        pulse_num = len(self.pulse_widths)
+        
+        
+        widthBlock = np.diag(np.repeat(-1,pulse_num))
+        intervalBlock = np.diag(np.repeat(1,pulse_num))
+        
+        
+        lb = np.repeat(0,pulse_num)
+        ub = np.repeat(np.inf,pulse_num)
+        return None
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
@@ -258,10 +292,12 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
                  repetition_times: Union[List[float], np.ndarray],
                  echo_times: Union[List[float], np.ndarray],
                  inversion_times: Union[List[float], np.ndarray]):
-        super().__init__({
-            'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100),
-            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100),
-            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10),
+        super().__init__(
+            # TODO: Check that initial 0 < -TI + TR - TE is satisfied
+            {
+            'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100,lower_bound = 0.5, upper_bound=100),
+            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100,lower_bound = 0.5, upper_bound=100),
+            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10,lower_bound = 0.5, upper_bound=100),
         })
 
     @property
@@ -284,3 +320,17 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         An array of N inversion times in milliseconds.
         """
         return self['InversionTime'].values
+
+    def get_constraints(self) -> LinearConstraint:
+        
+        pulse_num = len(self.repetition_times)
+        
+        # Matrix defining TR > TI + TE or equivalently 0 < -TI + TR - TE for every pulse
+        TIBlock = np.diag(np.repeat(-1,pulse_num))
+        TRBlock = np.diag(np.repeat(+1,pulse_num))
+        TEBlock = TIBlock
+
+        A = np.concatenate((TIBlock,TRBlock,TEBlock),axis=1)
+        lb = np.repeat(0,pulse_num)
+        ub = np.repeat(np.inf,pulse_num)
+        return LinearConstraint(A,lb,ub)

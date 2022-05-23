@@ -7,7 +7,7 @@ In order to simulate the MR signal in response to a MICROtool acquisition scheme
 """
 
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize
@@ -60,7 +60,7 @@ class TissueModel(Dict[str, TissueParameter]):
             scheme: AcquisitionScheme,
             noise_var: float,
             loss: LossFunction = crlb_loss,
-            method: Optional[str] = None) -> OptimizeResult:
+            method: Optional[Union[str,callable]] = None) -> OptimizeResult:
         """
         Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
         The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -78,6 +78,11 @@ class TissueModel(Dict[str, TissueParameter]):
         acquisition_parameter_scales = scheme.get_free_parameter_scales()
         x0 = scheme.get_free_parameters() / acquisition_parameter_scales
         bounds = scheme.get_free_parameter_bounds()
+        
+        constraints = scheme.get_constraints()
+
+        # * Notice * : manually disabled constraints!
+        constraints = None
 
         # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
         # model's Jacobian matrix and evaluating the loss function.
@@ -86,7 +91,7 @@ class TissueModel(Dict[str, TissueParameter]):
             jac = self.jacobian(scheme)
             return loss(jac, scales, include, noise_var)
 
-        result = minimize(calc_loss, x0, method=method, bounds=bounds)
+        result = minimize(calc_loss, x0, method=method, bounds=bounds,constraints=constraints)
         if 'x' in result:
             scheme.set_free_parameters(result['x'] * acquisition_parameter_scales)
 
@@ -142,8 +147,9 @@ class RelaxationTissueModel(TissueModel):
         te_t2 = np.exp(-te / self['T2'].value)
 
         # Calculate the derivative of the signal attenuation to T1, T2 and S0.
-        return np.array([
+        jac = np.array([
             self['S0'].value * (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (self['T1'].value ** 2),  # δS(S0, T1, T2) / δT1
             self['S0'].value * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (self['T2'].value ** 2),  # δS(S0, T1, T2) / δT2
             (1 - 2 * ti_t1 + tr_t1) * te_t2,   # δS(S0, T1, T2) / δS0
         ]).T
+        return jac
