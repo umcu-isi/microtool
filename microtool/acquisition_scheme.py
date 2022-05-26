@@ -8,7 +8,7 @@ from pathlib import Path
 from scipy.optimize import LinearConstraint
 
 
-# TODO: Linear constraints? For example: Δ > δ. Deal with fixed parameters when applying constraints
+# TODO: Linear constraints? Make an abstracted implementation of this rather than child class specific
 @dataclass
 class AcquisitionParameters:
     # noinspection PyUnresolvedReferences
@@ -67,7 +67,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         })
 
         # Allows user to provide bounds on parameters when constructing the scheme
-        # bounds need to be provided in order of acquisition parameters
+        # bounds need to be provided in same order as acquisition parameters
         if bounds != None:
             self.set_parameter_bounds(bounds)
     
@@ -146,9 +146,11 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
     def get_constraints(self) -> LinearConstraint:
         """
-        Returns optimisation constraints on the scheme parameters. Implementation is child-class specific
-
-        :return: A scipy.optimize.LinearConstraint object. None is used to specify no constraints.
+        Returns optimisation constraints on the scheme parameters. Implementation is child-class specific.
+        
+        :return: A scipy.optimize.LinearConstraint object. None is used to specify no constraints. 
+        The constraint is defined by lb <= A.x <= ub, x being the array of parameters optimized. 
+        A is the matrix defining the constraint relation between parameters.
         """
         return None
 
@@ -371,7 +373,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
             include.append(blocks[key])
 
         # If all parameters are included in optimization we simply set the lowerbound to zero
-        # the fixed parameters are substracted from the lowerbound so that for example TI < TR - TE
+        # the fixed parameters are substracted from the lowerbound so that for example TI <= TR - TE <= infty
         lb = np.repeat(0,pulse_num)
         for param in self.get_fixed_parameter_keys():
             lb = lb - paramsigns[param] * self[param].values    
@@ -379,5 +381,4 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         A = np.concatenate(include,axis=1)
         ub = np.repeat(np.inf,pulse_num)
 
-        # The constrained is defined by lb < A.x < ub, x being the array of parameters optimized
         return LinearConstraint(A,lb,ub)

@@ -51,7 +51,18 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     return np.linalg.eigvalsh(information)[include].sum()
 
 def brute_wrapper(fun: callable, x0: np.ndarray, args=(), Ns: int = 10, bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints = None,  **options) -> OptimizeResult:
-    check_bounded(bounds)
+    """A wrapper around the bruteforce optimizer from scipy.optimize such that it is compatible with 
+    scipy.optimize.minimize
+
+    :param fun: The objective function to be minimized
+    :param x0: initial guess for parameters (not used in bruteforce)
+    :param args: additional objective function parameters incase you OF has them, defaults to ()
+    :param Ns: Sample points per parameter for the parameter grid, defaults to 10
+    :param bounds: The domain in which we sample the parameters (optional arg in higher level function), defaults to None
+    :param constraints: Constraint objects defining the constraints between parameters, defaults to None
+    :return: A scipy.optimize.OptimizeResult object containing the optimal parameter values
+    """    
+    _check_bounded(bounds)
     ranges = tuple(bounds)
     result = brute(fun, ranges, args=args, Ns=Ns)
     return OptimizeResult(x=result, succes = True) 
@@ -69,31 +80,22 @@ def brute_force(fun: callable, x0: np.ndarray, args=(), Ns: int = 10, bounds: Li
     :param bounds: This needs to be provided otherwise bruteforce cant be used, defaults to None
     :param constraints: I dont know how brute force could deal with this, defaults to None
     :return: OptimizeResult object to for output
-    :raise ValueError: bounds or constraints are not appropriate for brute force optimization
     """
     
-    check_bounded(bounds)
-    # Check for no constraints
-    if constraints != None:
-        raise ValueError("brute_force cant deal with constraints")
-    
+    _check_bounded(bounds)
     # Number of parameters to optimize
     Nx = len(x0)
 
-    # Creating a discretized domain to compute objective funtion values on
-    bounds = np.array(bounds)
-    domains = np.linspace(bounds[:,0],bounds[:,1],num=Ns,axis = -1)
+    # Discretizing the domain to compute objective funtion values
+    grid = _make_grid(bounds,Ns)
 
-    # Meshgrid only takes individual domain vectors so we use unpacking operator *
-    mesh = np.array(np.meshgrid(*domains))
+    # Removing parameter combinations that are not conform constraints
+    if constraints != None:
+        grid = _constrain_grid(grid,constraints)
 
-    # Reshaping so that grid[i,:] is an array of parameter values that we can 
-    # evaluate using the objective function
-    grid = np.dstack(mesh).reshape(-1,Nx)
-    
     # Evaluating the objective function for all possible parameter combinations
-    loss = np.zeros(Ns*Nx)
-    for i in range(Ns*Nx):
+    loss = np.zeros(grid.shape[0])
+    for i in range(grid.shape[0]):
         loss[i] = fun(grid[i,:])
     
     # Getting the optimal values by finding the minimum loss.
@@ -103,8 +105,62 @@ def brute_force(fun: callable, x0: np.ndarray, args=(), Ns: int = 10, bounds: Li
 
     return OptimizeResult(fun = y_optimal,x=x_optimal, succes = True)
 
-def check_bounded(allbounds : List[Tuple[float]]) -> None:
+def _make_grid(bounds:List[Tuple[Optional[float], Optional[float]]], Ns:int) -> np.ndarray:
+    """Constructs a grid such that grid[i,:] contains a the ith combination of parameters 
+
+    :param bounds: The range over which we wish to optimize
+    :param Ns: The number of samples along the range   
+    :return: The grid that we can use to compute the objective function values
+    """    
+    N = len(bounds)
+    for k in range(N):
+        if type(bounds[k]) is not type(slice(None)):
+            if len(bounds[k]) < 3:
+                bounds[k] = tuple(bounds[k]) + (complex(Ns),)
+            bounds[k] = slice(*bounds[k])
+    if (N == 1):
+        bounds = bounds[0]
+
+    grid = np.mgrid[bounds]
     
+    # obtain an array of parameters that is iterable by a map-like callable
+    inpt_shape = grid.shape
+    if (N > 1):
+        grid = np.reshape(grid, (inpt_shape[0], np.prod(inpt_shape[1:]))).T
+    return grid
+
+
+def _constrain_grid(grid: np.ndarray, constraints : LinearConstraint) -> np.ndarray:
+    """Drops parameter combinations from the grid that do not comply with the provided linear constraints.
+    The constraint is formulated as lb <= A.x <= ub
+
+    :param grid: The full parameter grid
+    :param constraints: The LinearConstraints object used to constrain the grid
+    :return: The grid values that satisfy the constraints
+    """
+    # Readability variables    
+    A = constraints.A
+    lb = constraints.lb
+    ub = constraints.ub
+
+    index_to_drop =[]
+    for i in range(grid.shape[0]):
+        # Apply matrix dot product to all parameter combinations
+        transformed_parameters = np.dot(A,grid[i,:])
+        # check if result of above operations breaks inequalities
+        if not (np.all(lb <= transformed_parameters) and np.all(transformed_parameters <= ub) ):
+            index_to_drop.append(i)
+
+    # if not satisfied drop parametercombination
+    return np.delete(grid,np.array(index_to_drop),axis=0)
+
+def _check_bounded(allbounds : List[Tuple[float]]) -> None:
+    """This function checks the boundedness of a set of given bounds such that brute force optimizers
+    can assume boundedness after calling this function.
+
+    :param allbounds: A list of bounds
+    :raises ValueError: Raises a value error in case the there are no bounds or if bounds are to large
+    """    
     # Check for finite boundries
     if allbounds == None:
         raise ValueError(" No bounds provided in optimize: Brute force optimization can only be executed on a finite domain")
