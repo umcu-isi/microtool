@@ -259,9 +259,9 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
                  echo_times: Union[List[float], np.ndarray],
                  inversion_times: Union[List[float], np.ndarray]):
         super().__init__({
-            'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100),
-            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100),
-            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10),
+            'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100,upper_bound=1000),
+            'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100, upper_bound=1000),
+            'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10,upper_bound=100),
         })
 
     @property
