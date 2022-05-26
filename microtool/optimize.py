@@ -61,7 +61,11 @@ def brute_wrapper(fun: callable, x0: np.ndarray, args=(), Ns: int = 10, bounds: 
     :param bounds: The domain in which we sample the parameters (optional arg in higher level function), defaults to None
     :param constraints: Constraint objects defining the constraints between parameters, defaults to None
     :return: A scipy.optimize.OptimizeResult object containing the optimal parameter values
-    """    
+    :raises NotImplementedError: If constraints are provided this function doesnt know what to do.
+    """
+    if constraints != None:
+        raise NotImplementedError("Brute wrapper cant deal with constraints yet.") 
+
     _check_bounded(bounds)
     ranges = tuple(bounds)
     result = brute(fun, ranges, args=args, Ns=Ns)
