@@ -1,6 +1,6 @@
 
 from typing import Sequence, Callable
-from dataclasses import dataclass,field,astuple
+from dataclasses import dataclass,field,astuple, asdict
 import numpy as np
 from scipy.optimize.optimize import OptimizeResult
 
@@ -50,106 +50,5 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     # Rescaling has already been done by multiplying the Jacobian by the parameter scales.
     return np.linalg.eigvalsh(information)[include].sum()
 
-def SOMA(fun : callable, x0 : np.ndarray, args = (),**options) -> OptimizeResult:
-    """The SOMA optimization as described in https://github.com/diepquocbao/SOMA-T3A-Python (version 2)
-
-    :param fun: The loss function we wish to minimize
-    :param x0: initial parameter choices
-    :param args: Additional arguments to the loss function, defaults to ()
-    :return: scipy.optimizeresult with optimization outcome
-    """    
-    # %%%%%%%%%%%%%%% Prelimenaries %%%%%%%%%%%%%%%%%
-    # Defining function for evaluating a population cost
-    def population_cost(pop:np.ndarray) -> np.ndarray:
-
-        _, pop_size = np.shape(pop)
-        cost = np.zeros(pop_size)
-        for i in range(pop_size):
-            cost[i] = fun(pop[:,i])
-        return cost
-
-    # Setting the control parameters to default if not supplied
-    if "control_parameters" not in options.keys():
-        cparams = ControlParametersSOMA(len(x0))
-    else:
-        cparams = options["control_parameters"]
-
-    Nx,N_jump,pop_size,max_migrations,m,n,k,max_FEs = astuple(cparams)
 
 
-    # Initial population
-    bounds = np.array(options["bounds"])
-    # making lower bound and upperbound arrays
-    lb = np.repeat(bounds[:,0].reshape(Nx,1),pop_size,axis=1)
-    ub = np.repeat(bounds[:,1].reshape(Nx,1),pop_size,axis=1)
-    pop = lb + np.random.rand(Nx, pop_size) * (ub - lb)
-    fitness = population_cost(pop)
-    FEs = pop_size
-    best_cost = min(fitness)
-    id = np.argmin(fitness)
-    best_x = pop[:,id]
-
-    # ------------ Migrations
-    migration = 0
-    while FEs < max_FEs:
-        migration +=1
-        # select migrant m
-        M = np.random.choice(range(pop_size),m,replace=False)
-        M_sort = np.argsort(fitness[M])
-        newpop = np.zeros((Nx, n * N_jump))
-        for j in range(n):
-            Migrant = pop[:, M[M_sort[j]]].reshape(Nx, 1)
-            # select leader
-            K = np.random.choice(range(pop_size),k,replace=False)
-            K_sort = np.argsort(fitness[K])
-            Leader = pop[:, K[K_sort[0]]].reshape(Nx, 1)
-        if M[M_sort[j]] == K[K_sort[0]]:
-            Leader = pop[:, K[K_sort[1]]].reshape(Nx, 1)
-        PRT = 0.05 + 0.9*(FEs/max_FEs)
-        step = 0.15 - 0.08*(FEs/max_FEs)    
-        nstep = np.arange(0,N_jump)*step + step
-        PRTvector = (np.random.rand(Nx,N_jump) < PRT) * 1
-        indi_new = Migrant + (Leader - Migrant) * nstep * PRTvector
-        # Putback into search range
-        for cl in range(N_jump):
-            for rw in range(Nx):
-                if indi_new[rw,cl] < bounds[rw,0] or indi_new[rw,cl] > bounds[rw,1]:
-                    indi_new[rw,cl] = bounds[rw,0] + np.random.rand() * (bounds[rw,1] - bounds[rw,0])
-        newpop[:,N_jump * j:N_jump * (j+1)] = indi_new
-        
-        newfitpop = population_cost(newpop)
-        FEs += n*N_jump
-
-        for j in range(n):
-            newfit = newfitpop[N_jump*j:N_jump*(j+1)]
-            min_newfit = min(newfit)
-        # ----- Accepting: Place the best offspring into the current population
-        if min_newfit <= fitness[M[M_sort[j]]]:
-            fitness[M[M_sort[j]]] = min_newfit
-            id = np.argmin(newfit)
-            pop[:, M[M_sort[j]]] = newpop[:, (N_jump*j)+id]
-            # ----- Update the global best value --------------------
-            if min_newfit < best_cost:
-                best_cost = min_newfit
-                best_x = newpop[:, (N_jump*j)+id]
-
-    return OptimizeResult(x = best_x,succes = True, fun=best_cost, nfev = FEs)
-
-
-    
-
-
-
-@dataclass
-class ControlParametersSOMA:
-    Nx : int
-    N_jump : int = 45
-    pop_size : int = 100
-    max_migrations: int = 100
-    m: int = 10
-    n: int = 5
-    k: int = 10
-    max_FEs : int = field(init=False)
-
-    def __post_init__(self):
-        self.max_FEs = self.Nx*10**4
