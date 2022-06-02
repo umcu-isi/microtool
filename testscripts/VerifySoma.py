@@ -1,5 +1,3 @@
-import scipy
-import microtool.optimize as opt
 from microtool import soma
 import numpy as np
 from scipy.optimize import minimize
@@ -13,8 +11,8 @@ def ackley(x):
     return 20 + np.exp(1) - (20 * np.exp(-.2 *np.sqrt(ninv*sum1))) - np.exp(ninv * sum2)
 
 # # Setting the control parameters
-somaopt = soma.SOMA()
-print(somaopt)
+soma_optimizer = soma.SOMA()
+print(soma_optimizer)
 
 # setting optimization parameters
 Ndim = 2
@@ -23,6 +21,6 @@ domain = (-500,500)
 bounds = np.array([domain for i in range(Ndim)])
 
 for i in range(10):
-    result = minimize(ackley,x0,method=somaopt.run,bounds=bounds)
+    result = minimize(ackley,x0,method=soma_optimizer, bounds=bounds)
     print(result)
 
