@@ -60,7 +60,8 @@ class TissueModel(Dict[str, TissueParameter]):
             scheme: AcquisitionScheme,
             noise_var: float,
             loss: LossFunction = crlb_loss,
-            method: Optional[Union[str,callable]] = None) -> OptimizeResult:
+            method: Optional[Union[str, callable]] = None,
+            **options) -> OptimizeResult:
         """
         Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
         The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -87,7 +88,7 @@ class TissueModel(Dict[str, TissueParameter]):
             jac = self.jacobian(scheme)
             return loss(jac, scales, include, noise_var)
 
-        result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints)
+        result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints,options=options)
         if 'x' in result:
             scheme.set_free_parameters(result['x'] * acquisition_parameter_scales)
 
