@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from typing import Optional, Dict
 
 import numpy as np
-from scipy.optimize import OptimizeResult, minimize
+from scipy.optimize import OptimizeResult, minimize, curve_fit
+from copy import deepcopy
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
 from .optimize import LossFunction, crlb_loss
@@ -52,6 +53,15 @@ class TissueModel(Dict[str, TissueParameter]):
 
         :param scheme: An AcquisitionScheme.
         :return: An N×M Jacobian matrix, where N is the number of samples and M is the number of tissue parameters.
+        """
+        raise NotImplementedError()
+
+    def fit(self, scheme: AcquisitionScheme, noisy_signal: np.ndarray):
+        """
+        Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
+        :param noisy_signal: The noisy signal
+        :param scheme: The scheme under investigation
+        :return: The optimized tissue parameters
         """
         raise NotImplementedError()
 
@@ -97,6 +107,7 @@ class TissueModel(Dict[str, TissueParameter]):
         return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
 
 
+
 # TODO: Take T2* and relaxation parameter distributions into account. See eq. 5 and 6 in
 #  https://www.ncbi.nlm.nih.gov/books/NBK567564/
 class RelaxationTissueModel(TissueModel):
@@ -107,6 +118,7 @@ class RelaxationTissueModel(TissueModel):
     :param t2: Transverse relaxation time constant T2 in milliseconds.
     :param s0: MR signal from fully recovered magnetisation, just before the 90° RF pulse.
     """
+
     def __init__(self, t1: float, t2: float, s0: float = 1.0):
         super().__init__({
             'T1': TissueParameter(value=t1, scale=t1, optimize=False),
@@ -145,5 +157,34 @@ class RelaxationTissueModel(TissueModel):
         return np.array([
             self['S0'].value * (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (self['T1'].value ** 2),  # δS(S0, T1, T2) / δT1
             self['S0'].value * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (self['T2'].value ** 2),  # δS(S0, T1, T2) / δT2
-            (1 - 2 * ti_t1 + tr_t1) * te_t2,   # δS(S0, T1, T2) / δS0
+            (1 - 2 * ti_t1 + tr_t1) * te_t2,  # δS(S0, T1, T2) / δS0
         ]).T
+
+    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray):
+        ti = scheme.inversion_times  # ms
+        tr = scheme.repetition_times  # ms
+        te = scheme.echo_times  # ms
+
+        # The signal function we fit to extract the tissueparameters
+        def signal_fun(measurement, t1, t2, s0):
+            ti_t1 = np.exp(-ti / t1)
+            tr_t1 = np.exp(-tr / t1)
+            te_t2 = np.exp(-te / t2)
+            return s0 * (1 - 2 * ti_t1 + tr_t1) * te_t2
+
+        # Using the current model parameters as initials for the fit (these were the true values!)
+        initial_parameters = np.array([param.value for param in self.values()])
+        # Tissue induced bounds on the parameters ( T1 < 7000 , T2 < 3000 )
+        bounds = (np.array([0,0,0]),np.array([7000,3000,np.inf]))
+        # The scipy fitting routine
+        popt, pcov = curve_fit(signal_fun, np.arange(len(tr)), noisy_signal, initial_parameters, bounds=bounds)
+        output = deepcopy(self)
+
+        for i, key in enumerate(output.keys()):
+            output[key].value = popt[i]
+
+        print(pcov)
+        return output
+
+
+
