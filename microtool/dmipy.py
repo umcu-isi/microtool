@@ -50,7 +50,7 @@ def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> DmipyAcqui
         scheme.pulse_intervals * 1e-3,  # Convert from ms to s.
     )
 
-
+# TODO: implement fit method
 class DmipyTissueModel(TissueModel):
     def __init__(self, model: MultiCompartmentModel):
         super().__init__()
