@@ -2,3 +2,6 @@
 /venv
 /MICROtool.egg-info
 *.pyc
+
+# ignore profiling files
+*.prof
