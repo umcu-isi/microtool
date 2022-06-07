@@ -4,6 +4,8 @@ and how the noise distribution affects the estimated tissueparameters.
 """
 from typing import List, Dict, Any, Tuple
 
+import pandas as pd
+
 from .tissue_model import TissueModel
 from .acquisition_scheme import AcquisitionScheme
 from scipy.stats.sampling import NumericalInversePolynomial
@@ -13,7 +15,7 @@ import numpy as np
 
 # TODO: preallocate numpy arrays for speedup
 def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous, n_sim: int) \
-        -> Tuple[List[TissueModel],List[tuple]]:
+        -> Tuple[pd.DataFrame,List[np.ndarray]]:
     """
     This function runs a Monte Carlo simulation to compute the posterior probability distribution induced in a
     tissue model given an aquisition scheme and a noise distribution.
@@ -42,11 +44,13 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
         signal_bar = signal + noise_level
 
         # Fit the tissuemodel to the noisy data and save resulting parameters
-        tissue_parameters, cov_mat = model.fit(scheme, signal_bar)
-        posterior.append(tissue_parameters)
+        model_fitted, cov_mat = model.fit(scheme, signal_bar)
+
+        # storing only information of interest namely the parameter values
+        posterior.append(model_fitted.get_parameter_values())
         cov_matrices.append(cov_mat)
 
-    return posterior, cov_mat
+    return pd.DataFrame(posterior), cov_matrices
 
 
 # TODO: possibly implement unvectorized distributions for sampling speedup see

@@ -1,7 +1,11 @@
+from matplotlib import pyplot as plt
 
 import microtool.monte_carlo
 import numpy as np
 from scipy import stats
+import seaborn as sns
+
+
 
 # Loading the tissuemodel
 relaxation_model = microtool.tissue_model.RelaxationTissueModel(t1=900, t2=90)
@@ -20,7 +24,9 @@ relaxation_model.optimize(ir_scheme, noise_var)
 noise_distribution = stats.norm(loc = 0, scale = noise_var)
 
 # Running monte carlo simulation
-posterior, covariance_matrices = microtool.monte_carlo.run(ir_scheme, relaxation_model, noise_distribution, n_sim=5)
-for tissuemodel in posterior:
-    print(tissuemodel)
+posterior, covariance_matrices = microtool.monte_carlo.run(ir_scheme, relaxation_model, noise_distribution, n_sim=1000)
+
+
+sns.histplot(posterior["T2"])
+plt.show()
 
