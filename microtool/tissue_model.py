@@ -5,9 +5,10 @@ The TissueModel is a base class for different kinds of tissue models (different 
 In order to simulate the MR signal in response to a MICROtool acquisition scheme, the TissueModel first translates the
  acquisition scheme to a modelling-software specific one.
 """
-
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Dict, Tuple
+
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize, curve_fit
@@ -56,7 +57,7 @@ class TissueModel(Dict[str, TissueParameter]):
         """
         raise NotImplementedError()
 
-    def fit(self, scheme: AcquisitionScheme, noisy_signal: np.ndarray):
+    def fit(self, scheme: AcquisitionScheme, noisy_signal: np.ndarray) -> Tuple[TissueModel, np.ndarray]:
         """
         Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
         :param noisy_signal: The noisy signal
@@ -104,6 +105,12 @@ class TissueModel(Dict[str, TissueParameter]):
             scheme.set_free_parameters(result['x'] * acquisition_parameter_scales)
 
         return result
+
+    def get_parameter_values(self):
+        valdict = {}
+        for key,parameter in self.items():
+            valdict[key] = parameter.value
+        return valdict
 
     def __str__(self) -> str:
         parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
@@ -162,7 +169,7 @@ class RelaxationTissueModel(TissueModel):
             (1 - 2 * ti_t1 + tr_t1) * te_t2,  # δS(S0, T1, T2) / δS0
         ]).T
 
-    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray) -> Tuple:
+    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray) -> Tuple[TissueModel,np.ndarray]:
         ti = scheme.inversion_times  # ms
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
