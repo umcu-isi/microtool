@@ -4,6 +4,8 @@ import microtool.monte_carlo
 import numpy as np
 from scipy import stats
 import seaborn as sns
+import pathlib
+from math import sqrt
 
 
 
@@ -24,9 +26,18 @@ relaxation_model.optimize(ir_scheme, noise_var)
 noise_distribution = stats.norm(loc = 0, scale = noise_var)
 
 # Running monte carlo simulation
-posterior, covariance_matrices = microtool.monte_carlo.run(ir_scheme, relaxation_model, noise_distribution, n_sim=1000)
+n_sim = 10
+posterior = microtool.monte_carlo.run(ir_scheme, relaxation_model, noise_distribution, n_sim=n_sim)
 
+currentdir = pathlib.Path('.')
+outputdir = currentdir / "MC_results"
+outputdir.mkdir(exist_ok=True)
+
+#TODO: consider binary filetype for dataframe storage
+posterior.to_csv(outputdir/"TPD_relaxation.csv")
 
 sns.histplot(posterior["T2"])
+plt.title(f"n_sim = {n_sim}")
+plt.savefig(outputdir / "T2_distribution.png")
 plt.show()
 

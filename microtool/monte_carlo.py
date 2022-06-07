@@ -2,20 +2,27 @@
 This module contains all functions and classes involved in the monte carlo simulation of acquisition schemes
 and how the noise distribution affects the estimated tissueparameters.
 """
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Union
 
 import pandas as pd
 
 from .tissue_model import TissueModel
 from .acquisition_scheme import AcquisitionScheme
+from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme
+from dmipy.core.modeling_framework import MultiCompartmentModel
+
+MicroToolModel = Union[TissueModel, MultiCompartmentModel]
+MicroToolScheme = Union[AcquisitionScheme, DmipyAcquisitionScheme]
+
 from scipy.stats.sampling import NumericalInversePolynomial
 from scipy import stats
 import numpy as np
 
 
 # TODO: preallocate numpy arrays for speedup
-def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous, n_sim: int) \
-        -> Tuple[pd.DataFrame,List[np.ndarray]]:
+# TODO: Ensure that scheme and model are compatible (TissueModel <-> AcquisitionScheme) and (MCM <-> DMAS)
+
+def run(scheme: MicroToolScheme, model: MicroToolModel, noise_distribution: stats.rv_continuous, n_sim: int) -> pd.DataFrame:
     """
     This function runs a Monte Carlo simulation to compute the posterior probability distribution induced in a
     tissue model given an aquisition scheme and a noise distribution.
@@ -24,10 +31,10 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
     :param model: The tissuemodel for which we wish to know the posterior distribution
     :param noise_distribution: The noise distribution to perturb the signal
     :param n_sim: The number of times we sample the noise and fit the tissue parameters
-    :return: The tissuemodels with the fit parameters given the noisy signals and the covariant matrices for the fits.
+    :return: The fitted tissueparameters for all noise realizations
     """
     # synthesize data from TissueModel with a set of tissueparameters using scheme
-    signal = model(scheme)
+    signal = model.simulate_signal(scheme)
 
     # Setting up the distribution sampler
     urng = np.random.default_rng()  # Numpy uniform distribution sampler as basis random number generator
@@ -44,13 +51,12 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
         signal_bar = signal + noise_level
 
         # Fit the tissuemodel to the noisy data and save resulting parameters
-        model_fitted, cov_mat = model.fit(scheme, signal_bar)
-
+        model_fitted = model.fit(scheme, signal_bar)
+        parameter_dict = model_fitted.fitted_parameters
         # storing only information of interest namely the parameter values
-        posterior.append(model_fitted.get_parameter_values())
-        cov_matrices.append(cov_mat)
+        posterior.append(parameter_dict)
 
-    return pd.DataFrame(posterior), cov_matrices
+    return pd.DataFrame(posterior)
 
 
 # TODO: possibly implement unvectorized distributions for sampling speedup see
@@ -59,6 +65,7 @@ class DistributionBase:
     """
     Base class for distributions to be used in monte carlo simulations
     """
+
     def pdf(self, x: float) -> float:
         raise NotImplementedError
 
@@ -73,6 +80,7 @@ class ScipyNormal(DistributionBase):
     """
     A wrapper for the normal distribution.. for now only the built in function is used as test
     """
+
     def __init__(self, mean: float = 0, std: float = 1):
         self.norm = stats.norm(loc=mean, scale=std)
 

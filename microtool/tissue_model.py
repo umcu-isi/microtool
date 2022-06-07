@@ -46,6 +46,15 @@ class TissueModel(Dict[str, TissueParameter]):
         """
         raise NotImplementedError()
 
+    def simulate_signal(self,scheme: AcquisitionScheme) -> np.ndarray:
+        """
+        Wrapper for the signal simulation already implemented in __call__ method
+
+        :param scheme: The scheme for which we want to simulate the signal
+        :return: The signal attenuation values
+        """
+        return self.__call__(scheme)
+
     def jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
         """
         Calculates the change in MR signal attenuation due to a change in the tissue model parameters.
@@ -57,13 +66,14 @@ class TissueModel(Dict[str, TissueParameter]):
         """
         raise NotImplementedError()
 
-    def fit(self, scheme: AcquisitionScheme, noisy_signal: np.ndarray) -> Tuple[TissueModel, np.ndarray]:
+    def fit(self, scheme: AcquisitionScheme, noisy_signal: np.ndarray) -> FittedTissueModel:
         """
         Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
         :param noisy_signal: The noisy signal
         :param scheme: The scheme under investigation
         :return: A tuple containing the optimized tissue parameters as a TissueModel instance and the covariance matrix of the fit
         """
+
         raise NotImplementedError()
 
     def optimize(
@@ -112,9 +122,36 @@ class TissueModel(Dict[str, TissueParameter]):
             valdict[key] = parameter.value
         return valdict
 
+    @property
+    def parameter_names(self):
+        return [key for key in self.keys()]
+
+    def parameter_vector_to_parameters(self, parameter_vector: np.ndarray) -> Dict[str, float]:
+        parameters = {}
+        for i, name in enumerate(self.parameter_names):
+            parameters[name] = parameter_vector[i]
+        return parameters
+
     def __str__(self) -> str:
         parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
         return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
+
+class FittedTissueModel:
+    def __init__(self, model: TissueModel, fitted_parameters_vector: np.ndarray):
+        self.model = model
+        self.fitted_parameters_vector = fitted_parameters_vector
+
+    #TODO: add attributes describing fit quality
+
+    @property
+    def fitted_parameters(self) -> Dict[str,float]:
+
+        # getting the parameter names and values
+        names = self.model.parameter_names
+        parameter_vector = self.fitted_parameters_vector
+
+        return {name: parameter_vector[i] for i, name in enumerate(names)}
+
 
 
 # TODO: Take T2* and relaxation parameter distributions into account. See eq. 5 and 6 in
@@ -169,7 +206,7 @@ class RelaxationTissueModel(TissueModel):
             (1 - 2 * ti_t1 + tr_t1) * te_t2,  # δS(S0, T1, T2) / δS0
         ]).T
 
-    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray) -> Tuple[TissueModel,np.ndarray]:
+    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray) -> FittedTissueModel:
         ti = scheme.inversion_times  # ms
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
@@ -199,11 +236,7 @@ class RelaxationTissueModel(TissueModel):
 
         bounds = (np.array([0, 0, 0]), np.array([7000, 3000, np.inf]))
         # The scipy fitting routine
-        popt, pcov = curve_fit(signal_fun, np.arange(len(tr)), noisy_signal, initial_parameters, bounds=bounds)
+        popt, _ = curve_fit(signal_fun, np.arange(len(tr)), noisy_signal, initial_parameters, bounds=bounds)
 
-        output = deepcopy(self)
+        return FittedTissueModel(self, popt)
 
-        for i, key in enumerate(output.keys()):
-            output[key].value = popt[i]
-
-        return output, pcov
