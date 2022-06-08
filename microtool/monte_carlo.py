@@ -1,31 +1,28 @@
 """
 This module contains all functions and classes involved in the monte carlo simulation of acquisition schemes
 and how the noise distribution affects the estimated tissueparameters.
+
+IMPORTANT: Always execute run inside a if name main clause! otherwise the parralel processing throws a cryptic error
 """
-from typing import List, Dict, Any, Tuple, Union
+from typing import Union, List, Dict
 
-import pandas as pd
-
-from .tissue_model import TissueModel
-from .acquisition_scheme import AcquisitionScheme
-from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme
-from dmipy.core.modeling_framework import MultiCompartmentModel
-
-MicroToolModel = Union[TissueModel, MultiCompartmentModel]
-MicroToolScheme = Union[AcquisitionScheme, DmipyAcquisitionScheme]
-
-from scipy.stats.sampling import NumericalInversePolynomial
-from scipy import stats
 import numpy as np
+from scipy import stats
+from scipy.stats.sampling import NumericalInversePolynomial
 
+from .acquisition_scheme import AcquisitionScheme
+from .tissue_model import TissueModel
 
+MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 # TODO: preallocate numpy arrays for speedup
 # TODO: Ensure that scheme and model are compatible (TissueModel <-> AcquisitionScheme) and (MCM <-> DMAS)
+# TODO: Implement Rician noise distribution
+# TODO: Show progress messages to the user!
 
-def run(scheme: MicroToolScheme, model: MicroToolModel, noise_distribution: stats.rv_continuous, n_sim: int) -> pd.DataFrame:
+def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous, n_sim: int) -> MonteCarloResult:
     """
     This function runs a Monte Carlo simulation to compute the posterior probability distribution induced in a
-    tissue model given an aquisition scheme and a noise distribution.
+    tissue model given an aquisition scheme and a noise distribution. NEEDS to be executed inside if name main clause!
 
     :param scheme: The acquisition scheme under investigation
     :param model: The tissuemodel for which we wish to know the posterior distribution
@@ -33,8 +30,9 @@ def run(scheme: MicroToolScheme, model: MicroToolModel, noise_distribution: stat
     :param n_sim: The number of times we sample the noise and fit the tissue parameters
     :return: The fitted tissueparameters for all noise realizations
     """
+
     # synthesize data from TissueModel with a set of tissueparameters using scheme
-    signal = model.simulate_signal(scheme)
+    signal = model(scheme)
 
     # Setting up the distribution sampler
     urng = np.random.default_rng()  # Numpy uniform distribution sampler as basis random number generator
@@ -44,8 +42,8 @@ def run(scheme: MicroToolScheme, model: MicroToolModel, noise_distribution: stat
     posterior = []
     cov_matrices = []
     for i in range(n_sim):
-        # get the noise level by sampling the given distribution
-        noise_level = sampler.rvs()
+        # get the noise level by sampling the given distribution for all individual measurements
+        noise_level = sampler.rvs(size=len(signal))
 
         # add noise to the 'simulated' signal
         signal_bar = signal + noise_level
@@ -53,10 +51,13 @@ def run(scheme: MicroToolScheme, model: MicroToolModel, noise_distribution: stat
         # Fit the tissuemodel to the noisy data and save resulting parameters
         model_fitted = model.fit(scheme, signal_bar)
         parameter_dict = model_fitted.fitted_parameters
+
+
+
         # storing only information of interest namely the parameter values
         posterior.append(parameter_dict)
 
-    return pd.DataFrame(posterior)
+    return posterior
 
 
 # TODO: possibly implement unvectorized distributions for sampling speedup see

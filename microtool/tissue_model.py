@@ -6,13 +6,12 @@ In order to simulate the MR signal in response to a MICROtool acquisition scheme
  acquisition scheme to a modelling-software specific one.
 """
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Optional, Dict, Tuple
 
+from dataclasses import dataclass
+from typing import Optional, Dict, List, Union
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize, curve_fit
-from copy import deepcopy
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
 from .optimize import LossFunction, crlb_loss
@@ -46,8 +45,9 @@ class TissueModel(Dict[str, TissueParameter]):
         """
         raise NotImplementedError()
 
-    def simulate_signal(self,scheme: AcquisitionScheme) -> np.ndarray:
+    def simulate_signal(self, scheme: AcquisitionScheme) -> np.ndarray:
         """
+        Calculates the MR signal attenuation
         Wrapper for the signal simulation already implemented in __call__ method
 
         :param scheme: The scheme for which we want to simulate the signal
@@ -116,14 +116,15 @@ class TissueModel(Dict[str, TissueParameter]):
 
         return result
 
-    def get_parameter_values(self):
-        valdict = {}
-        for key,parameter in self.items():
-            valdict[key] = parameter.value
-        return valdict
+    @property
+    def parameters(self) -> Dict[str, Union[float, np.ndarray]]:
+        parameters = {}
+        for name, parameter in self.items():
+            parameters[name] = parameter.value
+        return parameters
 
     @property
-    def parameter_names(self):
+    def parameter_names(self)-> List[str]:
         return [key for key in self.keys()]
 
     def parameter_vector_to_parameters(self, parameter_vector: np.ndarray) -> Dict[str, float]:
@@ -132,26 +133,30 @@ class TissueModel(Dict[str, TissueParameter]):
             parameters[name] = parameter_vector[i]
         return parameters
 
+    @staticmethod
+    def parameters_to_parameter_vector(parameters: dict):
+        #TODO: deal with parameter cardinality > 1 (or abandon this interface altogether)
+        return np.array([parameter for parameter in parameters.values()])
+
     def __str__(self) -> str:
         parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
         return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
 
+
 class FittedTissueModel:
     def __init__(self, model: TissueModel, fitted_parameters_vector: np.ndarray):
-        self.model = model
+        self._model = model
         self.fitted_parameters_vector = fitted_parameters_vector
 
-    #TODO: add attributes describing fit quality
+    # TODO: add attributes describing fit quality
 
     @property
-    def fitted_parameters(self) -> Dict[str,float]:
-
+    def fitted_parameters(self) -> Dict[str, float]:
         # getting the parameter names and values
-        names = self.model.parameter_names
+        names = self._model.parameter_names
         parameter_vector = self.fitted_parameters_vector
-
+        # TODO: deal with fixed parameters
         return {name: parameter_vector[i] for i, name in enumerate(names)}
-
 
 
 # TODO: Take T2* and relaxation parameter distributions into account. See eq. 5 and 6 in
@@ -239,4 +244,3 @@ class RelaxationTissueModel(TissueModel):
         popt, _ = curve_fit(signal_fun, np.arange(len(tr)), noisy_signal, initial_parameters, bounds=bounds)
 
         return FittedTissueModel(self, popt)
-

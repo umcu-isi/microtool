@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Union
 
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
@@ -26,7 +26,8 @@ def get_parameters(diffusion_model: MultiCompartmentModel) -> Dict[str, TissuePa
 
             if value is None:
                 raise ValueError(f'Parameter {parameter_name} of model {model_name} has no value.')
-
+            if np.any(np.isnan(value)):
+                raise ValueError(f'Parameter {parameter_name} of model {model_name} has a nan value.')
             # Iterate over vector parameters and add their elements as scalar tissue parameters.
             for i in range(cardinality):
                 index_postfix = '' if cardinality == 1 else f'_{i}'
@@ -41,17 +42,27 @@ def get_parameters(diffusion_model: MultiCompartmentModel) -> Dict[str, TissuePa
     return parameters
 
 
-def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> DmipyAcquisitionScheme:
+def convert_acquisition_scheme(
+        scheme: Union[DiffusionAcquisitionScheme, DmipyAcquisitionScheme]) -> DmipyAcquisitionScheme:
     # Create a dmipy acquisition scheme.
-    return acquisition_scheme_from_bvalues(
-        scheme.b_values * 1e6,  # Convert from s/mm² to s/m².
-        scheme.b_vectors,
-        scheme.pulse_widths * 1e-3,  # Convert from ms to s.
-        scheme.pulse_intervals * 1e-3,  # Convert from ms to s.
-    )
+    if isinstance(scheme, DmipyAcquisitionScheme):
+        return scheme
+    else:
+        return acquisition_scheme_from_bvalues(
+            scheme.b_values * 1e6,  # Convert from s/mm² to s/m².
+            scheme.b_vectors,
+            scheme.pulse_widths * 1e-3,  # Convert from ms to s.
+            scheme.pulse_intervals * 1e-3,  # Convert from ms to s.
+        )
+
+
 
 # TODO: implement fit method
 class DmipyTissueModel(TissueModel):
+    """
+    Wrapper for the MultiCompartment models used by dmipy. Note that the parameters need to be initialized in the
+    dmipy model otherwise a value error is raised.
+    """
     def __init__(self, model: MultiCompartmentModel):
         super().__init__()
 
@@ -84,3 +95,24 @@ class DmipyTissueModel(TissueModel):
 
         # Divide by the finite differences to obtain the derivatives, and add the derivatives for S0.
         return np.concatenate((differences * self._reciprocal_h, [baseline])).T
+
+    def fit(self, scheme: DmipyAcquisitionScheme, noisy_signal: np.ndarray):
+        convert_acquisition_scheme(scheme)
+        result = self._model.fit(scheme, noisy_signal)
+        #TODO: use tissuemodel wrapper for output
+        # Note that some of the parameters are not included in the fitting and hence will not be returned when calling fitted_parameters
+        # on FittedMultiCompartmentModel
+
+        return result
+
+    # class FittedDmipyTissueModel:
+    #     def __init__(self, model:DmipyTissueModel, fitted_parameters: Dict[str, np.ndarray]):
+    #         self._model = model
+    #         self.fitted_parameter_dmipy = fitted_parameters
+    #
+    #     @property
+    #     def fitted_parameters(self) -> Dict[str, float]:
+    #         pass
+
+
+
