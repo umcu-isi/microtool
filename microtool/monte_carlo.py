@@ -14,12 +14,15 @@ from .acquisition_scheme import AcquisitionScheme
 from .tissue_model import TissueModel
 
 MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
+
+
 # TODO: preallocate numpy arrays for speedup
 # TODO: Ensure that scheme and model are compatible (TissueModel <-> AcquisitionScheme) and (MCM <-> DMAS)
 # TODO: Implement Rician noise distribution
 # TODO: Show progress messages to the user!
 
-def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous, n_sim: int) -> MonteCarloResult:
+def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous,
+        n_sim: int) -> MonteCarloResult:
     """
     This function runs a Monte Carlo simulation to compute the posterior probability distribution induced in a
     tissue model given an aquisition scheme and a noise distribution. NEEDS to be executed inside if name main clause!
@@ -51,8 +54,6 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
         # Fit the tissuemodel to the noisy data and save resulting parameters
         model_fitted = model.fit(scheme, signal_bar)
         parameter_dict = model_fitted.fitted_parameters
-
-
 
         # storing only information of interest namely the parameter values
         posterior.append(parameter_dict)
