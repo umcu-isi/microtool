@@ -71,7 +71,8 @@ class TissueModel(Dict[str, TissueParameter]):
         Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
         :param noisy_signal: The noisy signal
         :param scheme: The scheme under investigation
-        :return: A tuple containing the optimized tissue parameters as a TissueModel instance and the covariance matrix of the fit
+        :return: A tuple containing the optimized tissue parameters as a TissueModel instance and the covariance matrix
+                 of the fit
         """
 
         raise NotImplementedError()
@@ -124,7 +125,7 @@ class TissueModel(Dict[str, TissueParameter]):
         return parameters
 
     @property
-    def parameter_names(self)-> List[str]:
+    def parameter_names(self) -> List[str]:
         return [key for key in self.keys()]
 
     def parameter_vector_to_parameters(self, parameter_vector: np.ndarray) -> Dict[str, float]:
@@ -135,7 +136,7 @@ class TissueModel(Dict[str, TissueParameter]):
 
     @staticmethod
     def parameters_to_parameter_vector(parameters: dict):
-        #TODO: deal with parameter cardinality > 1 (or abandon this interface altogether)
+        # TODO: deal with parameter cardinality > 1 (or abandon this interface altogether)
         return np.array([parameter for parameter in parameters.values()])
 
     def __str__(self) -> str:
