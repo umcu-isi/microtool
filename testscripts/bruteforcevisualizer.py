@@ -1,4 +1,6 @@
-from microtool.optimize import brute_force
+from matplotlib import pyplot as plt
+
+from microtool.optimize import BruteForce, plot_loss
 from scipy.optimize import minimize
 import numpy as np
 
@@ -14,7 +16,10 @@ def ackley(x):
 # setting optimization parameters
 Ndim = 2
 x0 = np.zeros(Ndim)
-domain = (-500, 500)
+domain = (-50, 50)
 bounds = [domain for i in range(Ndim)]
-
-minimize(ackley, x0, method=brute_force, bounds=bounds ,options={"show_plot": True, "Ns":100})
+# setting the optimizer
+brute_force = BruteForce(Ns=100, plot_mask=np.array([0]))
+result = minimize(ackley, x0, method=brute_force, bounds=bounds)
+plot_loss(result, ackley, np.array([5]), np.array([0]))
+plt.show()
