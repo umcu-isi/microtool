@@ -13,7 +13,7 @@ import numpy as np
 from scipy.optimize import OptimizeResult, minimize
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
-from .optimize import LossFunction, crlb_loss
+from .optimize import LossFunction, crlb_loss, Optimizer
 
 
 @dataclass
@@ -60,7 +60,7 @@ class TissueModel(Dict[str, TissueParameter]):
             scheme: AcquisitionScheme,
             noise_var: float,
             loss: LossFunction = crlb_loss,
-            method: Optional[Union[str, callable]] = None,
+            method: Optional[Union[str, callable, Optimizer]] = None,
             **options) -> OptimizeResult:
         """
         Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
