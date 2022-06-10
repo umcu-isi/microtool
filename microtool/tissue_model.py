@@ -74,8 +74,8 @@ class TissueModel(Dict[str, TissueParameter]):
         :param method: Type of solver. See the documentation for scipy.optimize.minimize
         :return: A scipy.optimize.OptimizeResult object.
         """
-        scales = [value.scale for value in self.values()]
-        include = [value.optimize for value in self.values()]
+        scales = self.get_scales()
+        include = self.get_include()
         acquisition_parameter_scales = scheme.get_free_parameter_scales()
         x0 = scheme.get_free_parameters() / acquisition_parameter_scales
         bounds = scheme.get_free_parameter_bounds()
@@ -97,6 +97,12 @@ class TissueModel(Dict[str, TissueParameter]):
     def __str__(self) -> str:
         parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
         return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
+
+    def get_scales(self):
+        return [value.scale for value in self.values()]
+
+    def get_include(self):
+        return [value.optimize for value in self.values()]
 
 
 # TODO: Take T2* and relaxation parameter distributions into account. See eq. 5 and 6 in
