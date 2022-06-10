@@ -54,7 +54,8 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         # arrays/lists are inhomogeneous.
         self._matrix = np.array([val.values for val in parameters.values()], dtype=np.float64)
 
-        # Create a new dictionary with parameter values pointing to the _parameter_matrix.
+        # Create a new dictionary with parameter values pointing to the _parameter_matrix. 
+        # WARNING: Does not point to matrix!!
         self.update({
             key: AcquisitionParameters(
                 values=self._matrix[i],
@@ -77,6 +78,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             f'    - {key}: {value} in range ({value.lower_bound}, {value.upper_bound})' for key, value in self.items())
         return f'Acquisition scheme with {n} measurements and {m} scalar parameters:\n{parameters}'
 
+
     def get_free_parameters(self) -> np.ndarray:
         """
         Returns the free acquisition parameters as an M×N matrix, where M is the number of parameters and N is the
@@ -96,8 +98,14 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         """
         m, n = self._matrix.shape
         mask = np.array([not p.fixed for p in self.values()])
-        mask = np.broadcast_to(mask, [n, m]).T
-        np.place(self._matrix, mask, parameters)
+        mask_matrix = np.broadcast_to(mask, [n, m]).T
+        np.place(self._matrix, mask_matrix, parameters)
+
+        #TODO: Discuss......
+        for i, key in enumerate(self.keys()):
+            self[key].values = self._matrix[i]
+
+        
 
     def get_free_parameter_scales(self) -> np.ndarray:
         """
