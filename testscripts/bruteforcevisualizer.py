@@ -1,6 +1,6 @@
 from matplotlib import pyplot as plt
-
-from microtool.optimize import BruteForce, plot_loss
+from microtool.utils import plot_loss
+from microtool.optimize import BruteForce
 from scipy.optimize import minimize
 import numpy as np
 
