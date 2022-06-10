@@ -36,13 +36,12 @@ def main():
     noise_distribution = stats.norm(loc=0, scale=noise_var)
 
     # Running monte carlo simulation
-    n_sim = 1000
+    n_sim = 10
 
     tissue_parameters = monte_carlo.run(acq_scheme, stick_model_wrapped, noise_distribution, n_sim)
 
-    with open(outputdir / "TPD_dmipy_large.pkl", "wb") as f:
+    with open(outputdir / "TPD_alexander2008.pkl", "wb") as f:
         pickle.dump(tissue_parameters, f)
-
 
 
 if __name__ == "__main__":
