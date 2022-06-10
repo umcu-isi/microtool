@@ -16,16 +16,14 @@ from .tissue_model import TissueModel
 MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 
 
-# TODO: preallocate numpy arrays for speedup
-# TODO: Ensure that scheme and model are compatible (TissueModel <-> AcquisitionScheme) and (MCM <-> DMAS)
-# TODO: Implement Rician noise distribution
 # TODO: Show progress messages to the user!
 
 def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous,
         n_sim: int) -> MonteCarloResult:
     """
+    NEEDS TO BE EXECUTED IN if __name__ == "__main__" clause!!!! otherwise obscure parralel processing error.
     This function runs a Monte Carlo simulation to compute the posterior probability distribution induced in a
-    tissue model given an aquisition scheme and a noise distribution. NEEDS to be executed inside if name main clause!
+    tissue model given an aquisition scheme and a noise distribution.
 
     :param scheme: The acquisition scheme under investigation
     :param model: The tissuemodel for which we wish to know the posterior distribution
@@ -43,7 +41,6 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
                                          random_state=urng)  # using scipy method to shape to distribution
 
     posterior = []
-    cov_matrices = []
     for i in range(n_sim):
         # get the noise level by sampling the given distribution for all individual measurements
         noise_level = sampler.rvs(size=len(signal))
