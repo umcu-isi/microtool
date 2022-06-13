@@ -60,7 +60,7 @@ class Optimizer:
     However we decide to do this in the future.
     """
 
-    def __call__(self, fun: callable, x0: np.ndarray, args=(), *moreargs, **kwargs) -> OptimizeResult:
+    def __call__(self, fun: callable, x0: np.ndarray, args, **options) -> OptimizeResult:
         """
         This is the interface with scipy.optimize. So the child class should have exactly this __call__ implemented
 
@@ -88,7 +88,7 @@ class BruteForce(Optimizer):
         Wrapping around the optimizer implemented as method to this class. Done s.t. this optimizer is compatible
         with the scipy.optimize interface.
         """
-        return self.brute_force(fun, x0, arg=args, bounds=bounds, constraints=constraints, **options)
+        return self.brute_force(fun, x0, bounds=bounds, constraints=constraints, **options)
 
     def brute_force(self, fun: callable, x0: np.ndarray, args=(),
                     bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints=None,
@@ -97,7 +97,6 @@ class BruteForce(Optimizer):
         :param fun: The objective function that we wish to minimize
         :param x0: starting values for the parameters we wish to optimize
         :param args: I have no idea why this is here, defaults to ()
-        :param Ns: Number of samples computed along the range for variables, defaults to 10
         :param bounds: This needs to be provided otherwise bruteforce cant be used, defaults to None
         :param constraints: , defaults to None
         :return: OptimizeResult object from scipy
@@ -124,31 +123,6 @@ class BruteForce(Optimizer):
 
         return OptimizeResult(fun=y_optimal, x=x_optimal, succes=True)
 
-    def brute_wrapper(self, fun: callable, x0: np.ndarray, args=(),
-                      bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints=None,
-                      **options) -> OptimizeResult:
-        """A wrapper around the bruteforce optimizer from scipy.optimize such that it is compatible with
-        scipy.optimize.minimize
-
-        :param fun: The objective function to be minimized
-        :param x0: initial guess for parameters (not used in bruteforce)
-        :param args: additional objective function parameters incase you OF has them, defaults to ()
-        :param Ns: Sample points per parameter for the parameter grid, defaults to 10
-        :param bounds: The domain in which we sample the parameters (optional arg in higher level function), defaults to None
-        :param constraints: Constraint objects defining the constraints between parameters, defaults to None
-        :return: A scipy.optimize.OptimizeResult object containing the optimal parameter values
-        :raises NotImplementedError: If constraints are provided this function doesnt know what to do.
-        """
-        if constraints is not None:
-            raise NotImplementedError("Brute wrapper cant deal with constraints yet.")
-        if self.plot_result:
-            raise NotImplementedError("brute_wrapper cant deal with plotting yet")
-
-        self._check_bounded(bounds)
-        ranges = tuple(bounds)
-        result = brute(fun, ranges, args=args, Ns=self.Ns)
-        return OptimizeResult(x=result, succes=True)
-
     def _make_grid(self, bounds: List[Tuple[Optional[float], Optional[float]]]) -> np.ndarray:
         """Constructs a grid such that grid[i,:] contains the ith combination of parameters
 
@@ -162,14 +136,14 @@ class BruteForce(Optimizer):
                 if len(bounds[k]) < 3:
                     bounds[k] = tuple(bounds[k]) + (complex(self.Ns),)
                 bounds[k] = slice(*bounds[k])
-        if (N == 1):
+        if N == 1:
             bounds = bounds[0]
 
         grid = np.mgrid[bounds]
 
         # obtain an array of parameters that is iterable by a map-like callable
         inpt_shape = grid.shape
-        if (N > 1):
+        if N > 1:
             grid = np.reshape(grid, (inpt_shape[0], np.prod(inpt_shape[1:]))).T
         return grid
 
