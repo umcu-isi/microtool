@@ -77,20 +77,20 @@ class TissueModel(Dict[str, TissueParameter]):
         scales = self.get_scales()
         include = self.get_include()
         acquisition_parameter_scales = scheme.get_free_parameter_scales()
-        x0 = scheme.get_free_parameters() / acquisition_parameter_scales
+        x0 = scheme.get_free_parameter_vector() / acquisition_parameter_scales
         bounds = scheme.get_free_parameter_bounds()
         constraints = scheme.get_constraints()
 
         # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
         # model's Jacobian matrix and evaluating the loss function.
         def calc_loss(x: np.ndarray):
-            scheme.set_free_parameters(x * acquisition_parameter_scales)
+            scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
             jac = self.jacobian(scheme)
             return loss(jac, scales, include, noise_var)
 
         result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints,options=options)
         if 'x' in result:
-            scheme.set_free_parameters(result['x'] * acquisition_parameter_scales)
+            scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
         return result
 

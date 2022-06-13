@@ -6,6 +6,7 @@ from typing import Union, List, Tuple, Dict, Optional
 import numpy as np
 from pathlib import Path
 from scipy.optimize import LinearConstraint
+from math import prod
 
 
 # TODO: Linear constraints? Make an abstracted implementation of this rather than child class specific
@@ -47,65 +48,55 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     :raise ValueError: Lists have unequal length.
     """
 
-    def __init__(self, parameters: Dict[str, AcquisitionParameters], bounds: List[Tuple[float]] = None):
-        super().__init__()
-
-        # Copy the acquisition parameter values into one matrix. This will raise a ValueError in case the value
-        # arrays/lists are inhomogeneous.
-        self._matrix = np.array([val.values for val in parameters.values()], dtype=np.float64)
-
-        # Create a new dictionary with parameter values pointing to the _parameter_matrix. 
-        # WARNING: Does not point to matrix!!
-        self.update({
-            key: AcquisitionParameters(
-                values=self._matrix[i],
-                unit=parameters[key].unit,
-                scale=parameters[key].scale,
-                lower_bound=parameters[key].lower_bound,
-                upper_bound=parameters[key].upper_bound,
-                fixed=parameters[key].fixed
-            ) for i, key in enumerate(parameters.keys())
-        })
+    def __init__(self, parameters: Dict[str, AcquisitionParameters], bounds: Optional[List[Tuple[float]]] = None):
+        super().__init__(parameters)
 
         # Allows user to provide bounds on parameters when constructing the scheme
         # bounds need to be provided in same order as acquisition parameters
-        if bounds != None:
-            self.set_parameter_bounds(bounds)
+        if bounds:
+            if len(bounds) != len(self):
+                raise ValueError(" Number of bounds does not match number of acquisition parameters. ")
+
+            for i, param in enumerate(self.values()):
+                param.lower_bound = bounds[i][0]
+                param.upper_bound = bounds[i][1]
 
     def __str__(self) -> str:
-        m, n = self._matrix.shape
         parameters = '\n'.join(
             f'    - {key}: {value} in range ({value.lower_bound}, {value.upper_bound})' for key, value in self.items())
-        return f'Acquisition scheme with {n} measurements and {m} scalar parameters:\n{parameters}'
+        return f'Acquisition scheme with {self.get_pulse_count()} measurements and {len(self)} scalar parameters:\n{parameters} '
 
-
-    def get_free_parameters(self) -> np.ndarray:
+    def get_free_parameters(self) -> Dict[str, np.ndarray]:
         """
-        Returns the free acquisition parameters as an M×N matrix, where M is the number of parameters and N is the
-        number of measurements in the acquisition scheme.
+        Returns the free acquisition parameters as a dictionary of AcquisitionParameter name : values
 
-        :return: An M×N matrix with acquisition parameters.
+        :return: A dictionary containing key : TissueParameter.values pairs.
         """
-        mask = np.array([not p.fixed for p in self.values()])
-        return self._matrix[mask].ravel()
+        return {key: self[key].values for key in self.keys()}
 
-    def set_free_parameters(self, parameters: np.ndarray) -> None:
+    def get_free_parameter_vector(self) -> np.ndarray:
+        return np.concatenate([val.values.flatten() for val in self.values() if not val.fixed])
+
+    def set_free_parameter_vector(self, vector: np.ndarray) -> None:
+        free_keys = self.get_free_parameter_keys()
+        # Reshape the flattened vector based on parameter value shapes?
+        i = 0
+        for key in free_keys:
+            shape = self[key].values.shape
+            stride = int(prod(shape))
+            thesevals = vector[i:(i+stride)]
+            self[key].values = thesevals.reshape(shape)
+            i += stride
+
+    def set_free_parameters(self, parameters: Dict[str, np.ndarray]) -> None:
         """
         Sets the free acquisition parameters from an M×N matrix, where M is the number of parameters and N is the
         number of measurements in the acquisition scheme. The M×N matrix may be flattened.
 
         :param parameters: An M×N matrix with acquisition parameters.
         """
-        m, n = self._matrix.shape
-        mask = np.array([not p.fixed for p in self.values()])
-        mask_matrix = np.broadcast_to(mask, [n, m]).T
-        np.place(self._matrix, mask_matrix, parameters)
-
-        #TODO: Discuss......
-        for i, key in enumerate(self.keys()):
-            self[key].values = self._matrix[i]
-
-        
+        for key in parameters.keys():
+            self[key].values = parameters[key]
 
     def get_free_parameter_scales(self) -> np.ndarray:
         """
@@ -114,7 +105,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         :return: A list of M×N (min, max) pairs, where M is the number of parameters and N is the
          number of measurements in the acquisition scheme. None is used to specify no bound.
         """
-        m, n = self._matrix.shape
+        n = self.get_pulse_count()
         return np.array([p.scale for p in self.values() if not p.fixed for _ in range(n)])
 
     def get_free_parameter_bounds(self) -> List[Tuple[Optional[float], Optional[float]]]:
@@ -124,7 +115,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         :return: A list of M×N (min, max) pairs, where M is the number of parameters and N is the
          number of measurements in the acquisition scheme. None is used to specify no bound.
         """
-        m, n = self._matrix.shape
+        n = self.get_pulse_count()
         return [(p.lower_bound, p.upper_bound) for p in self.values() if not p.fixed for _ in range(n)]
 
     def get_free_parameter_keys(self) -> List[str]:
@@ -138,19 +129,9 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     def get_fixed_parameter_keys(self) -> List[str]:
         return list(set(self.keys()) - set(self.get_free_parameter_keys()))
 
-    def set_parameter_bounds(self, bounds: List[Tuple[float]]) -> None:
-        """ A function for setting the acquisition paramater boundaries 
-
-        :param bounds: A list containing tuples containing the parameter boundries
-        :raises ValueError: If there are more or less boundaries than parameters provided
-        """
-
-        if len(bounds) != len(self):
-            raise ValueError(" Number of bounds does not match number of acquisition parameters. ")
-
-        for i, param in enumerate(self.values()):
-            param.lower_bound = bounds[i][0]
-            param.upper_bound = bounds[i][1]
+    def get_pulse_count(self) -> int:
+        parameters = list(self.get_free_parameters().values())
+        return len(parameters[0])
 
     def get_constraints(self) -> LinearConstraint:
         """
@@ -160,7 +141,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         The constraint is defined by lb <= A.x <= ub, x being the array of parameters optimized. 
         A is the matrix defining the constraint relation between parameters.
         """
-        return None
+        raise NotImplementedError()
 
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
@@ -310,7 +291,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         lb = np.repeat(0, pulse_num)
         ub = np.repeat(np.inf, pulse_num)
-        return None
+        raise NotImplementedError()
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
@@ -329,7 +310,6 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
                  echo_times: Union[List[float], np.ndarray],
                  inversion_times: Union[List[float], np.ndarray],
                  bounds: List[tuple] = None):
-
         super().__init__(
             {
                 'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100),
@@ -359,31 +339,35 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         return self['InversionTime'].values
 
     def get_constraints(self) -> LinearConstraint:
-
         # To get the number of pulses we first find the free parameters
         free_param_keys = self.get_free_parameter_keys()
 
-        pulse_num = len(self[free_param_keys[0]])
+        pulse_num = self.get_pulse_count()
 
         # Matrix defining TR > TI + TE or equivalently 0 < -TI + TR - TE < \infty for every pulse
-        unit_mat = np.diag(np.repeat(1, pulse_num))
-        allparams = self.keys()
-        paramsigns = {'RepetitionTimeExcitation': +1, 'EchoTime': -1, 'InversionTime': -1}
 
         # Linear operators to extract the acquisition parameters from the flattened parameter array used in optimization
         # the sign of the inequality 0 < -TI + TR - TE is included
-        blocks = {param: paramsigns[param] * unit_mat for param in allparams}
+        parameter_signs = {
+            'RepetitionTimeExcitation': 1,
+            'EchoTime': -1,
+            'InversionTime': -1,
+        }
 
-        # We include the linear operators only if the parameter needs to be optimized 
-        include = []
-        for key in free_param_keys:
-            include.append(blocks[key])
+        blocks = {
+            'RepetitionTimeExcitation': np.identity(pulse_num),
+            'EchoTime': -np.identity(pulse_num),
+            'InversionTime': -np.identity(pulse_num),
+        }
+
+        # We include the linear operators only if the parameter needs to be optimized
+        include = [blocks[key] for key in free_param_keys]
 
         # If all parameters are included in optimization we simply set the lowerbound to zero
         # the fixed parameters are substracted from the lowerbound so that for example TI <= TR - TE <= infty
-        lb = np.repeat(0, pulse_num)
-        for param in self.get_fixed_parameter_keys():
-            lb = lb - paramsigns[param] * self[param].values
+        lb = np.zeros(pulse_num)
+        for parameter in self.get_fixed_parameter_keys():
+            lb = lb - parameter_signs[parameter] * self[parameter].values
 
         A = np.concatenate(include, axis=1)
         ub = np.repeat(np.inf, pulse_num)
