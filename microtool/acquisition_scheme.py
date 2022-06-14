@@ -84,7 +84,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         for key in free_keys:
             shape = self[key].values.shape
             stride = int(prod(shape))
-            thesevals = vector[i:(i+stride)]
+            thesevals = vector[i:(i + stride)]
             self[key].values = thesevals.reshape(shape)
             i += stride
 
@@ -132,6 +132,32 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     def get_pulse_count(self) -> int:
         parameters = list(self.get_free_parameters().values())
         return len(parameters[0])
+
+    def make_constraints(self, parameter_coefficients: Dict[str, float]) -> LinearConstraint:
+        """ This method constructs the scipy constraints for the inequality based on a dictionary of coefficients
+        Assumes inequality of the form 0 <= c_1 * x_1 + c_2 * x_2 .... <= infty.
+
+        Provide the coefficients c_i as values for the parameters as they are named in the child class.
+
+        :param parameter_coefficients: A dictionary defining the constraint inequalities coefficients
+        :return: A scipy linear constraint defining the constraint
+        """
+        pulse_num = self.get_pulse_count()
+
+        # we make the linear constraint only on parameters that actually change
+        free_param_keys = self.get_free_parameter_keys()
+
+        # blocks defining the linear inequality
+        blocks = [parameter_coefficients[key] * np.identity(pulse_num) for key in free_param_keys]
+
+        # Adjusting bounds if a fixed parameter is involved in the inequality
+        lb = np.zeros(pulse_num)
+        for key in self.get_fixed_parameter_keys():
+            lb = lb - parameter_coefficients[key] * self[key].values
+
+        A = np.concatenate(blocks, axis=1)
+        ub = np.repeat(np.inf, pulse_num)
+        return LinearConstraint(A, lb, ub)
 
     def get_constraints(self) -> LinearConstraint:
         """
@@ -283,15 +309,15 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
     def get_constraints(self) -> LinearConstraint:
-        # Matrix defining Δ > δ or equivalently 0 < Δ - δ
-        pulse_num = len(self.pulse_widths)
-
-        widthBlock = np.diag(np.repeat(-1, pulse_num))
-        intervalBlock = np.diag(np.repeat(1, pulse_num))
-
-        lb = np.repeat(0, pulse_num)
-        ub = np.repeat(np.inf, pulse_num)
-        raise NotImplementedError()
+        # Matrix defining Δ > δ or equivalently 0 < Δ - δ < \infty
+        parameter_coefficients = {
+            'DiffusionBValue': 0,
+            'DiffusionGradientAnglePhi': 0,
+            'DiffusionGradientAngleTheta': 0,
+            'DiffusionPulseWidth': -1,
+            'DiffusionPulseInterval': 1
+        }
+        return self.make_constraints(parameter_coefficients)
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
@@ -339,37 +365,11 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         return self['InversionTime'].values
 
     def get_constraints(self) -> LinearConstraint:
-        # To get the number of pulses we first find the free parameters
-        free_param_keys = self.get_free_parameter_keys()
 
-        pulse_num = self.get_pulse_count()
-
-        # Matrix defining TR > TI + TE or equivalently 0 < -TI + TR - TE < \infty for every pulse
-
-        # Linear operators to extract the acquisition parameters from the flattened parameter array used in optimization
-        # the sign of the inequality 0 < -TI + TR - TE is included
         parameter_signs = {
             'RepetitionTimeExcitation': 1,
             'EchoTime': -1,
             'InversionTime': -1,
         }
 
-        blocks = {
-            'RepetitionTimeExcitation': np.identity(pulse_num),
-            'EchoTime': -np.identity(pulse_num),
-            'InversionTime': -np.identity(pulse_num),
-        }
-
-        # We include the linear operators only if the parameter needs to be optimized
-        include = [blocks[key] for key in free_param_keys]
-
-        # If all parameters are included in optimization we simply set the lowerbound to zero
-        # the fixed parameters are substracted from the lowerbound so that for example TI <= TR - TE <= infty
-        lb = np.zeros(pulse_num)
-        for parameter in self.get_fixed_parameter_keys():
-            lb = lb - parameter_signs[parameter] * self[parameter].values
-
-        A = np.concatenate(include, axis=1)
-        ub = np.repeat(np.inf, pulse_num)
-
-        return LinearConstraint(A, lb, ub)
+        return self.make_constraints(parameter_signs)
