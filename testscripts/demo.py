@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -31,7 +25,6 @@ plt.xlabel('Measurement')
 plt.ylabel('Signal attenuation');
 
 # ## 3. Optimize the acquisition scheme
-
 noise_variance = 0.1
 relaxation_model.optimize(ir_scheme, noise_variance);
 
@@ -42,6 +35,4 @@ plt.xlabel('Measurement')
 plt.ylabel('Signal attenuation');
 
 
-
-# ## 7. Visualize the loss function with respect to first b-value
 

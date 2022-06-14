@@ -21,7 +21,7 @@ class LossInspector:
         self.noise_var = noise_var
         self.loss_function = loss_function
 
-    def compute_loss(self, x: np.ndarray)->float:
+    def compute_loss(self, x: np.ndarray) -> float:
         """
 
         :param x: The scaled parameters for which we wish to know the loss
@@ -56,10 +56,10 @@ class LossInspector:
         # extracting the parameters of interest value at the minimum
         parameters_optimal = x_optimal[plot_parameters]
         # discretizing the domain using the domain length
-        #TODO: Ensure that domain is in bounds!
+        # TODO: Ensure that domain is in bounds!
         domains = np.linspace(parameters_optimal - 0.5 * domain_lengths, parameters_optimal + 0.5 * domain_lengths,
                               endpoint=True)
-        #TODO: Plot optimal parameter value using vline or plane
+        # TODO: Plot optimal parameter value using vline or plane
 
         # 3d plots for 2 investigated parameters
         if len(plot_parameters) == 2:
