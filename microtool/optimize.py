@@ -1,12 +1,10 @@
 from typing import Sequence, Callable, Tuple, List, Optional
 
-from .acquisition_scheme import AcquisitionScheme
-
 import numpy as np
+from scipy.optimize import LinearConstraint
 from scipy.optimize.optimize import OptimizeResult
-from scipy.optimize import LinearConstraint, brute
-import matplotlib.pyplot as plt
-from copy import deepcopy
+
+from .optimize_utils import is_constrained, check_bounded
 
 # A LossFunction takes an N×M Jacobian matrix, a sequence of M parameter scales, a boolean sequence that specifies which
 # parameters should be included in the loss, and the noise variance. It should return a scalar loss.
@@ -76,23 +74,12 @@ class Optimizer:
 
 
 class BruteForce(Optimizer):
-    def __init__(self, Ns: int = 10, plot_result: bool = False, plot_mask: np.ndarray = None):
+    def __init__(self, Ns: int = 10):
         self.Ns = Ns
-        self.plot_result = plot_result
-        self.plot_mask = plot_mask
 
     def __call__(self, fun: callable, x0: np.ndarray, args=(),
                  bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints=None,
                  **options) -> OptimizeResult:
-        """
-        Wrapping around the optimizer implemented as method to this class. Done s.t. this optimizer is compatible
-        with the scipy.optimize interface.
-        """
-        return self.brute_force(fun, x0, bounds=bounds, constraints=constraints, **options)
-
-    def brute_force(self, fun: callable, x0: np.ndarray, args=(),
-                    bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints=None,
-                    **options) -> OptimizeResult:
         """
         :param fun: The objective function that we wish to minimize
         :param x0: starting values for the parameters we wish to optimize
@@ -102,13 +89,13 @@ class BruteForce(Optimizer):
         :return: OptimizeResult object from scipy
         """
 
-        self._check_bounded(bounds)
+        check_bounded(bounds)
 
         # Discretizing the domain to compute objective function values
         grid = self._make_grid(bounds)
 
         # Removing parameter combinations that are not conform constraints
-        if constraints != ():
+        if constraints:
             grid = self._constrain_grid(grid, constraints)
 
         # Evaluating the objective function for all possible parameter combinations
@@ -127,7 +114,6 @@ class BruteForce(Optimizer):
         """Constructs a grid such that grid[i,:] contains the ith combination of parameters
 
         :param bounds: The range over which we wish to optimize
-        :param Ns: The number of samples along the range
         :return: The grid with shape Ns x Nx that we can use to compute the objective function values
         """
         N = len(bounds)
@@ -156,38 +142,11 @@ class BruteForce(Optimizer):
         :param constraints: The LinearConstraints object used to constrain the grid
         :return: The grid values that satisfy the constraints
         """
-        # Readability variables
-        A = constraints.A
-        lb = constraints.lb
-        ub = constraints.ub
-
         index_to_drop = []
         for i in range(grid.shape[0]):
-            # Apply matrix dot product to all parameter combinations
-            transformed_parameters = np.dot(A, grid[i, :])
             # check if result of above operations breaks inequalities
-            if not (np.all(lb <= transformed_parameters) and np.all(transformed_parameters <= ub)):
+            if is_constrained(grid[i, :], constraints):
                 index_to_drop.append(i)
 
-        # if not satisfied drop parametercombination
+        # if not satisfied drop parameter combination
         return np.delete(grid, np.array(index_to_drop), axis=0)
-
-    @staticmethod
-    def _check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> None:
-        """This function checks the boundedness of a set of given bounds such that brute force optimizers
-        can assume boundedness after calling this function.
-
-        :param allbounds: A list of bounds
-        :raises ValueError: Raises a value error in case the there are no bounds or if bounds are to large
-        """
-        # Check for finite boundaries
-        if allbounds is None:
-            raise ValueError(
-                " No bounds provided in optimize: Brute force optimization can only be executed on a finite domain")
-
-        for bounds in allbounds:
-            for bound in bounds:
-                if bound is None:
-                    raise ValueError(" Infinite boundaries not supported for brute force optimizer ")
-                if np.any(np.abs(bound) > 1e3):
-                    raise ValueError("Boundary range is too large for meaningful result")
