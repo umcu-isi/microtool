@@ -31,7 +31,7 @@ class LossInspector:
         tissue_include = self.model.get_include()
         acq_scales = self.scheme.get_free_parameter_scales()
         # we update the scheme to compute the loss altough this changes not the scheme the user supplied
-        self.scheme.set_free_parameters(x * acq_scales)
+        self.scheme.set_free_parameter_vector(x * acq_scales)
         jac = self.model.jacobian(self.scheme)
         return self.loss_function(jac, tissue_scales, tissue_include, self.noise_var)
 
@@ -40,8 +40,6 @@ class LossInspector:
         """
         Allows for plotting a loss function as a function of 2 or 1 parameter(s) close to a minimum found by optimization.
 
-        :param result: The optimization result we wish to plot.
-        :param fun: the loss function used during optimization
         :param domain_lengths: The length of the parameter domains we wish to visualize
         :param plot_parameters: The index of the parameters we wish to visualize
         :return: None, instantiates a matplotlib.pyplot figure.
@@ -49,10 +47,11 @@ class LossInspector:
         # checking if things are okay
         if len(plot_parameters) > 2:
             raise ValueError("Cant plot loss a function of more than 2 parameters")
-
+        if len(plot_parameters) != len(domain_lengths):
+            raise ValueError("Provide as many domain lengths as parameters")
         # extracting the minimum
 
-        x_optimal = self.scheme_original.get_free_parameters() / self.scheme_original.get_free_parameter_scales()
+        x_optimal = self.scheme_original.get_free_parameter_vector() / self.scheme_original.get_free_parameter_scales()
         # extracting the parameters of interest value at the minimum
         parameters_optimal = x_optimal[plot_parameters]
         # discretizing the domain using the domain length
@@ -75,11 +74,17 @@ class LossInspector:
             # make a meshgrid out of the two changing parameters so we can compute loss on the entire grid
             X1, X2 = np.meshgrid(domains[:, 0], domains[:, 1])
 
-            # make a plot of this loss versus the parameters
-            plt.figure()
+            # making the figure
+            fig = plt.figure("3D loss landscape")
             ax = plt.axes(projection='3d')
             Z = vloss(X1, X2)
             ax.plot_surface(X1, X2, Z)
+            ax.plot(*parameters_optimal, loss(*parameters_optimal), 'ro', label="Optimal point")
+            ax.legend()
+            ax.set_zlabel("Loss")
+            ax.set_xlabel("Parameter 1")
+            ax.set_ylabel("Parameter 2")
+            fig.tight_layout()
         else:
             # Normal plot if investigating 1 parameter
             def loss(x1):
@@ -90,8 +95,15 @@ class LossInspector:
 
             # vectorization if so we can pass the domain
             vloss = np.vectorize(loss)
+
+            # making the figure
             plt.figure()
             plt.plot(domains[:, 0], vloss(domains[:, 0]))
+            plt.plot(*parameters_optimal, loss(parameters_optimal), 'ro', label="Optimal point")
+            plt.xlabel("Parameter 1")
+            plt.ylabel("Loss function")
+            plt.legend()
+            plt.tight_layout()
 
 
 def wrap_loss(loss_function: LossFunction, scheme: AcquisitionScheme, model: TissueModel, noise_var: float) -> callable:
