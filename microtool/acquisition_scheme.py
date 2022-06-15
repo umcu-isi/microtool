@@ -8,6 +8,8 @@ from pathlib import Path
 
 
 # TODO: Linear constraints? For example: Δ > δ  and TR > TI + TE
+# TODO: Check constraints on initialization
+
 @dataclass
 class AcquisitionParameters:
     # noinspection PyUnresolvedReferences

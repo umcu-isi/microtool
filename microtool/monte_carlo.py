@@ -16,8 +16,8 @@ from .tissue_model import TissueModel
 MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 
 
-# TODO: Show progress messages to the user!
-
+# TODO: Show progress messages to the user
+# TODO: Mute dmipy fit messages
 def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous,
         n_sim: int) -> MonteCarloResult:
     """

@@ -40,7 +40,7 @@ def main():
 
     tissue_parameters = monte_carlo.run(acq_scheme, stick_model_wrapped, noise_distribution, n_sim)
 
-    with open(outputdir / "TPD_alexander2008.pkl", "wb") as f:
+    with open(outputdir / "TPD.pkl", "wb") as f:
         pickle.dump(tissue_parameters, f)
 
 
