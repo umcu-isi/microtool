@@ -72,14 +72,14 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
         :return: A dictionary containing key : TissueParameter.values pairs.
         """
-        return {key: self[key].values for key in self.keys()}
+        return {key: self[key].values for key in self.get_free_parameter_keys()}
 
     def get_free_parameter_vector(self) -> np.ndarray:
         return np.concatenate([val.values.flatten() for val in self.values() if not val.fixed])
 
     def set_free_parameter_vector(self, vector: np.ndarray) -> None:
         free_keys = self.get_free_parameter_keys()
-        # Reshape the flattened vector based on parameter value shapes?
+        # Reshape the flattened vector based on parameter value shapes
         i = 0
         for key in free_keys:
             shape = self[key].values.shape
