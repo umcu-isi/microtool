@@ -56,13 +56,13 @@ def convert_acquisition_scheme(
         )
 
 
-
 # TODO: implement fit method
 class DmipyTissueModel(TissueModel):
     """
     Wrapper for the MultiCompartment models used by dmipy. Note that the parameters need to be initialized in the
     dmipy model otherwise a value error is raised.
     """
+
     def __init__(self, model: MultiCompartmentModel):
         super().__init__()
 
@@ -97,11 +97,10 @@ class DmipyTissueModel(TissueModel):
         return np.concatenate((differences * self._reciprocal_h, [baseline])).T
 
     def fit(self, scheme: DmipyAcquisitionScheme, noisy_signal: np.ndarray):
-        convert_acquisition_scheme(scheme)
-        result = self._model.fit(scheme, noisy_signal)
-        #TODO: use tissuemodel wrapper for output
-        # Note that some of the parameters are not included in the fitting and hence will not be returned when calling fitted_parameters
-        # on FittedMultiCompartmentModel
+        dmipy_scheme = convert_acquisition_scheme(scheme)
+        result = self._model.fit(dmipy_scheme, noisy_signal)
+        # TODO: use tissuemodel wrapper for output Note that some of the parameters are not included in the fitting
+        #  and hence will not be returned when calling fitted_parameters on FittedMultiCompartmentModel
 
         return result
 
@@ -113,6 +112,3 @@ class DmipyTissueModel(TissueModel):
     #     @property
     #     def fitted_parameters(self) -> Dict[str, float]:
     #         pass
-
-
-
