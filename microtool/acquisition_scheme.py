@@ -88,6 +88,17 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             self[key].values = thesevals.reshape(shape)
             i += stride
 
+    def get_free_parameter_idx(self,parameter: str, pulse_id:int) -> int:
+
+        i = 0
+        for key in self.get_free_parameter_keys():
+            if key == parameter:
+                return i + pulse_id
+            shape = self[key].values.shape
+            stride = int(prod(shape))
+            i += stride
+
+
     def set_free_parameters(self, parameters: Dict[str, np.ndarray]) -> None:
         """
         Sets the free acquisition parameters from an M×N matrix, where M is the number of parameters and N is the

@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import microtool
+from microtool import plot_utils
 
 # # Inversion recovery
 
@@ -22,17 +23,18 @@ print(ir_scheme)
 plt.figure(figsize=(6, 4))
 plt.plot(relaxation_model(ir_scheme), '.')
 plt.xlabel('Measurement')
-plt.ylabel('Signal attenuation');
+plt.ylabel('Signal attenuation')
 
 # ## 3. Optimize the acquisition scheme
 noise_variance = 0.1
-relaxation_model.optimize(ir_scheme, noise_variance);
+relaxation_model.optimize(ir_scheme, noise_variance)
 
 print(ir_scheme)
 plt.figure(figsize=(6, 4))
 plt.plot(relaxation_model(ir_scheme), '.')
 plt.xlabel('Measurement')
-plt.ylabel('Signal attenuation');
+plt.ylabel('Signal attenuation')
 
-
-
+lossinspector = plot_utils.LossInspector(microtool.optimize.crlb_loss, ir_scheme, relaxation_model, noise_variance)
+lossinspector.plot({"InversionTime": 1, "RepetitionTimeExcitation" : 2})
+plt.show()
