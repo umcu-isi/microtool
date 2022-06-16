@@ -63,11 +63,28 @@ class DmipyTissueModel(TissueModel):
     dmipy model otherwise a value error is raised.
     """
 
-    def __init__(self, model: MultiCompartmentModel):
+    def __init__(self, model: MultiCompartmentModel, volume_fractions: np.ndarray):
+        """
+
+        :param model: MultiCompartment model
+        :param volume_fractions: The relative volume fractions of the models (order in the sameway you initialized the
+        multicompartment model)
+        """
         super().__init__()
 
         # Extract the scalar tissue parameters.
         self.update(get_parameters(model))
+
+        if model.N_models > 1:
+            # Get the ordered partial volume names from the model
+            vf_keys = model.partial_volume_names
+            # check if the volume_fractions match the length of this dictionary
+            if len(volume_fractions) != len(vf_keys):
+                raise ValueError("Not enough volume fractions provided for the number of models.")
+            # Including the volume fractions as TissueParameters to the DmipyTissueModel
+            for i, key in enumerate(vf_keys):
+                self.update({key: TissueParameter(value=volume_fractions[i], scale=1., optimize=False)})
+
         self._model = model
 
         # Get the baseline parameter vector, but don't include S0.

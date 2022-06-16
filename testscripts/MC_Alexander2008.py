@@ -51,9 +51,10 @@ def main():
     lambda_par *= 1.0e-9
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
 
+    # defining relative volume fraction
     mc_model = MultiCompartmentModel(models=[cylinder, zeppelin])
-
-    mc_model_wrapped = DmipyTissueModel(mc_model)
+    print(dir(mc_model))
+    mc_model_wrapped = DmipyTissueModel(mc_model, np.array([.5, .5]))
 
     # ----------- Optimizing the scheme ------------------
     mc_model_wrapped.optimize(scheme, noise_var)
