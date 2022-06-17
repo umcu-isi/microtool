@@ -63,7 +63,7 @@ class DmipyTissueModel(TissueModel):
     dmipy model otherwise a value error is raised.
     """
 
-    def __init__(self, model: MultiCompartmentModel, volume_fractions: np.ndarray):
+    def __init__(self, model: MultiCompartmentModel, volume_fractions: np.ndarray = None):
         """
 
         :param model: MultiCompartment model
@@ -76,6 +76,8 @@ class DmipyTissueModel(TissueModel):
         self.update(get_parameters(model))
 
         if model.N_models > 1:
+            if volume_fractions is None:
+                raise ValueError("Provide volume fractions of composite tissuemodels are used.")
             # Get the ordered partial volume names from the model
             vf_keys = model.partial_volume_names
             # check if the volume_fractions match the length of this dictionary
