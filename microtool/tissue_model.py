@@ -66,7 +66,7 @@ class TissueModel(Dict[str, TissueParameter]):
         """
         raise NotImplementedError()
 
-    def fit(self, scheme: AcquisitionScheme, noisy_signal: np.ndarray) -> FittedTissueModel:
+    def fit(self, scheme: AcquisitionScheme, noisy_signal: np.ndarray, **fit_options) -> FittedTissueModel:
         """
         Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
         :param noisy_signal: The noisy signal
@@ -212,7 +212,7 @@ class RelaxationTissueModel(TissueModel):
             (1 - 2 * ti_t1 + tr_t1) * te_t2,  # δS(S0, T1, T2) / δS0
         ]).T
 
-    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray) -> FittedTissueModel:
+    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray,**fit_options) -> FittedTissueModel:
         ti = scheme.inversion_times  # ms
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
