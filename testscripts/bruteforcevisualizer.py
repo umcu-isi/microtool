@@ -1,10 +1,11 @@
 from matplotlib import pyplot as plt
-from microtool.plot import plot_loss
 from microtool.optimize import BruteForce
 from scipy.optimize import minimize
 import numpy as np
+from numba import jit
 
 
+@jit
 def ackley(x):
     n = float(len(x))
     ninv = 1 / n
@@ -19,7 +20,5 @@ x0 = np.zeros(Ndim)
 domain = (-50, 50)
 bounds = [domain for i in range(Ndim)]
 # setting the optimizer
-brute_force = BruteForce(Ns=100, plot_mask=np.array([0]))
+brute_force = BruteForce(Ns=1000)
 result = minimize(ackley, x0, method=brute_force, bounds=bounds)
-plot_loss(result, ackley, np.array([5]), np.array([0]))
-plt.show()
