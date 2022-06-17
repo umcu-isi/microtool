@@ -10,6 +10,7 @@ import numpy as np
 from scipy import stats
 from scipy.stats.sampling import NumericalInversePolynomial
 
+from tqdm import tqdm
 from .acquisition_scheme import AcquisitionScheme
 from .tissue_model import TissueModel
 
@@ -41,7 +42,7 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
                                          random_state=urng)  # using scipy method to shape to distribution
 
     posterior = []
-    for i in range(n_sim):
+    for i in tqdm(range(n_sim)):
         # get the noise level by sampling the given distribution for all individual measurements
         noise_level = sampler.rvs(size=len(signal))
 
