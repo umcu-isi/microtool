@@ -117,7 +117,7 @@ class DmipyTissueModel(TissueModel):
 
     def fit(self, scheme: DmipyAcquisitionScheme, noisy_signal: np.ndarray, **fit_options):
         dmipy_scheme = convert_acquisition_scheme(scheme)
-        result = self._model.fit(dmipy_scheme, noisy_signal, fit_options)
+        result = self._model.fit(dmipy_scheme, noisy_signal, *fit_options)
         # TODO: use tissuemodel wrapper for output Note that some of the parameters are not included in the fitting
         #  and hence will not be returned when calling fitted_parameters on FittedMultiCompartmentModel
 
