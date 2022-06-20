@@ -11,7 +11,7 @@ from dmipy.signal_models import cylinder_models
 from scipy import stats
 
 from microtool import monte_carlo
-from microtool.dmipy import DmipyTissueModel
+from microtool.dmipy import DmipyTissueModel, DmipyAcquisitionSchemeWrapper
 
 currentdir = pathlib.Path('.')
 outputdir = currentdir / "MC_results"
@@ -22,7 +22,7 @@ def main():
     # ------------- Setting up dmipy objects -----------
     # predefined dmipy acquisition scheme
     acq_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
-
+    scheme = DmipyAcquisitionSchemeWrapper(acq_scheme)
     # simplest tissuemodel available in dmipy
     mu = (np.pi / 2., np.pi / 2.)  # in radians
     lambda_par = 1.7e-9  # in m^2/s
@@ -38,7 +38,9 @@ def main():
     # Running monte carlo simulation
     n_sim = 10
 
-    tissue_parameters = monte_carlo.run(acq_scheme, stick_model_wrapped, noise_distribution, n_sim)
+    stick_model_wrapped.optimize(scheme, noise_var)
+
+    tissue_parameters = monte_carlo.run(scheme, stick_model_wrapped, noise_distribution, n_sim)
 
     with open(outputdir / "TPD.pkl", "wb") as f:
         pickle.dump(tissue_parameters, f)

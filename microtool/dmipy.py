@@ -56,7 +56,21 @@ def convert_acquisition_scheme(
         )
 
 
-# TODO: implement fit method
+# TODO: Check units on this thing
+class DmipyAcquisitionSchemeWrapper(DiffusionAcquisitionScheme):
+    """
+    Class wrapper for pure dmipy acquisition schemes
+    """
+
+    def __init__(self, scheme: DmipyAcquisitionScheme):
+        self._scheme = scheme
+        b_values = scheme.bvalues
+        b_vectors = scheme.gradient_directions
+        pulse_widths = scheme.delta
+        pulse_intervals = scheme.Delta
+        super().__init__(b_values, b_vectors, pulse_widths, pulse_intervals)
+
+
 class DmipyTissueModel(TissueModel):
     """
     Wrapper for the MultiCompartment models used by dmipy. Note that the parameters need to be initialized in the
