@@ -36,9 +36,6 @@ def get_parameters(diffusion_model: MultiCompartmentModel) -> Dict[str, TissuePa
                     scale=scale[i] if cardinality > 1 else scale,
                 )
 
-    # Add S0 as a tissue parameter.
-    parameters['S0'] = TissueParameter(value=1.0, scale=1.0, optimize=False)
-
     return parameters
 
 
@@ -86,9 +83,10 @@ class DmipyTissueModel(TissueModel):
         """
         super().__init__()
 
-        # Extract the scalar tissue parameters.
+        # Extract the scalar tissue parameters from individual models.
         self.update(get_parameters(model))
 
+        # Set up volume fractions if there are multiple models
         if model.N_models > 1:
             if volume_fractions is None:
                 raise ValueError("Provide volume fractions of composite tissuemodels are used.")
@@ -101,6 +99,8 @@ class DmipyTissueModel(TissueModel):
             for i, key in enumerate(vf_keys):
                 self.update({key: TissueParameter(value=volume_fractions[i], scale=1., optimize=False)})
 
+        # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
+        self.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
         self._model = model
 
         # Get the baseline parameter vector, but don't include S0.
