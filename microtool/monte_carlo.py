@@ -13,12 +13,11 @@ from scipy.stats.sampling import NumericalInversePolynomial
 from tqdm import tqdm
 from .acquisition_scheme import AcquisitionScheme
 from .tissue_model import TissueModel
+from .utils import HiddenPrints
 
 MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 
 
-# TODO: Show progress messages to the user
-# TODO: Mute dmipy fit messages
 def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous,
         n_sim: int) -> MonteCarloResult:
     """
@@ -42,15 +41,16 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
                                          random_state=urng)  # using scipy method to shape to distribution
 
     posterior = []
-    for i in tqdm(range(n_sim)):
+    for i in tqdm(range(n_sim), desc=f"Starting Monte Carlo with {n_sim} simulations:"):
         # get the noise level by sampling the given distribution for all individual measurements
         noise_level = sampler.rvs(size=len(signal))
 
         # add noise to the 'simulated' signal
         signal_bar = signal + noise_level
 
-        # Fit the tissuemodel to the noisy data and save resulting parameters
-        model_fitted = model.fit(scheme, signal_bar)
+        # Fit the tissuemodel to the noisy data and save resulting parameters (hiding useless print statements
+        with HiddenPrints():
+            model_fitted = model.fit(scheme, signal_bar)
         parameter_dict = model_fitted.fitted_parameters
 
         # storing only information of interest namely the parameter values

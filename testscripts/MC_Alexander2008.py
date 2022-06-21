@@ -56,6 +56,8 @@ def main():
     print(dir(mc_model))
     mc_model_wrapped = DmipyTissueModel(mc_model, np.array([.5, .5]))
 
+    print("Using the following model:\n", mc_model_wrapped)
+
     # ----------- Optimizing the scheme ------------------
     mc_model_wrapped.optimize(scheme, noise_var)
 
