@@ -1,21 +1,17 @@
 from typing import List, Tuple, Optional
 
 import numpy as np
-from scipy.optimize import LinearConstraint
 
 
-def is_constrained(x: np.ndarray, constraints: LinearConstraint) -> bool:
+def is_constrained(x: np.ndarray, A: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> bool:
     """A function for checking if a given parameter combination breaks a given linear constraint.
 
+    :param A:
+    :param lb:
+    :param ub:
     :param x: Parameter combination
-    :param constraints: scipy linear constraint object
     :return: boolean that is true if the parameter combination breaks the constraint
     """
-    # Readability variables
-    A = constraints.A
-    lb = constraints.lb
-    ub = constraints.ub
-
     transformed_parameters = A @ x
     return np.any((lb >= transformed_parameters) | (transformed_parameters >= ub))
 
