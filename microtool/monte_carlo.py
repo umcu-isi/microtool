@@ -13,13 +13,13 @@ from scipy.stats.sampling import NumericalInversePolynomial
 from tqdm import tqdm
 from .acquisition_scheme import AcquisitionScheme
 from .tissue_model import TissueModel
-from .utils import HiddenPrints
+from .utils_IO import HiddenPrints
 
 MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 
 
 def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous,
-        n_sim: int) -> MonteCarloResult:
+        n_sim: int, test_mode = False) -> MonteCarloResult:
     """
     NEEDS TO BE EXECUTED IN if __name__ == "__main__" clause!!!! otherwise obscure parralel processing error.
     This function runs a Monte Carlo simulation to compute the posterior probability distribution induced in a
@@ -40,8 +40,9 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
     sampler = NumericalInversePolynomial(noise_distribution,
                                          random_state=urng)  # using scipy method to shape to distribution
 
+
     posterior = []
-    for i in tqdm(range(n_sim), desc=f"Starting Monte Carlo with {n_sim} simulations:"):
+    for _ in tqdm(range(n_sim), desc=f"Starting Monte Carlo with {n_sim} simulations"):
         # get the noise level by sampling the given distribution for all individual measurements
         noise_level = sampler.rvs(size=len(signal))
 
@@ -50,7 +51,10 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
 
         # Fit the tissuemodel to the noisy data and save resulting parameters (hiding useless print statements
         with HiddenPrints():
-            model_fitted = model.fit(scheme, signal_bar)
+            if test_mode:
+                model_fitted = model.fit(scheme, signal)
+            else:
+                model_fitted = model.fit(scheme, signal_bar)
         parameter_dict = model_fitted.fitted_parameters
 
         # storing only information of interest namely the parameter values
