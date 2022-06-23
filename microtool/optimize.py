@@ -1,11 +1,13 @@
+#import itertools
 from typing import Sequence, Callable, Tuple, List, Optional
 
 import numpy as np
-from scipy.optimize import LinearConstraint
 from scipy.optimize.optimize import OptimizeResult
-
+from scipy.optimize import LinearConstraint, brute
+import matplotlib.pyplot as plt
+from copy import deepcopy
+from tqdm.contrib.itertools import product
 from .optimize_utils import is_constrained, check_bounded
-
 # A LossFunction takes an N×M Jacobian matrix, a sequence of M parameter scales, a boolean sequence that specifies which
 # parameters should be included in the loss, and the noise variance. It should return a scalar loss.
 LossFunction = Callable[[np.ndarray, Sequence[float], Sequence[bool], float], float]
@@ -39,7 +41,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     # Calculate the Fisher information matrix on the rescaled Jacobian. The Cramer-Rao lower bound on parameter variance
     # is the inverse of the information matrix. A properly scaled matrix gives an interpretable condition number and a
     # more robust inverse.
-    information = fisher_information(jac * scales, noise_var)
+    information = fisher_information((jac * scales), noise_var)
 
     # An ill-conditioned information matrix should result in a high loss.
     if np.linalg.cond(information) > 1e9:
@@ -77,76 +79,97 @@ class BruteForce(Optimizer):
     def __init__(self, Ns: int = 10):
         self.Ns = Ns
 
-    def __call__(self, fun: callable, x0: np.ndarray, args=(),
-                 bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints=None,
-                 **options) -> OptimizeResult:
+    def __call__(self, fun: callable, x0: np.ndarray, args=(), **options) -> OptimizeResult:
         """
         :param fun: The objective function that we wish to minimize
-        :param x0: starting values for the parameters we wish to optimize
+        :param x0: starting values for the parameters we wish to optimize in this case not used!!!
         :param args: I have no idea why this is here, defaults to ()
-        :param bounds: This needs to be provided otherwise bruteforce cant be used, defaults to None
+        :param bounds: This needs to be provided otherwise bruteforce can't be used, defaults to None
         :param constraints: , defaults to None
         :return: OptimizeResult object from scipy
         """
-
+        bounds = options['bounds']
+        constraints = options['constraints']
+        # this checks if boundaries actually contains values for lower bound and upperbound
         check_bounded(bounds)
 
-        # Discretizing the domain to compute objective function values
-        grid = self._make_grid(bounds)
+        nx = len(x0)
+        # make the individual discretized domains
+        domains = []
+        previous_bound = ()
+        for bound in bounds:
+            if bound == previous_bound:
+                # making a pointer to the previous array if the same bounds are provided sequentially
+                domains.append(domains[-1].view())
+            else:
+                domains.append(np.linspace(bound[0], bound[1], num=self.Ns))
 
-        # Removing parameter combinations that are not conform constraints
-        if constraints:
-            grid = self._constrain_grid(grid, constraints)
-
-        # Evaluating the objective function for all possible parameter combinations
-        loss = np.zeros(grid.shape[0])
-        for i in range(grid.shape[0]):
-            loss[i] = fun(grid[i, :])
-
-        # Getting the optimal values by finding the minimum loss.
-        min_index = np.argmin(loss)
-        x_optimal = grid[min_index, :]
-        y_optimal = loss[min_index]
-
+        x_optimal, y_optimal = compute_losses(fun, domains, constraints)
         return OptimizeResult(fun=y_optimal, x=x_optimal, succes=True)
 
-    def _make_grid(self, bounds: List[Tuple[Optional[float], Optional[float]]]) -> np.ndarray:
-        """Constructs a grid such that grid[i,:] contains the ith combination of parameters
 
-        :param bounds: The range over which we wish to optimize
-        :return: The grid with shape Ns x Nx that we can use to compute the objective function values
-        """
-        N = len(bounds)
-        for k in range(N):
-            if type(bounds[k]) is not type(slice(None)):
-                if len(bounds[k]) < 3:
-                    bounds[k] = tuple(bounds[k]) + (complex(self.Ns),)
-                bounds[k] = slice(*bounds[k])
-        if N == 1:
-            bounds = bounds[0]
+def compute_losses(fun: callable, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
 
-        grid = np.mgrid[bounds]
+    if constraints != ():
+        A = constraints.A
+        lb = constraints.lb
+        ub = constraints.ub
 
-        # obtain an array of parameters that is iterable by a map-like callable
-        inpt_shape = grid.shape
-        if N > 1:
-            grid = np.reshape(grid, (inpt_shape[0], np.prod(inpt_shape[1:]))).T
-        return grid
+        # iterate over the grid
+        y_optimal = np.inf
+        x_optimal = None
+        for combination in product(*domains, desc='Running brute force grid computation'):
+            combination = np.array(combination)
+            # check constraint
+            if is_constrained(combination, A, lb, ub):
+                loss = np.inf
+            else:
+                loss = fun(combination)
 
-    @staticmethod
-    def _constrain_grid(grid: np.ndarray, constraints: LinearConstraint) -> np.ndarray:
-        """Drops parameter combinations from the grid that do not comply with the provided linear constraints.
-        The constraint is formulated as lb <= A.x <= ub
+            # update optimal value
+            if loss < y_optimal:
+                x_optimal = combination
+                y_optimal = loss
+    else:
+        # iterate over the grid
+        y_optimal = np.inf
+        x_optimal = None
+        for combination in product(*domains, desc='Running brute force grid computation'):
+            combination = np.array(combination)
+            loss = fun(combination)
+            # update optimal value
+            if loss < y_optimal:
+                x_optimal = combination
+                y_optimal = loss
 
-        :param grid: The full parameter grid
-        :param constraints: The LinearConstraints object used to constrain the grid
-        :return: The grid values that satisfy the constraints
-        """
-        index_to_drop = []
-        for i in range(grid.shape[0]):
-            # check if result of above operations breaks inequalities
-            if is_constrained(grid[i, :], constraints):
-                index_to_drop.append(i)
+    return x_optimal, y_optimal
 
-        # if not satisfied drop parameter combination
-        return np.delete(grid, np.array(index_to_drop), axis=0)
+
+def is_constrained(x: np.ndarray, A: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> bool:
+    """A function for checking if a given parameter combination breaks a given linear constraint.
+
+    :param A:
+    :param lb:
+    :param ub:
+    :param x: Parameter combination
+    :return: boolean that is true if the parameter combination breaks the constraint
+    """
+    transformed_parameters = A @ x
+    return np.any((lb >= transformed_parameters) | (transformed_parameters >= ub))
+
+
+def check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> None:
+    """This function checks the boundedness of a set of given bounds such that brute force optimizers
+    can assume boundedness after calling this function.
+
+    :param allbounds: A list of bounds
+    :raises ValueError: Raises a value error in case the there are no bounds or if bounds are to large
+    """
+    # Check for finite boundaries
+    if allbounds is None:
+        raise ValueError(
+            " No bounds provided in optimize: this optimization can only be executed on a finite domain")
+    for bounds in allbounds:
+        for bound in bounds:
+            if bound is None:
+                raise ValueError(" Infinite boundaries not supported for this optimizer")

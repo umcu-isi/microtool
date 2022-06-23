@@ -5,6 +5,7 @@ from typing import Union, List, Tuple, Dict, Optional
 
 import numpy as np
 from pathlib import Path
+
 from scipy.optimize import LinearConstraint
 from math import prod
 
@@ -109,6 +110,13 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         for key in parameters.keys():
             self[key].values = parameters[key]
 
+    def set_free_parameter_bounds(self, bounds:List[Tuple[float,float]]) -> None:
+        if len(bounds) != len(self.get_free_parameter_keys()):
+            raise ValueError("provide bounds only for free parameters.")
+        for i ,key in enumerate(self.get_free_parameter_keys()):
+            self[key].lower_bound = bounds[i][0]
+            self[key].upper_bound = bounds[i][1]
+
     def get_free_parameter_scales(self) -> np.ndarray:
         """
         Returns the bounds on the free tissue parameters.
@@ -128,6 +136,17 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         """
         n = self.get_pulse_count()
         return [(p.lower_bound, p.upper_bound) for p in self.values() if not p.fixed for _ in range(n)]
+
+    def get_free_parameter_bounds_scaled(self) -> List[Tuple[float,float]]:
+        n = self.get_pulse_count()
+        bounds = []
+        for key in self.get_free_parameter_keys():
+            p = self[key]
+            p_bounds = (p.lower_bound, p.upper_bound)
+            for _ in range(n):
+                bounds.append(tuple([None if bound is None else bound/p.scale for bound in p_bounds]))
+
+        return bounds
 
     def get_free_parameter_keys(self) -> List[str]:
         """ 
