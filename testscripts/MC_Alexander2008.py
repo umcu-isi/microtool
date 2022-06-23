@@ -27,13 +27,14 @@ def main():
     # -------------ACQUISITION-------------------
     # Define the PGSE acquisition scheme
     # First we sample the gradient directions
-    n_pulses = 20
-    angles = utils_dmipy.sample_sphere(n_pulses)  # for now random sampling from the sphere (not efficient or realistic)
-    b_vectors = utils_dmipy.angles_to_eigenvectors(angles)
+    n_pulses = 2
+
+    b_vectors = utils_dmipy.sample_uniform(n_pulses)
     b_values = np.repeat(10., n_pulses)
     pulse_widths = np.repeat(30., n_pulses)
     pulse_intervals = np.repeat(300., n_pulses)
     scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
+    print("The initial scheme:\n", scheme)
 
     # ------INTRA AXONAL MODEL-------------
     # Cylinder orientation angles theta, phi := mu
@@ -52,14 +53,14 @@ def main():
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
 
     # defining relative volume fraction
-    mc_model = MultiCompartmentModel(models=[cylinder, zeppelin])
-    print(dir(mc_model))
+    mc_model = MultiCompartmentModel(models=[zeppelin, cylinder])
     mc_model_wrapped = DmipyTissueModel(mc_model, np.array([.5, .5]))
 
     print("Using the following model:\n", mc_model_wrapped)
 
     # ----------- Optimizing the scheme ------------------
     mc_model_wrapped.optimize(scheme, noise_var)
+    print("Using the optimized scheme:\n", scheme)
 
     # ------------ Monte Carlo --------------------
     # Setting up the noise distribution
@@ -69,10 +70,13 @@ def main():
     # Running monte carlo simulation
     n_sim = 10
 
-    tissue_parameters = monte_carlo.run(scheme, mc_model_wrapped, noise_distribution, n_sim)
+    tissue_parameters = monte_carlo.run(scheme, mc_model_wrapped, noise_distribution, n_sim, test_mode=True)
 
-    with open(outputdir / "TPD_alexander2008.pkl", "wb") as f:
+    with open(outputdir / "TPD_alexander2008_nsim{}_npulse{}_noise{}.pkl".format(n_sim, n_pulses, noise_var), "wb") as f:
         pickle.dump(tissue_parameters, f)
+
+    with open(outputdir/"alexander2008_ground_truth.pkl",'wb') as f:
+        pickle.dump(mc_model_wrapped.parameters, f)
 
 
 if __name__ == "__main__":
