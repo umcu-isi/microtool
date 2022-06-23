@@ -7,9 +7,10 @@ In order to simulate the MR signal in response to a MICROtool acquisition scheme
 """
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List, Tuple
 
 import numpy as np
+from numba import jit
 from scipy.optimize import OptimizeResult, minimize
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
@@ -61,6 +62,7 @@ class TissueModel(Dict[str, TissueParameter]):
             noise_var: float,
             loss: LossFunction = crlb_loss,
             method: Optional[Union[str, callable, Optimizer]] = None,
+            bounds: List[Tuple[float,float] ] = None,
             **options) -> OptimizeResult:
         """
         Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
@@ -78,7 +80,12 @@ class TissueModel(Dict[str, TissueParameter]):
         include = self.get_include()
         acquisition_parameter_scales = scheme.get_free_parameter_scales()
         x0 = scheme.get_free_parameter_vector() / acquisition_parameter_scales
-        bounds = scheme.get_free_parameter_bounds()
+        if not bounds:
+            bounds = scheme.get_free_parameter_bounds_scaled()
+        else:
+            scheme.set_free_parameter_bounds(bounds)
+            bounds = scheme.get_free_parameter_bounds_scaled()
+
         constraints = scheme.get_constraints()
 
         # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue

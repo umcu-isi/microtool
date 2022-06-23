@@ -12,9 +12,9 @@ print(relaxation_model)
 # ## 2. Create an initial inversion-recovery acquisition scheme
 # Initial TR = 500 ms, initial TE = 10 ms, initial TI = {50, ..., 400} ms
 
-tr = np.array([500, 500, 500, 500, 500, 500, 500, 500])
-te = np.array([10, 10, 10, 10, 20, 20, 20, 20])
-ti = np.array([50, 100, 150, 200, 250, 300, 350, 400])
+tr = np.array([500, 500, 500, 500])
+te = np.array([10, 10, 10, 10])
+ti = np.array([50, 100, 150, 200])
 
 ir_scheme = microtool.acquisition_scheme.InversionRecoveryAcquisitionScheme(tr, te, ti)
 print(ir_scheme)
@@ -22,17 +22,16 @@ print(ir_scheme)
 plt.figure(figsize=(6, 4))
 plt.plot(relaxation_model(ir_scheme), '.')
 plt.xlabel('Measurement')
-plt.ylabel('Signal attenuation');
+plt.ylabel('Signal attenuation')
 
 # ## 3. Optimize the acquisition scheme
 noise_variance = 0.1
-relaxation_model.optimize(ir_scheme, noise_variance);
+brute = microtool.optimize.BruteForce(5)
+relaxation_model.optimize(ir_scheme, noise_variance, method=brute, bounds=[(0, 3000), (0, 100)])
 
 print(ir_scheme)
 plt.figure(figsize=(6, 4))
 plt.plot(relaxation_model(ir_scheme), '.')
 plt.xlabel('Measurement')
-plt.ylabel('Signal attenuation');
-
-
-
+plt.ylabel('Signal attenuation')
+plt.show()

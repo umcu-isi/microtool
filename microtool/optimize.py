@@ -1,15 +1,12 @@
+#import itertools
 from typing import Sequence, Callable, Tuple, List, Optional
-import itertools
 
-from .acquisition_scheme import AcquisitionScheme
-from numba import jit
-from numba.experimental import jitclass
 import numpy as np
+from numba import jit
+from scipy.optimize import LinearConstraint
 from scipy.optimize.optimize import OptimizeResult
-from scipy.optimize import LinearConstraint, brute
-import matplotlib.pyplot as plt
-from copy import deepcopy
-
+from tqdm import tqdm
+from tqdm.contrib.itertools import product
 # A LossFunction takes an N×M Jacobian matrix, a sequence of M parameter scales, a boolean sequence that specifies which
 # parameters should be included in the loss, and the noise variance. It should return a scalar loss.
 LossFunction = Callable[[np.ndarray, Sequence[float], Sequence[bool], float], float]
@@ -43,7 +40,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     # Calculate the Fisher information matrix on the rescaled Jacobian. The Cramer-Rao lower bound on parameter variance
     # is the inverse of the information matrix. A properly scaled matrix gives an interpretable condition number and a
     # more robust inverse.
-    information = fisher_information(jac * scales, noise_var)
+    information = fisher_information((jac * scales), noise_var)
 
     # An ill-conditioned information matrix should result in a high loss.
     if np.linalg.cond(information) > 1e9:
@@ -76,54 +73,12 @@ class Optimizer:
         """
         raise NotImplementedError()
 
-    @staticmethod
-    def is_constrained(x: np.ndarray, constraints: LinearConstraint) -> bool:
-        """A function for checking if a given parameter combination breaks a given linear constraint.
-
-        :param x: Parameter combination
-        :param constraints: scipy linear constraint object
-        :return: boolean that is true if the parameter combination breaks the constraint
-        """
-        if constraints == ():
-            return False
-        # Readability variables
-        A = constraints.A
-        lb = constraints.lb
-        ub = constraints.ub
-
-        transformed_parameters = A @ x
-        return np.any((lb >= transformed_parameters) | (transformed_parameters >= ub))
-
-    @staticmethod
-    def check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> None:
-        """This function checks the boundedness of a set of given bounds such that brute force optimizers
-        can assume boundedness after calling this function.
-
-        :param allbounds: A list of bounds
-        :raises ValueError: Raises a value error in case the there are no bounds or if bounds are to large
-        """
-        # Check for finite boundaries
-        if allbounds is None:
-            raise ValueError(
-                " No bounds provided in optimize: this optimization can only be executed on a finite domain")
-        for bounds in allbounds:
-            for bound in bounds:
-                if bound is None:
-                    raise ValueError(" Infinite boundaries not supported for this optimizer")
-
 
 class BruteForce(Optimizer):
     def __init__(self, Ns: int = 10):
         self.Ns = Ns
 
-    @jit
-    def __call__(self, fun: callable, x0: np.ndarray, args=(),
-                 bounds: List[Tuple[Optional[float], Optional[float]]] = None, constraints=(),
-                 **options) -> OptimizeResult:
-        """
-        Wrapping around the optimizer implemented as method to this class. Done s.t. this optimizer is compatible
-        with the scipy.optimize interface.
-        """
+    def __call__(self, fun: callable, x0: np.ndarray, args=(), **options) -> OptimizeResult:
         """
         :param fun: The objective function that we wish to minimize
         :param x0: starting values for the parameters we wish to optimize in this case not used!!!
@@ -132,23 +87,40 @@ class BruteForce(Optimizer):
         :param constraints: , defaults to None
         :return: OptimizeResult object from scipy
         """
-
+        bounds = options['bounds']
+        constraints = options['constraints']
         # this checks if boundaries actually contains values for lower bound and upperbound
-        self.check_bounded(bounds)
+        check_bounded(bounds)
 
         nx = len(x0)
         # make the individual discretized domains
         domains = []
+        previous_bound = ()
         for bound in bounds:
-            domains.append(np.linspace(bound[0], bound[1], num=self.Ns))
+            if bound == previous_bound:
+                # making a pointer to the previous array if the same bounds are provided sequentially
+                domains.append(domains[-1].view())
+            else:
+                domains.append(np.linspace(bound[0], bound[1], num=self.Ns))
+
+        x_optimal, y_optimal = compute_losses(fun, domains, constraints)
+        return OptimizeResult(fun=y_optimal, x=x_optimal, succes=True)
+
+
+def compute_losses(fun: callable, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
+
+    if constraints != ():
+        A = constraints.A
+        lb = constraints.lb
+        ub = constraints.ub
 
         # iterate over the grid
         y_optimal = np.inf
-        x_optimal = x0
-        for combination in itertools.product(*domains):
+        x_optimal = None
+        for combination in product(*domains, desc='Running brute force grid computation'):
             combination = np.array(combination)
             # check constraint
-            if self.is_constrained(combination, constraints):
+            if is_constrained(combination, A, lb, ub):
                 loss = np.inf
             else:
                 loss = fun(combination)
@@ -157,5 +129,46 @@ class BruteForce(Optimizer):
             if loss < y_optimal:
                 x_optimal = combination
                 y_optimal = loss
+    else:
+        # iterate over the grid
+        y_optimal = np.inf
+        x_optimal = None
+        for combination in product(*domains, desc='Running brute force grid computation'):
+            combination = np.array(combination)
+            loss = fun(combination)
+            # update optimal value
+            if loss < y_optimal:
+                x_optimal = combination
+                y_optimal = loss
 
-        return OptimizeResult(fun=y_optimal, x=x_optimal, succes=True)
+    return x_optimal, y_optimal
+
+
+def is_constrained(x: np.ndarray, A: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> bool:
+    """A function for checking if a given parameter combination breaks a given linear constraint.
+
+    :param A:
+    :param lb:
+    :param ub:
+    :param x: Parameter combination
+    :return: boolean that is true if the parameter combination breaks the constraint
+    """
+    transformed_parameters = A @ x
+    return np.any((lb >= transformed_parameters) | (transformed_parameters >= ub))
+
+
+def check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> None:
+    """This function checks the boundedness of a set of given bounds such that brute force optimizers
+    can assume boundedness after calling this function.
+
+    :param allbounds: A list of bounds
+    :raises ValueError: Raises a value error in case the there are no bounds or if bounds are to large
+    """
+    # Check for finite boundaries
+    if allbounds is None:
+        raise ValueError(
+            " No bounds provided in optimize: this optimization can only be executed on a finite domain")
+    for bounds in allbounds:
+        for bound in bounds:
+            if bound is None:
+                raise ValueError(" Infinite boundaries not supported for this optimizer")

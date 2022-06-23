@@ -1,8 +1,8 @@
-from matplotlib import pyplot as plt
-from microtool.optimize import BruteForce
-from scipy.optimize import minimize
 import numpy as np
 from numba import jit
+from scipy.optimize import minimize
+
+from microtool.optimize import BruteForce
 
 
 @jit
@@ -15,10 +15,11 @@ def ackley(x):
 
 
 # setting optimization parameters
-Ndim = 2
+Ndim = 10
 x0 = np.zeros(Ndim)
-domain = (-50, 50)
+domain = (-.5, .5)
 bounds = [domain for i in range(Ndim)]
 # setting the optimizer
-brute_force = BruteForce(Ns=1000)
+brute_force = BruteForce(Ns=10)
 result = minimize(ackley, x0, method=brute_force, bounds=bounds)
+print(result)
