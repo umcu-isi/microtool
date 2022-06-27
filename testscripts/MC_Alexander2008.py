@@ -12,9 +12,9 @@ from dmipy.signal_models import cylinder_models, gaussian_models
 from scipy import stats
 
 from microtool import monte_carlo
-from microtool.dmipy import DmipyTissueModel
 from microtool import utils_dmipy
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool.dmipy import DmipyTissueModel
 
 currentdir = pathlib.Path('.')
 outputdir = currentdir / "MC_results"
@@ -26,30 +26,30 @@ def main():
     noise_var = 0.02
     # -------------ACQUISITION-------------------
     # Define the PGSE acquisition scheme
-    # First we sample the gradient directions
-    n_pulses = 2
+    n_pulses = 200
 
+    # sampling uniform gradient directions
     b_vectors = utils_dmipy.sample_uniform(n_pulses)
-    b_values = np.repeat(10., n_pulses)
-    pulse_widths = np.repeat(30., n_pulses)
-    pulse_intervals = np.repeat(300., n_pulses)
+
+    # choosing four shells
+    b_values = np.concatenate([np.repeat(0.0, 50), np.repeat(1000, 50), np.repeat(2000, 50), np.repeat(3000, 50)])
+
+    pulse_widths = np.repeat(10., n_pulses)
+    pulse_intervals = np.repeat(40., n_pulses)
     scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
-    print("The initial scheme:\n", scheme)
 
     # ------INTRA AXONAL MODEL-------------
     # Cylinder orientation angles theta, phi := mu
     mu = np.array([0., 0.])
-    # Parralel diffusivity lambda_par in E9 m^2/s (in the paper d_par)
-    lambda_par = 1.7
-    # some reason the dmipy docs claim this one is not scaled??
+    # Parralel diffusivity lambda_par in E-9 m^2/s (in the paper d_par)
+    lambda_par = 1.7e-9
     lambda_perp = 0.2e-9
-    # Cylinder diameter in m (NOTE: alexander uses radi)
+    # Cylinder diameter in e-6 m (NOTE: alexander uses radi)
     diameter = 2 * 2.0e-6
     # Intra axonal tissue model using Van Gelderens signal model
     cylinder = cylinder_models.C4CylinderGaussianPhaseApproximation(mu, lambda_par, diameter, lambda_perp)
 
     # ----------EXTRA AXONAL MODEL-----------------
-    lambda_par *= 1.0e-9
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
 
     # defining relative volume fraction
@@ -68,15 +68,17 @@ def main():
     noise_distribution = stats.norm(loc=0, scale=noise_var)
 
     # Running monte carlo simulation
-    n_sim = 10
+    n_sim = 3
 
     tissue_parameters = monte_carlo.run(scheme, mc_model_wrapped, noise_distribution, n_sim, test_mode=True)
 
-    with open(outputdir / "TPD_alexander2008_nsim{}_npulse{}_noise{}.pkl".format(n_sim, n_pulses, noise_var), "wb") as f:
+    with open(outputdir / "debug.pkl".format(n_sim, n_pulses,
+                                                       noise_var),
+              "wb") as f:
         pickle.dump(tissue_parameters, f)
 
-    with open(outputdir/"alexander2008_ground_truth.pkl",'wb') as f:
-        pickle.dump(mc_model_wrapped.parameters, f)
+    with open(outputdir / "alexander2008_ground_truth.pkl", 'wb') as f:
+        pickle.dump(mc_model_wrapped, f)
 
 
 if __name__ == "__main__":

@@ -127,6 +127,21 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray]):
+
+        # check scale of b_values (in bounds or not)
+        if np.any((b_values[b_values!=0] < 1) | (b_values[b_values!=0] > 1e4)):
+            warnings.warn("The provided b-values are not clinically relevant, clinical b-values are expected in the "
+                          "order of 1e3 s/mm^2 ")
+
+        # check scale of pulses ( in bounds or not)
+        if np.any((pulse_widths > 1000) | (pulse_widths < 1)):
+            warnings.warn("The provided pulse-widths are not in the expected order of 1e2")
+
+        if np.any((pulse_intervals > 1000) | (pulse_intervals < 1)):
+            warnings.warn("The provided pulse-intervals are not in the expected order of 1e2")
+
+        # TODO: check pulse constraints
+
         # Check if the b-vectors are unit vectors and set b=0 'vectors' to (0, 0, 0) as per convention.
         b0 = b_values == 0
         b_vectors = np.asarray(b_vectors, dtype=np.float64)
