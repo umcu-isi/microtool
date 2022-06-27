@@ -89,7 +89,7 @@ class DmipyTissueModel(TissueModel):
         # Set up volume fractions if there are multiple models
         if model.N_models > 1:
             if volume_fractions is None:
-                raise ValueError("Provide volume fractions of composite tissuemodels are used.")
+                raise ValueError("Provide volume fractions if composite tissuemodels are used.")
             # Get the ordered partial volume names from the model
             vf_keys = model.partial_volume_names
             # check if the volume_fractions match the length of this dictionary
@@ -132,17 +132,6 @@ class DmipyTissueModel(TissueModel):
     def fit(self, scheme: DmipyAcquisitionScheme, noisy_signal: np.ndarray, **fit_options):
         dmipy_scheme = convert_acquisition_scheme(scheme)
         # Brute2Fine is really slow for some reason? Maybe because of scipy version stuff???
-        result = self._model.fit(dmipy_scheme, noisy_signal, *fit_options, solver='mix')
-        # TODO: use tissuemodel wrapper for output Note that some of the parameters are not included in the fitting
-        #  and hence will not be returned when calling fitted_parameters on FittedMultiCompartmentModel
+        result = self._model.fit(dmipy_scheme, noisy_signal, solver='mix', **fit_options)
 
         return result
-
-    # class FittedDmipyTissueModel:
-    #     def __init__(self, model:DmipyTissueModel, fitted_parameters: Dict[str, np.ndarray]):
-    #         self._model = model
-    #         self.fitted_parameter_dmipy = fitted_parameters
-    #
-    #     @property
-    #     def fitted_parameters(self) -> Dict[str, float]:
-    #         pass
