@@ -1,13 +1,10 @@
-import itertools
-import math
+from itertools import combinations
 from typing import List
 
 import numpy as np
 from matplotlib import pyplot as plt
+from scipy.optimize import minimize
 from scipy.spatial import distance
-from scipy.optimize import minimize, NonlinearConstraint
-from itertools import combinations
-from numba import njit
 
 
 def test_uniform():
@@ -17,7 +14,14 @@ def test_uniform():
 
     # Optimizing the coulomb potential constraining the points to the sphere
     samples = sample_uniform()
+    print(np.linalg.norm(samples, axis=1))
     _plot_vectors(samples, "Electrostatic optimization")
+    plt.show()
+
+
+def test_shells():
+    result = sample_q_shells([9, 9, 9])
+    _plot_shells(result)
     plt.show()
 
 
@@ -32,8 +36,8 @@ def sample_q_shells(n_shells: List[int]) -> List[np.ndarray]:
     vec_init = list(map(sample_sphere_vectors, n_shells))
     x0 = np.concatenate(list(map(np.ravel, vec_init)))
 
-    result = minimize(cost_scipy, x0, args=(n_shells, 0.5), constraints=get_constraints(x0))
-    return repack_shells(result['x'], n_shells)
+    result = minimize(cost_scipy, x0, args=(n_shells, 0.5), constraints=get_constraints())
+    return list(map(normalize, repack_shells(result['x'], n_shells)))
 
 
 def cost_scipy(x: np.ndarray, n_shells: List[int], alpha: float = 0.5) -> float:
@@ -85,27 +89,26 @@ def sample_uniform(ns: int = 100) -> np.ndarray:
     """
     vec_init = sample_sphere_vectors(ns)
     x0 = vec_init.flatten()
-    result = minimize(cost_fun, x0, constraints=get_constraints(x0))
-    return result['x'].reshape((-1, 3))
+    result = minimize(cost_fun, x0, constraints=get_constraints())
+    return normalize(result['x'].reshape((-1, 3)))
 
 
-def get_constraints(x: np.ndarray) -> NonlinearConstraint:
-    return NonlinearConstraint(get_norms, make_bounds(x), make_bounds(x))
+def normalize(vecs: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(vecs, axis=1)
+    result = np.zeros(vecs.shape)
+    for i, norm in enumerate(norms):
+        result[i] = vecs[i, :] / norm
+    return result
 
 
-def make_bounds(x):
+def get_constraints() -> dict:
+    return {'type': 'eq', 'fun': constraint_function}
+
+
+def constraint_function(x: np.ndarray) -> np.ndarray:
     vecs = np.reshape(x, (-1, 3))
-    return np.ones(vecs.shape[0])
-
-
-def get_norms(x):
-    """
-    Helper function for constraining the vectors to unit length (i.e. on the sphere)
-    :param x:
-    :return:
-    """
-    vecs = np.reshape(x, (-1, 3))
-    return np.linalg.norm(vecs, axis=1)
+    norms = np.linalg.norm(vecs, axis=1)
+    return np.abs(norms - np.ones(norms.shape))
 
 
 def cost_fun(x):
