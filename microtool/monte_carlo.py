@@ -61,38 +61,3 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
         posterior.append(parameter_dict)
 
     return posterior
-
-
-# TODO: possibly implement unvectorized distributions for sampling speedup see
-#  https://docs.scipy.org/doc/scipy/tutorial/stats/sampling.html#non-uniform-random-number-sampling
-class DistributionBase:
-    """
-    Base class for distributions to be used in monte carlo simulations
-    """
-
-    def pdf(self, x: float) -> float:
-        raise NotImplementedError
-
-    def dpdf(self, x: float) -> float:
-        raise NotImplementedError
-
-    def cdf(self, x: float) -> float:
-        raise NotImplementedError
-
-
-class ScipyNormal(DistributionBase):
-    """
-    A wrapper for the normal distribution.. for now only the built in function is used as test
-    """
-
-    def __init__(self, mean: float = 0, std: float = 1):
-        self.norm = stats.norm(loc=mean, scale=std)
-
-    def pdf(self, x: float) -> float:
-        return self.norm.pdf(x)
-
-    def cdf(self, x: float) -> float:
-        return self.norm.cdf(x)
-
-    def dpdf(self, x: float) -> float:
-        raise NotImplementedError
