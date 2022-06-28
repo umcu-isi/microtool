@@ -1,3 +1,4 @@
+import pathlib
 from itertools import combinations
 from typing import List
 
@@ -5,6 +6,11 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.optimize import minimize
 from scipy.spatial import distance
+
+# The folder used for look ups
+module_folder = pathlib.Path(__file__).parent.absolute()
+folder = module_folder / 'gradient_directions'
+folder.mkdir(exist_ok=True)
 
 
 def test_uniform():
@@ -27,9 +33,7 @@ def test_shells():
 
 def main():
     """ Demonstrating the use of these functions"""
-    result = sample_q_shells([9, 9, 9])
-    _plot_shells(result)
-    plt.show()
+    test_shells()
 
 
 def sample_q_shells(n_shells: List[int]) -> List[np.ndarray]:
@@ -82,15 +86,28 @@ def cost_inter_shell(vectors: List[np.ndarray]) -> float:
 
 def sample_uniform(ns: int = 100) -> np.ndarray:
     """
-    Using electrostatic energy minimization we generate uniform samples on the sphere
+    Using electrostatic energy minimization we generate uniform samples on the sphere. We keep a lookup table for the
+    samples meaning that if this sample has been previously computed we can load it from the disk.
 
     :param ns: Number of samples on the sphere
     :return: the unit vectors uniform on sphere in shape (ns,3)
     """
-    vec_init = sample_sphere_vectors(ns)
-    x0 = vec_init.flatten()
-    result = minimize(cost_fun, x0, constraints=get_constraints())
-    return normalize(result['x'].reshape((-1, 3)))
+    # Performing a look up
+    base_name = "uniform_samples_"
+    stored_samples = [sample_path.name for sample_path in list(folder.glob(base_name + '*'))]
+
+    sample_name = base_name + str(ns) + '.npy'
+    if sample_name in stored_samples:
+        vectors = np.load(str(folder / sample_name))
+    else:
+        # if look up was unsuccessful we sample and write to disk
+        vec_init = sample_sphere_vectors(ns)
+        x0 = vec_init.flatten()
+        result = minimize(cost_fun, x0, constraints=get_constraints())
+        vectors = normalize(result['x'].reshape((-1, 3)))
+        np.save(str(folder / sample_name), vectors)
+
+    return vectors
 
 
 def normalize(vecs: np.ndarray) -> np.ndarray:
