@@ -45,12 +45,25 @@ def sample_q_shells(n_shells: List[int]) -> List[np.ndarray]:
 
 
 def cost_scipy(x: np.ndarray, n_shells: List[int], alpha: float = 0.5) -> float:
+    """
+
+    :param x: The flat array containing all the vectors
+    :param n_shells: Number of vectors in each shell
+    :param alpha: The relative weighting of inter and intra shell cost/electrostatic energy
+    :return: The cost associated with this set of vectors
+    """
     # folding the parameter vector
     vectors = repack_shells(x, n_shells)
     return alpha * cost_inter_shell(vectors) + (1.0 - alpha) * cost_intra_shell(vectors)
 
 
-def repack_shells(x, n_shells) -> List[np.ndarray]:
+# TODO: just make the cost function use the flattened factor then you dont need to unpack and repack all the time
+def repack_shells(x: np.ndarray, n_shells: List[int]) -> List[np.ndarray]:
+    """
+    :param x: A flattened numpy ndarray that you wish to reorganize in shell structure
+    :param n_shells: A list containing the number of samples on each shell
+    :return: The vectors of each shell stored as a seperate list entry
+    """
     vectors = []
     idx = 0
     for n_q in n_shells:
@@ -62,12 +75,21 @@ def repack_shells(x, n_shells) -> List[np.ndarray]:
 
 
 def cost_intra_shell(vectors: List[np.ndarray]) -> float:
+    """
+    Computes the pairwise electrostatic energy between shell pairs and adds and scales them to penalize similar
+    orientations on different shells.
+
+    :param vectors: The list of vector sets of the different q shells
+    :return: Cost associated with this configuration
+    """
+
     # total number of samples
     n_total = float(sum(list(map(len, vectors))))  # float type setting
 
     # go over the unique pair combinations of shells s!=t
     cost = 0.
     for vec_shell_s, vec_shell_t in combinations(vectors, 2):
+        # now that we have unique shell pair we go over
         for i in range(vec_shell_s.shape[0]):
             for j in range(vec_shell_t.shape[0]):
                 cost += total_potential(np.vstack((vec_shell_s[i, :], vec_shell_t[j, :])))
@@ -75,6 +97,12 @@ def cost_intra_shell(vectors: List[np.ndarray]) -> float:
 
 
 def cost_inter_shell(vectors: List[np.ndarray]) -> float:
+    """
+    Computes the electrostatic energy in each shell individually.
+
+    :param vectors: The list of vectors where each list entry represent a different q-shell
+    :return: Cost/Electrostatic energy
+    """
     # Get electrostatic energy for individual shells
     n_q = len(vectors)  # number of shells
     cost = 0.0
@@ -111,6 +139,12 @@ def sample_uniform(ns: int = 100) -> np.ndarray:
 
 
 def normalize(vecs: np.ndarray) -> np.ndarray:
+    """
+    Normalizes a set of vectors.
+
+    :param vecs: An array of shape (n_vecs, 3)
+    :return: Vector set of shape (n_vecs, 3) with each vector length being unity
+    """
     norms = np.linalg.norm(vecs, axis=1)
     result = np.zeros(vecs.shape)
     for i, norm in enumerate(norms):
@@ -123,6 +157,15 @@ def get_constraints() -> dict:
 
 
 def constraint_function(x: np.ndarray) -> np.ndarray:
+    """
+    Computes the difference of the vector lengths from unity.
+
+    The constraint function according to scipy standards. Meaning f(x) = 0 for equality type and f(x) <= 0 for inequality
+    type. (output is allowed to be a 1D array )
+
+    :param x: Parameter vector
+    :return: array with difference from unit length for every vector
+    """
     vecs = np.reshape(x, (-1, 3))
     norms = np.linalg.norm(vecs, axis=1)
     return np.abs(norms - np.ones(norms.shape))
@@ -148,6 +191,9 @@ def total_potential(vectors: np.ndarray) -> np.ndarray:
 
 
 def make_sphere(r):
+    """
+    Quick function for generating some points on a sphere for plotting purposes.
+    """
     pi = np.pi
     cos = np.cos
     sin = np.sin
@@ -158,7 +204,12 @@ def make_sphere(r):
     return x, y, z
 
 
-def _plot_shells(shells: List[np.ndarray], title: str = None) -> None:
+def _plot_shells(shells: List[np.ndarray]) -> None:
+    """
+    Helper function for plotting q-shell configurations
+    :param shells: List of vector collections for each shell
+    :return: None, makes matplotlib figure. Display using plt.show()
+    """
     plt.figure()
     ax = plt.axes(projection='3d')
 
@@ -177,7 +228,7 @@ def _plot_vectors(vectors: np.ndarray, title: str) -> None:
     Helper function for plotting a set of vectors
     :param vectors: (num, 3) shaped array of vectors
     :param title: Title for the plot
-    :return: None
+    :return: None, display using plt.show()
     """
     plt.figure(title)
     ax = plt.axes(projection='3d')
