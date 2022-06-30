@@ -8,13 +8,14 @@ In order to simulate the MR signal in response to a MICROtool acquisition scheme
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Union
+from typing import Optional, Dict, Union, List, Tuple
 
 import numpy as np
+from numba import jit
 from scipy.optimize import OptimizeResult, minimize, curve_fit
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
-from .optimize import LossFunction, crlb_loss
+from .optimize import LossFunction, crlb_loss, Optimizer
 
 
 @dataclass
@@ -82,7 +83,9 @@ class TissueModel(Dict[str, TissueParameter]):
             scheme: AcquisitionScheme,
             noise_var: float,
             loss: LossFunction = crlb_loss,
-            method: Optional[str] = None) -> OptimizeResult:
+            method: Optional[Union[str, callable, Optimizer]] = None,
+            bounds: List[Tuple[float,float] ] = None,
+            **options) -> OptimizeResult:
         """
         Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
         The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -95,25 +98,28 @@ class TissueModel(Dict[str, TissueParameter]):
         :param method: Type of solver. See the documentation for scipy.optimize.minimize
         :return: A scipy.optimize.OptimizeResult object.
         """
-        # Tissueparameter attributes
-        scales = [value.scale for value in self.values()]
-        include = [value.optimize for value in self.values()]
-
-        # Aquisition parameter attributes
+        scales = self.get_scales()
+        include = self.get_include()
         acquisition_parameter_scales = scheme.get_free_parameter_scales()
-        x0 = scheme.get_free_parameters() / acquisition_parameter_scales
-        bounds = scheme.get_free_parameter_bounds()
+        x0 = scheme.get_free_parameter_vector() / acquisition_parameter_scales
+        if not bounds:
+            bounds = scheme.get_free_parameter_bounds_scaled()
+        else:
+            scheme.set_free_parameter_bounds(bounds)
+            bounds = scheme.get_free_parameter_bounds_scaled()
+
+        constraints = scheme.get_constraints()
 
         # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
         # model's Jacobian matrix and evaluating the loss function.
         def calc_loss(x: np.ndarray):
-            scheme.set_free_parameters(x * acquisition_parameter_scales)
+            scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
             jac = self.jacobian(scheme)
             return loss(jac, scales, include, noise_var)
 
-        result = minimize(calc_loss, x0, method=method, bounds=bounds)
+        result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints,options=options)
         if 'x' in result:
-            scheme.set_free_parameters(result['x'] * acquisition_parameter_scales)
+            scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
         return result
 
@@ -142,6 +148,12 @@ class TissueModel(Dict[str, TissueParameter]):
     def __str__(self) -> str:
         parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
         return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
+
+    def get_scales(self):
+        return [value.scale for value in self.values()]
+
+    def get_include(self):
+        return [value.optimize for value in self.values()]
 
 
 class FittedTissueModel:
@@ -206,11 +218,12 @@ class RelaxationTissueModel(TissueModel):
         te_t2 = np.exp(-te / self['T2'].value)
 
         # Calculate the derivative of the signal attenuation to T1, T2 and S0.
-        return np.array([
+        jac = np.array([
             self['S0'].value * (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (self['T1'].value ** 2),  # δS(S0, T1, T2) / δT1
             self['S0'].value * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (self['T2'].value ** 2),  # δS(S0, T1, T2) / δT2
             (1 - 2 * ti_t1 + tr_t1) * te_t2,  # δS(S0, T1, T2) / δS0
         ]).T
+        return jac
 
     def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray,**fit_options) -> FittedTissueModel:
         ti = scheme.inversion_times  # ms
