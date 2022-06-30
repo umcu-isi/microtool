@@ -166,7 +166,7 @@ class SOMA(Optimizer):
         return message
 
     def __call__(self, fun: callable, x0: np.ndarray, args=(), **options) -> OptimizeResult:
-        """This is where the optimization routine is runned.
+        """This is where the optimization routine is ran.
 
         :param fun: Objective function to be minimized
         :param x0: starting parameters (only used for length)
@@ -179,6 +179,10 @@ class SOMA(Optimizer):
 
         # TODO: guarantee bounds in higherlevel functions in tissuemodel
         bounds = options["bounds"]
+        constraints = options['constraints']
+
+        if constraints is not None:
+            raise NotImplementedError("SOMA optimizer does not consider constraints.")
 
         population = Population(self.population_sz, bounds, fun, self.max_fevals)
 
@@ -204,6 +208,7 @@ class Population:
         :param values: Starting parameter values of the population, defaults to None
         """
         self.sz = sz
+        bounds = np.array(bounds)
         self.lower_bound = bounds[:, 0]
         self.upper_bound = bounds[:, 1]
         self.Nx = len(bounds)
