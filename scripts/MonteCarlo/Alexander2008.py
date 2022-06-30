@@ -71,7 +71,7 @@ def main():
     noise_distribution = stats.norm(loc=0, scale=noise_var)
 
     # Running monte carlo simulation
-    n_sim = 1000
+    n_sim = 2
 
     tissue_parameters = monte_carlo.run(scheme, mc_model_wrapped, noise_distribution, n_sim, test_mode=False)
 

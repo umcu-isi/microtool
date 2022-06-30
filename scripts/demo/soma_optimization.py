@@ -1,11 +1,8 @@
+from microtool.optimize import SOMA
 import numpy as np
-from numba import jit
 from scipy.optimize import minimize
 
-from microtool.optimize import BruteForce
 
-
-@jit
 def ackley(x):
     n = float(len(x))
     ninv = 1 / n
@@ -14,12 +11,16 @@ def ackley(x):
     return 20 + np.exp(1) - (20 * np.exp(-.2 * np.sqrt(ninv * sum1))) - np.exp(ninv * sum2)
 
 
+# # Setting the control parameters
+soma_optimizer = SOMA()
+print(soma_optimizer)
+
 # setting optimization parameters
-Ndim = 10
+Ndim = 2
 x0 = np.zeros(Ndim)
-domain = (-.5, .5)
-bounds = [domain for i in range(Ndim)]
-# setting the optimizer
-brute_force = BruteForce(Ns=10)
-result = minimize(ackley, x0, method=brute_force, bounds=bounds)
-print(result)
+domain = (-500, 500)
+bounds = np.array([domain for i in range(Ndim)])
+
+for i in range(10):
+    result = minimize(ackley, x0, method=soma_optimizer, bounds=bounds)
+    print(result)

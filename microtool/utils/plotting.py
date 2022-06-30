@@ -1,8 +1,8 @@
 from typing import Dict, List, Tuple
 
-from .optimize import LossFunction
-from .acquisition_scheme import AcquisitionScheme
-from .tissue_model import TissueModel
+from microtool.optimize import LossFunction
+from microtool.acquisition_scheme import AcquisitionScheme
+from microtool.tissue_model import TissueModel
 from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,7 +32,7 @@ class LossInspector:
         tissue_scales = self.model.get_scales()
         tissue_include = self.model.get_include()
         acq_scales = self.scheme.get_free_parameter_scales()
-        # we update the scheme to compute the loss altough this changes not the scheme the user supplied
+        # we update the scheme to compute the loss altough this does not change the scheme the user supplied
         self.scheme.set_free_parameter_vector(x * acq_scales)
         jac = self.model.jacobian(self.scheme)
         return self.loss_function(jac, tissue_scales, tissue_include, self.noise_var)

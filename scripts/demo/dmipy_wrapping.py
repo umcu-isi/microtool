@@ -1,8 +1,7 @@
 # # dmpyi diffusion model
 import numpy as np
-from dmipy.signal_models.cylinder_models import C1Stick
-from dmipy.signal_models.gaussian_models import G1Ball
 from dmipy.core.modeling_framework import MultiCompartmentModel
+from dmipy.signal_models.cylinder_models import C1Stick
 from matplotlib import pyplot as plt
 
 import microtool.dmipy
@@ -35,7 +34,7 @@ print(diffusion_scheme)
 plt.figure(figsize=(6, 4))
 plt.plot(diffusion_model(diffusion_scheme), '.')
 plt.xlabel('Measurement')
-plt.ylabel('Signal attenuation');
+plt.ylabel('Signal attenuation')
 
 # ## 4. Calculate the Cramer-Rao lower bound loss
 
@@ -48,13 +47,13 @@ microtool.optimize.crlb_loss(jacobian, scales, include, noise_variance)
 
 # ## 5. Optimize the acquisition scheme
 
-optimizeresult = diffusion_model.optimize(diffusion_scheme, noise_variance);
+optimizeresult = diffusion_model.optimize(diffusion_scheme, noise_variance)
 
 print(diffusion_scheme)
 plt.figure(figsize=(6, 4))
 plt.plot(diffusion_model(diffusion_scheme), '.')
 plt.xlabel('Measurement')
-plt.ylabel('Signal attenuation');
+plt.ylabel('Signal attenuation')
 
 # ## 6. Calculate the Cramer-Rao lower bound loss again
 # It should be lower after optimizing the acquisition.

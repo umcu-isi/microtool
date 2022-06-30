@@ -1,6 +1,7 @@
 from typing import List, Tuple, Optional
 
 import numpy as np
+from tqdm.contrib.itertools import product
 
 
 def is_constrained(x: np.ndarray, A: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> bool:
@@ -31,3 +32,39 @@ def check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> N
         for bound in bounds:
             if bound is None:
                 raise ValueError(" Infinite boundaries not supported for this optimizer")
+
+
+def find_minimum(fun: callable, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
+    if constraints != ():
+        A = constraints.A
+        lb = constraints.lb
+        ub = constraints.ub
+
+        # iterate over the grid
+        y_optimal = np.inf
+        x_optimal = None
+        for combination in product(*domains, desc='Running brute force grid computation'):
+            combination = np.array(combination)
+            # check constraint
+            if is_constrained(combination, A, lb, ub):
+                loss = np.inf
+            else:
+                loss = fun(combination)
+
+            # update optimal value
+            if loss < y_optimal:
+                x_optimal = combination
+                y_optimal = loss
+    else:
+        # iterate over the grid
+        y_optimal = np.inf
+        x_optimal = None
+        for combination in product(*domains, desc='Running brute force grid computation'):
+            combination = np.array(combination)
+            loss = fun(combination)
+            # update optimal value
+            if loss < y_optimal:
+                x_optimal = combination
+                y_optimal = loss
+
+    return x_optimal, y_optimal

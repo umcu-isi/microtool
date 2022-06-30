@@ -1,6 +1,7 @@
 # # MISST diffusion model
 
 # ## 1. Set the path to the MISST MATLAB package
+import numpy as np
 from matplotlib import pyplot as plt
 
 import microtool.misst
@@ -45,7 +46,7 @@ print(diffusion_scheme)
 
 
 noise_variance = 0.1
-diffusion_model.optimize(diffusion_scheme, noise_variance);
+diffusion_model.optimize(diffusion_scheme, noise_variance)
 
 # In[ ]:
 
@@ -54,4 +55,4 @@ print(diffusion_scheme)
 plt.figure(figsize=(6, 4))
 plt.plot(diffusion_model(diffusion_scheme), '.')
 plt.xlabel('Measurement')
-plt.ylabel('Signal attenuation');
+plt.ylabel('Signal attenuation')

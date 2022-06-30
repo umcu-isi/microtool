@@ -9,6 +9,7 @@ from pathlib import Path
 from scipy.optimize import LinearConstraint
 from math import prod
 
+
 # TODO: Linear constraints? For example: Δ > δ  and TR > TI + TE
 # TODO: Check constraints on initialization
 
@@ -90,7 +91,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             self[key].values = thesevals.reshape(shape)
             i += stride
 
-    def get_free_parameter_idx(self,parameter: str, pulse_id:int) -> int:
+    def get_free_parameter_idx(self, parameter: str, pulse_id: int) -> int:
 
         i = 0
         for key in self.get_free_parameter_keys():
@@ -99,7 +100,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             shape = self[key].values.shape
             stride = int(prod(shape))
             i += stride
-
 
     def set_free_parameters(self, parameters: Dict[str, np.ndarray]) -> None:
         """
@@ -111,10 +111,10 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         for key in parameters.keys():
             self[key].values = parameters[key]
 
-    def set_free_parameter_bounds(self, bounds:List[Tuple[float,float]]) -> None:
+    def set_free_parameter_bounds(self, bounds: List[Tuple[float, float]]) -> None:
         if len(bounds) != len(self.get_free_parameter_keys()):
             raise ValueError("provide bounds only for free parameters.")
-        for i ,key in enumerate(self.get_free_parameter_keys()):
+        for i, key in enumerate(self.get_free_parameter_keys()):
             self[key].lower_bound = bounds[i][0]
             self[key].upper_bound = bounds[i][1]
 
@@ -138,14 +138,14 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         n = self.get_pulse_count()
         return [(p.lower_bound, p.upper_bound) for p in self.values() if not p.fixed for _ in range(n)]
 
-    def get_free_parameter_bounds_scaled(self) -> List[Tuple[float,float]]:
+    def get_free_parameter_bounds_scaled(self) -> list[tuple[Optional[float], ...]]:
         n = self.get_pulse_count()
         bounds = []
         for key in self.get_free_parameter_keys():
             p = self[key]
             p_bounds = (p.lower_bound, p.upper_bound)
             for _ in range(n):
-                bounds.append(tuple([None if bound is None else bound/p.scale for bound in p_bounds]))
+                bounds.append(tuple([None if bound is None else bound / p.scale for bound in p_bounds]))
 
         return bounds
 
@@ -219,7 +219,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  pulse_intervals: Union[List[float], np.ndarray]):
 
         # check scale of b_values (in bounds or not)
-        if np.any((b_values[b_values!=0] < 1) | (b_values[b_values!=0] > 1e4)):
+        if np.any((b_values[b_values != 0] < 1) | (b_values[b_values != 0] > 1e4)):
             warnings.warn("The provided b-values are not clinically relevant, clinical b-values are expected in the "
                           "order of 1e3 s/mm^2 ")
 
@@ -408,7 +408,6 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         return self['InversionTime'].values
 
     def get_constraints(self) -> LinearConstraint:
-
         parameter_signs = {
             'RepetitionTimeExcitation': 1,
             'EchoTime': -1,

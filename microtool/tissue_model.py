@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Union, List, Tuple
 
 import numpy as np
-from numba import jit
 from scipy.optimize import OptimizeResult, minimize, curve_fit
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
@@ -96,6 +95,7 @@ class TissueModel(Dict[str, TissueParameter]):
         :param noise_var: Noise variance on the MR signal attenuation.
         :param loss: a function of type LossFunction.
         :param method: Type of solver. See the documentation for scipy.optimize.minimize
+        :param bounds: Provide the bounds of acquisition parameters if desired
         :return: A scipy.optimize.OptimizeResult object.
         """
         scales = self.get_scales()

@@ -119,3 +119,5 @@ class MisstTissueModel(TissueModel):
 
         # Add the derivative to S0 (the signal itself).
         return np.concatenate([s0 * np.array(jac), signal], axis=1)
+
+    #TODO: Implement fit method

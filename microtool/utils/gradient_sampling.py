@@ -8,7 +8,7 @@ from scipy.optimize import minimize
 from scipy.spatial import distance
 
 # The folder used for look ups
-module_folder = pathlib.Path(__file__).parent.absolute()
+module_folder = pathlib.Path(__file__).resolve().parent
 folder = module_folder / 'gradient_directions'
 folder.mkdir(exist_ok=True)
 
