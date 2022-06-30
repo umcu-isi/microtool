@@ -1,6 +1,6 @@
 """
-All the utility functions for this python package. Most of these are useless on their own but just wanted to organise
-these somewhere.
+Helper functions for handling the input and output for this module. Especially usefull for the Monte Carlo stuff.
+But also thinks like hiding print statements
 """
 import pickle
 import pandas as pd

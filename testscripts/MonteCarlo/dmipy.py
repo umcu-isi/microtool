@@ -13,8 +13,8 @@ from scipy import stats
 from microtool import monte_carlo
 from microtool.dmipy import DmipyTissueModel, DmipyAcquisitionSchemeWrapper
 
-currentdir = pathlib.Path('.')
-outputdir = currentdir / "MC_results"
+currentdir = pathlib.Path('..')
+outputdir = currentdir / "results"
 outputdir.mkdir(exist_ok=True)
 
 

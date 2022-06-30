@@ -6,8 +6,8 @@ import numpy as np
 from scipy import stats
 import pathlib
 
-currentdir = pathlib.Path('.')
-outputdir = currentdir / "MC_results"
+currentdir = pathlib.Path('..')
+outputdir = currentdir / "results"
 outputdir.mkdir(exist_ok=True)
 
 

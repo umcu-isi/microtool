@@ -12,12 +12,12 @@ from dmipy.signal_models import cylinder_models, gaussian_models
 from scipy import stats
 
 from microtool import monte_carlo
-from microtool import utils_dmipy
+from microtool.utils import gradient_sampling
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.dmipy import DmipyTissueModel
 
-currentdir = pathlib.Path('.')
-outputdir = currentdir / "MC_results"
+currentdir = pathlib.Path('..')
+outputdir = currentdir / "results"
 outputdir.mkdir(exist_ok=True)
 
 
@@ -29,7 +29,7 @@ def main():
     n_pulses = 200
 
     # sampling uniform gradient directions
-    b_vectors = utils_dmipy.sample_uniform(n_pulses)
+    b_vectors = gradient_sampling.sample_uniform(n_pulses)
 
     # choosing four shells
     b_values = np.concatenate([np.repeat(0.0, 50), np.repeat(1000, 50), np.repeat(2000, 50), np.repeat(3000, 50)])
@@ -52,8 +52,11 @@ def main():
     # ----------EXTRA AXONAL MODEL-----------------
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
 
-    # defining relative volume fraction
     mc_model = MultiCompartmentModel(models=[zeppelin, cylinder])
+    # Fixing the parralel diffusivity parameter to be equal for intra and extra axonal models
+    mc_model.set_equal_parameter('C4CylinderGaussianPhaseApproximation_1_lambda_par', 'G2Zeppelin_1_lambda_par')
+
+    # defining relative volume fraction
     mc_model_wrapped = DmipyTissueModel(mc_model, np.array([.5, .5]))
 
     print("Using the following model:\n", mc_model_wrapped)
@@ -68,13 +71,11 @@ def main():
     noise_distribution = stats.norm(loc=0, scale=noise_var)
 
     # Running monte carlo simulation
-    n_sim = 3
+    n_sim = 1000
 
-    tissue_parameters = monte_carlo.run(scheme, mc_model_wrapped, noise_distribution, n_sim, test_mode=True)
+    tissue_parameters = monte_carlo.run(scheme, mc_model_wrapped, noise_distribution, n_sim, test_mode=False)
 
-    with open(outputdir / "debug.pkl".format(n_sim, n_pulses,
-                                                       noise_var),
-              "wb") as f:
+    with open(outputdir / "alexander_nofixed_n_sim_{}_noise_{}.pkl".format(n_sim, noise_var), "wb") as f:
         pickle.dump(tissue_parameters, f)
 
     with open(outputdir / "alexander2008_ground_truth.pkl", 'wb') as f:

@@ -2,16 +2,16 @@ import pathlib
 
 from matplotlib import pyplot as plt
 import math
-from microtool.utils_IO import get_df_from_pickle, get_pickle
+from microtool.utils.IO import get_df_from_pickle, get_pickle
 
-resultdir = pathlib.Path("MC_results")
-filename = "debug.pkl"
+resultdir = pathlib.Path("results")
+filename = "alexander_nofixed_n_sim_1000_noise_0.02.pkl"
 df = get_df_from_pickle(resultdir / filename)
 gt = get_pickle(resultdir / "alexander2008_ground_truth.pkl")
 
 n_rows = math.ceil(df.shape[1] / 3)
 
-
+print(df.describe())
 for i, parameter in enumerate(df.keys()):
     ax = plt.subplot(n_rows, 3, i + 1)
 

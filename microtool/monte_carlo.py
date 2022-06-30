@@ -13,7 +13,7 @@ from scipy.stats.sampling import NumericalInversePolynomial
 from tqdm import tqdm
 from .acquisition_scheme import AcquisitionScheme
 from .tissue_model import TissueModel
-from .utils_IO import HiddenPrints
+from microtool.utils.IO import HiddenPrints
 
 MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 
