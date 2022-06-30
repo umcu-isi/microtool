@@ -19,7 +19,7 @@ MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 
 
 def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous,
-        n_sim: int, test_mode = False) -> MonteCarloResult:
+        n_sim: int, test_mode=False, **fit_options) -> MonteCarloResult:
     """
     NEEDS TO BE EXECUTED IN if __name__ == "__main__" clause!!!! otherwise obscure parralel processing error.
     This function runs a Monte Carlo simulation to compute the posterior probability distribution induced in a
@@ -29,6 +29,7 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
     :param model: The tissuemodel for which we wish to know the posterior distribution
     :param noise_distribution: The noise distribution to perturb the signal
     :param n_sim: The number of times we sample the noise and fit the tissue parameters
+    :param test_mode:
     :return: The fitted tissueparameters for all noise realizations
     """
 
@@ -39,7 +40,6 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
     urng = np.random.default_rng()  # Numpy uniform distribution sampler as basis random number generator
     sampler = NumericalInversePolynomial(noise_distribution,
                                          random_state=urng)  # using scipy method to shape to distribution
-
 
     posterior = []
     for _ in tqdm(range(n_sim), desc=f"Starting Monte Carlo with {n_sim} simulations"):
@@ -52,9 +52,9 @@ def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats
         # Fit the tissuemodel to the noisy data and save resulting parameters (hiding useless print statements
         with HiddenPrints():
             if test_mode:
-                model_fitted = model.fit(scheme, signal)
+                model_fitted = model.fit(scheme, signal, **fit_options)
             else:
-                model_fitted = model.fit(scheme, signal_bar)
+                model_fitted = model.fit(scheme, signal_bar, **fit_options)
         parameter_dict = model_fitted.fitted_parameters
 
         # storing only information of interest namely the parameter values
