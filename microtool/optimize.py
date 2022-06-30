@@ -1,5 +1,6 @@
-from typing import Sequence, Callable, Tuple, List
 
+from typing import Sequence, Callable, Tuple, List
+from dataclasses import dataclass,field,astuple, asdict
 import numpy as np
 from scipy.optimize.optimize import OptimizeResult
 from tqdm.contrib.itertools import product
