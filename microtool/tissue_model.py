@@ -83,7 +83,7 @@ class TissueModel(Dict[str, TissueParameter]):
             noise_var: float,
             loss: LossFunction = crlb_loss,
             method: Optional[Union[str, callable, Optimizer]] = None,
-            bounds: List[Tuple[float,float] ] = None,
+            bounds: List[Tuple[float, float]] = None,
             **options) -> OptimizeResult:
         """
         Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
@@ -102,6 +102,7 @@ class TissueModel(Dict[str, TissueParameter]):
         include = self.get_include()
         acquisition_parameter_scales = scheme.get_free_parameter_scales()
         x0 = scheme.get_free_parameter_vector() / acquisition_parameter_scales
+
         if not bounds:
             bounds = scheme.get_free_parameter_bounds_scaled()
         else:
@@ -117,7 +118,7 @@ class TissueModel(Dict[str, TissueParameter]):
             jac = self.jacobian(scheme)
             return loss(jac, scales, include, noise_var)
 
-        result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints,options=options)
+        result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints, options=options)
         if 'x' in result:
             scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
@@ -225,7 +226,8 @@ class RelaxationTissueModel(TissueModel):
         ]).T
         return jac
 
-    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray,**fit_options) -> FittedTissueModel:
+    def fit(self, scheme: InversionRecoveryAcquisitionScheme, noisy_signal: np.ndarray,
+            **fit_options) -> FittedTissueModel:
         ti = scheme.inversion_times  # ms
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
