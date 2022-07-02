@@ -29,9 +29,9 @@ class LossInspector:
         :param x: The scaled parameters for which we wish to know the loss
         :return: the loss value
         """
-        tissue_scales = self.model.get_scales()
-        tissue_include = self.model.get_include()
-        acq_scales = self.scheme.get_free_parameter_scales()
+        tissue_scales = self.model.scales
+        tissue_include = self.model.include
+        acq_scales = self.scheme.free_parameter_scales
         # we update the scheme to compute the loss altough this does not change the scheme the user supplied
         self.scheme.set_free_parameter_vector(x * acq_scales)
         jac = self.model.jacobian(self.scheme)
@@ -49,16 +49,16 @@ class LossInspector:
         """
         # check if the provided parameters are actually in the scheme
         for key in parameters.keys():
-            if key not in self.scheme.get_free_parameters():
+            if key not in self.scheme.free_parameters:
                 raise ValueError("The provided acquisition parameter key(s) do not match the provided schemes free "
                                  "parameters")
 
         # check if provided pulse id is the correct value
         for key, pulse_id in parameters.items():
-            if pulse_id >= self.scheme.get_pulse_count() or pulse_id < 0:
+            if pulse_id >= self.scheme.pulse_count or pulse_id < 0:
                 raise ValueError(f"Invalid pulse id provided for {key}.")
 
-        x_optimal = self.scheme.get_free_parameter_vector() / self.scheme.get_free_parameter_scales()
+        x_optimal = self.scheme.free_parameter_vector / self.scheme.free_parameter_scales
         parameter_idx = [self.scheme.get_free_parameter_idx(key, value) for key, value in parameters.items()]
         parameters_optimal = [x_optimal[i] for i in parameter_idx]
         # make domains if not provided

@@ -98,17 +98,11 @@ class TissueModel(Dict[str, TissueParameter]):
         :param bounds: Provide the bounds of acquisition parameters if desired
         :return: A scipy.optimize.OptimizeResult object.
         """
-        scales = self.get_scales()
-        include = self.get_include()
-        acquisition_parameter_scales = scheme.get_free_parameter_scales()
-        x0 = scheme.get_free_parameter_vector() / acquisition_parameter_scales
-
-        if not bounds:
-            bounds = scheme.get_free_parameter_bounds_scaled()
-        else:
-            scheme.set_free_parameter_bounds(bounds)
-            bounds = scheme.get_free_parameter_bounds_scaled()
-
+        scales = self.scales
+        include = self.include
+        acquisition_parameter_scales = scheme.free_parameter_scales
+        x0 = scheme.free_parameter_vector / acquisition_parameter_scales
+        bounds = scheme.free_parameter_bounds
         constraints = scheme.get_constraints()
 
         # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
@@ -150,10 +144,12 @@ class TissueModel(Dict[str, TissueParameter]):
         parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
         return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
 
-    def get_scales(self):
+    @property
+    def scales(self):
         return [value.scale for value in self.values()]
 
-    def get_include(self):
+    @property
+    def include(self):
         return [value.optimize for value in self.values()]
 
 
