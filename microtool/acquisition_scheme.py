@@ -80,13 +80,21 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
     @property
     def free_parameter_vector(self) -> np.ndarray:
+        """
+        Returns all the free parameters as a flattened vector.
+        :return:
+        """
         return np.concatenate([val.values.flatten() for val in self.values() if not val.fixed])
 
     def set_free_parameter_vector(self, vector: np.ndarray) -> None:
-        free_keys = self.free_parameter_keys
+        """
+        A setter function for the free parameters. Infers the desired parameter by shape information
+        :param vector: The parameter vector you wish to assign to the scheme
+        :return: None, changes parameter attributes
+        """
         # Reshape the flattened vector based on parameter value shapes
         i = 0
-        for key in free_keys:
+        for key in self.free_parameter_keys:
             shape = self[key].values.shape
             stride = int(prod(shape))
             thesevals = vector[i:(i + stride)]
@@ -94,7 +102,12 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             i += stride
 
     def get_free_parameter_idx(self, parameter: str, pulse_id: int) -> int:
-
+        """
+        Allows you to get the index in the free parameter vector of a parameter pulse number combination
+        :param parameter: The name of free acquisition parameter
+        :param pulse_id: The pulse for which you need the index
+        :return: The index
+        """
         i = 0
         for key in self.free_parameter_keys:
             if key == parameter:
@@ -114,6 +127,11 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             self[key].values = parameters[key]
 
     def set_free_parameter_bounds(self, bounds: List[Tuple[float, float]]) -> None:
+        """
+        Setter function for the parameter bounds, requires you to provide bounds for all parameters in sequence
+        :param bounds: The bounds
+        :return: None, changes parameter attributes
+        """
         if len(bounds) != len(self.free_parameter_keys):
             raise ValueError("provide bounds only for free parameters.")
         for i, key in enumerate(self.free_parameter_keys):
@@ -123,10 +141,13 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     @property
     def free_parameter_scales(self) -> np.ndarray:
         """
+        Getter for the scale of the free parameters repeated for the number of pulses.
 
+        :return: The scale of the free parameters
         """
         n = self.pulse_count
-        return np.array([p.scale for p in self.values() if not p.fixed for _ in range(n)])
+
+        return np.array([p.scale for _ in range(n) for p in self.values() if not p.fixed])
 
     @property
     def free_parameter_bounds(self) -> List[Tuple[Optional[float], Optional[float]]]:
@@ -137,10 +158,13 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
          number of measurements in the acquisition scheme. None is used to specify no bound.
         """
         n = self.pulse_count
-        return [(p.lower_bound, p.upper_bound) for p in self.values() if not p.fixed for _ in range(n)]
+        return [(p.lower_bound, p.upper_bound) for _ in range(n) for p in self.values() if not p.fixed]
 
     @property
     def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], ...]]:
+        """
+        :return: The free parameters bounds divided by their scales. List of min max pairs
+        """
         n = self.pulse_count
         bounds = []
         for key in self.free_parameter_keys:

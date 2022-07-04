@@ -27,7 +27,7 @@ plt.ylabel('Signal attenuation')
 # ## 3. Optimize the acquisition scheme
 noise_variance = 0.1
 brute = optimize.BruteForce(5)
-relaxation_model.optimize(ir_scheme, noise_variance, method=brute, bounds=[(0, 3000), (0, 100)])
+relaxation_model.optimize(ir_scheme, noise_variance, bounds=[(0, 3000), (0, 100)])
 
 print(ir_scheme)
 plt.figure(figsize=(6, 4))
