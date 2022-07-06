@@ -3,5 +3,13 @@
 /MICROtool.egg-info
 *.pyc
 
-# ignore profiling files
+# Results and images
+/scripts/MonteCarlo/results
+/Images
+
+# profiling files
 *.prof
+
+# Data files
+*.npy
+*.pkl
