@@ -138,7 +138,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         n = self.get_pulse_count()
         return [(p.lower_bound, p.upper_bound) for p in self.values() if not p.fixed for _ in range(n)]
 
-    def get_free_parameter_bounds_scaled(self) -> list[tuple[Optional[float], ...]]:
+    def get_free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], ...]]:
         n = self.get_pulse_count()
         bounds = []
         for key in self.get_free_parameter_keys():

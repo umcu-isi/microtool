@@ -117,7 +117,7 @@ class DmipyTissueModel(TissueModel):
 
         # Evaluate the dmipy model.
         s0 = self['S0'].value
-        return s0 * self._model.simulate_signal(dmipy_scheme, self._parameter_baseline)
+        return s0 * self._model.simulate_signal(dmipy_scheme, self._dmipy_parameters)
 
     def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         dmipy_scheme = convert_acquisition_scheme(scheme)
