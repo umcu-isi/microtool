@@ -55,7 +55,7 @@ class TestSchemeWrapping:
             report = f"The attribute {attribute} triggered an assertion, i.e., they are not equal for both " \
                      f"scheme types "
             if isinstance(value, np.ndarray):
-                assert np.allclose(value, converted_attributes[attribute]), report
+                np.testing.assert_allclose(value, converted_attributes[attribute], rtol=0, atol=1e-5), report
             elif isinstance(value, (float, int)):
                 assert value == converted_attributes[attribute], report
 
@@ -84,7 +84,7 @@ class TestTissueModelWrapping:
         stick_model_wrapped = DmipyTissueModel(self.stick_model)
         wrapped_signal = stick_model_wrapped(self.scheme)
         naked_signal = self.stick_model.simulate_signal(self.scheme, self.parameters)
-        assert np.allclose(wrapped_signal, naked_signal)
+        np.testing.assert_allclose(wrapped_signal, naked_signal)
 
 
 def test_model_scheme_integration():
@@ -109,4 +109,5 @@ def test_model_scheme_integration():
     # signal computation
     wrapped_signal = stick_model_wrapped(acq_wrapped)
     naked_signal = stick_model.simulate_signal(acq_scheme, parameters)
-    assert np.allclose(wrapped_signal, naked_signal)
+    # assert list(wrapped_signal) == list(naked_signal)
+    np.testing.assert_allclose(wrapped_signal, naked_signal, rtol=0, atol=1e-5)

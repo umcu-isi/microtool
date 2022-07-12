@@ -62,10 +62,12 @@ class DmipyAcquisitionSchemeWrapper(DiffusionAcquisitionScheme):
 
     def __init__(self, scheme: DmipyAcquisitionScheme):
         self._scheme = scheme
-        b_values = scheme.bvalues
+        # convert to s/mm^2 from s/m^2
+        b_values = scheme.bvalues * 1e-6
         b_vectors = scheme.gradient_directions
-        pulse_widths = scheme.delta
-        pulse_intervals = scheme.Delta
+        # convert to ms from s
+        pulse_widths = scheme.delta * 1e3
+        pulse_intervals = scheme.Delta * 1e3
         super().__init__(b_values, b_vectors, pulse_widths, pulse_intervals)
 
 
