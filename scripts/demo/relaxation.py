@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from microtool import optimize, acquisition_scheme, tissue_model
-
+from microtool.utils.plotting import LossInspector
 # # Inversion recovery
 
 # ## 1. Create a tissue model specifying a T1 and T2
@@ -35,4 +35,7 @@ plt.plot(relaxation_model(ir_scheme), '.')
 plt.xlabel('Measurement')
 plt.ylabel('Signal attenuation')
 
+lossinspector = LossInspector(optimize.crlb_loss, ir_scheme, relaxation_model, noise_var=noise_variance)
+lossinspector.plot({"InversionTime": 1,"RepetitionTimeExcitation": 2})
 
+plt.show()

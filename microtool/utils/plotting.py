@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple
 from microtool.optimize import LossFunction
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.tissue_model import TissueModel
-from copy import deepcopy
+from copy import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -19,7 +19,7 @@ class LossInspector:
         :param model: The tissuemodel under investigation
         :param noise_var: The noise variance estimation
         """
-        self.scheme = deepcopy(scheme)
+        self.scheme = copy(scheme)
         self.model = model
         self.noise_var = noise_var
         self.loss_function = loss_function
@@ -50,8 +50,9 @@ class LossInspector:
         # check if the provided parameters are actually in the scheme
         for key in parameters.keys():
             if key not in self.scheme.free_parameters:
+
                 raise ValueError("The provided acquisition parameter key(s) do not match the provided schemes free "
-                                 "parameters")
+                                 f"parameters choices are {self.scheme.free_parameter_keys}")
 
         # check if provided pulse id is the correct value
         for key, pulse_id in parameters.items():
@@ -69,10 +70,14 @@ class LossInspector:
             domains = self._make_domains(parameters)
             domains = np.array(domains)
 
-        # extracting the minimum (i.e. the full free parameter vector)
 
         # discretizing domains
         domains = np.linspace(domains[:, 0], domains[:, 1], endpoint=True)
+
+        # getting plotting parameters scales to get correct axes later
+        scales = []
+        for key in parameters.keys():
+            scales.append(self.scheme[key].scale)
 
         # 3d plots for 2 investigated parameters
         if len(parameters) == 2:
@@ -92,8 +97,9 @@ class LossInspector:
             fig = plt.figure("3D loss landscape")
             ax = plt.axes(projection='3d')
             Z = vloss(X1, X2)
-            ax.plot_surface(X1, X2, Z)
-            ax.plot(*parameters_optimal, loss(*parameters_optimal), 'ro', label="Optimal point")
+
+            ax.plot_surface(X1 * scales[0], X2 * scales[1], Z, alpha = 0.5, color='grey')
+            ax.plot(*[parameters_optimal[i] * scales[i] for i in range(2)], loss(*parameters_optimal), 'ro', label="Optimal point")
             ax.legend()
             ax.set_zlabel("Loss")
             labels = list(parameters.keys())
@@ -113,8 +119,8 @@ class LossInspector:
 
             # making the figure
             plt.figure()
-            plt.plot(domains[:, 0], vloss(domains[:, 0]))
-            plt.plot(parameters_optimal[0], loss(parameters_optimal[0]), 'ro', label="Optimal point")
+            plt.plot(domains[:, 0] * scales[0], vloss(domains[:, 0]))
+            plt.plot(parameters_optimal[0] * scales[0], loss(parameters_optimal[0]), 'ro', label="Optimal point")
             plt.xlabel(list(parameters.keys())[0])
             plt.ylabel("Loss function")
             plt.legend()
