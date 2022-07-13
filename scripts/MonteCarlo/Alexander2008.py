@@ -28,7 +28,7 @@ def main():
 
     # ------INTRA AXONAL MODEL-------------
     # Cylinder orientation angles theta, phi := mu
-    mu = np.array([0., 0.])
+    mu = np.array([np.pi/2, 0.])
     # Parralel diffusivity lambda_par in E-9 m^2/s (in the paper d_par)
     lambda_par = 1.7e-9
     lambda_perp = 0.2e-9
