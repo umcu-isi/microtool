@@ -16,7 +16,7 @@ from microtool.utils import gradient_sampling
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.dmipy import DmipyTissueModel
 
-currentdir = pathlib.Path('..')
+currentdir = pathlib.Path(__file__).parent
 outputdir = currentdir / "results"
 outputdir.mkdir(exist_ok=True)
 

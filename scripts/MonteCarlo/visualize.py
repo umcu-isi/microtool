@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import math
 from microtool.utils.IO import get_df_from_pickle, get_pickle
 
-resultdir = pathlib.Path("results")
+resultdir = pathlib.Path(__file__).parent / 'results'
 filename = "alexander_nofixed_n_sim_1000_noise_0.02.pkl"
 df = get_df_from_pickle(resultdir / filename)
 gt = get_pickle(resultdir / "alexander2008_ground_truth.pkl")

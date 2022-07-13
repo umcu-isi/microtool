@@ -40,7 +40,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     # Calculate the Fisher information matrix on the rescaled Jacobian. The Cramer-Rao lower bound on parameter variance
     # is the inverse of the information matrix. A properly scaled matrix gives an interpretable condition number and a
     # more robust inverse.
-    information = fisher_information((jac * scales), noise_var)
+    information = fisher_information(jac * scales, noise_var)
 
     # An ill-conditioned information matrix should result in a high loss.
     if np.linalg.cond(information) > 1e9:
