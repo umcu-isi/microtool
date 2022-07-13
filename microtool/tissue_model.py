@@ -98,10 +98,21 @@ class TissueModel(Dict[str, TissueParameter]):
         :param bounds: Provide the bounds of acquisition parameters if desired
         :return: A scipy.optimize.OptimizeResult object.
         """
+
+        M = int(np.sum(np.array(self.include)))
+        N = len(scheme.free_parameter_vector)
+        if M > N:
+            raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
+                             f"AcquisitionScheme parameters ({N}) with meaningful result.")
+
+
+
         scales = self.scales
         include = self.include
         acquisition_parameter_scales = scheme.free_parameter_scales
         x0 = scheme.free_parameter_vector / acquisition_parameter_scales
+        if bounds is not None:
+            scheme.set_free_parameter_bounds(bounds)
         bounds = scheme.free_parameter_bounds
         constraints = scheme.get_constraints()
 
@@ -111,6 +122,9 @@ class TissueModel(Dict[str, TissueParameter]):
             scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
             jac = self.jacobian(scheme)
             return loss(jac, scales, include, noise_var)
+
+        # if calc_loss(x0) >= 1e9:
+        #     raise ValueError("The starting scheme has a poor loss value, optimization will yield undesired results.")
 
         result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints, options=options)
         if 'x' in result:
