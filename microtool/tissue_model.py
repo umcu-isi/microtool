@@ -105,8 +105,6 @@ class TissueModel(Dict[str, TissueParameter]):
             raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
                              f"AcquisitionScheme parameters ({N}) with meaningful result.")
 
-
-
         scales = self.scales
         include = self.include
         acquisition_parameter_scales = scheme.free_parameter_scales
@@ -165,6 +163,9 @@ class TissueModel(Dict[str, TissueParameter]):
     @property
     def include(self):
         return [value.optimize for value in self.values()]
+
+    def set_initial_parameters(self, parameters: Dict[str, Union[np.ndarray, float]]) -> None:
+        raise NotImplementedError()
 
 
 class FittedTissueModel:

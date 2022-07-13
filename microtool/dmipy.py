@@ -54,7 +54,7 @@ def convert_acquisition_scheme(
         )
 
 
-# TODO: Check units on this thing
+# TODO: Unittest this on a case where you know what the outcome should be.
 class DmipyAcquisitionSchemeWrapper(DiffusionAcquisitionScheme):
     """
     Class wrapper for pure dmipy acquisition schemes
@@ -85,7 +85,6 @@ class DmipyTissueModel(TissueModel):
         multicompartment model)
         """
         super().__init__()
-
         # Extract the scalar tissue parameters from individual models.
         self.update(get_parameters(model))
 
@@ -135,17 +134,16 @@ class DmipyTissueModel(TissueModel):
     def fit(self, scheme: DmipyAcquisitionScheme, noisy_signal: np.ndarray, **fit_options):
         dmipy_scheme = convert_acquisition_scheme(scheme)
 
-        # Setting the initial guess to the currently initialized values of the tissue model
-        for name, value in self._dmipy_parameters.items():
-            try:
-                self._model.set_initial_guess_parameter(name, value)
-            except ValueError:
-                msg = "Parameter {} was not added to the initial guesses since it is either already fixed or it does " \
-                      "not exist for this multicompartment model".format(name)
-                warnings.warn(msg)
-
         result = self._model.fit(dmipy_scheme, noisy_signal, **fit_options)
         return result
+
+    def set_init_parameter(self, parameter_name: str, value: np.ndarray) -> None:
+        self._model.set_initial_guess_parameter(parameter_name, value)
+
+    def set_initial_parameters(self, parameters: Dict[str, np.ndarray]) -> None:
+        for name, value in parameters.items():
+            if name in self._model.parameter_names:
+                self.set_init_parameter(name, value)
 
     @property
     def _dmipy_parameters(self) -> dict:
@@ -164,3 +162,4 @@ class DmipyTissueModel(TissueModel):
         for pv_name in self._model.partial_volume_names:
             parameters[pv_name] = self[pv_name].value
         return parameters
+
