@@ -16,7 +16,7 @@ scipy_methods = ['Nelder-Mead', 'L-BFGS-B', 'Powell', 'TNC', 'COBYLA', "SLSQP", 
 
 # Instantiating Optimizers with default control parameters for testing
 custom_methods = [optimizer() for optimizer in optimization_methods.Optimizer.__subclasses__()]
-METHODS = scipy_methods + custom_methods
+METHODS = [*scipy_methods, *custom_methods]
 
 # --------- Basic tissuemodel for testing.
 
@@ -43,6 +43,5 @@ def test_optimizers(scheme_factory, optimization_method):
     loss_non_optimal = optimize.compute_loss(model, scheme, NOISE, optimize.crlb_loss)
 
     result = optimize.optimize_scheme(scheme, model, NOISE, method=optimization_method)
-    optimized_parameters = result['x'] * scheme.free_parameter_scales
     loss_optimal = optimize.compute_loss(model, scheme, NOISE, optimize.crlb_loss)
     assert loss_optimal < loss_non_optimal

@@ -12,6 +12,7 @@ from scipy.stats.sampling import NumericalInversePolynomial
 
 from dmipy.signal_models import cylinder_models, gaussian_models
 from dmipy.core.modeling_framework import MultiCompartmentModel
+from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme
 from tqdm import tqdm
 from .acquisition_scheme import AcquisitionScheme
 from .tissue_model import TissueModel
@@ -22,7 +23,7 @@ MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 INIT_MODEL = MultiCompartmentModel(models=[gaussian_models.G2Zeppelin(), cylinder_models.C1Stick()])
 
 
-def run(scheme: AcquisitionScheme, model: TissueModel, noise_distribution: stats.rv_continuous,
+def run(scheme: Union[AcquisitionScheme, DmipyAcquisitionScheme], model: TissueModel, noise_distribution: stats.rv_continuous,
         n_sim: int, cascade: bool = True, test_mode=False, **fit_options) -> MonteCarloResult:
     """
     NEEDS TO BE EXECUTED IN if __name__ == "__main__" clause!!!! otherwise obscure parralel processing error.

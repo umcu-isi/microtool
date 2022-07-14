@@ -44,15 +44,9 @@ class TissueModel(Dict[str, TissueParameter]):
         """
         raise NotImplementedError()
 
-    def simulate_signal(self, scheme: AcquisitionScheme) -> np.ndarray:
-        """
-        Calculates the MR signal attenuation
-        Wrapper for the signal simulation already implemented in __call__ method
-
-        :param scheme: The scheme for which we want to simulate the signal
-        :return: The signal attenuation values
-        """
-        return self.__call__(scheme)
+    def __str__(self) -> str:
+        parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
+        return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
 
     def jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
         """
@@ -86,21 +80,6 @@ class TissueModel(Dict[str, TissueParameter]):
     @property
     def parameter_names(self) -> List[str]:
         return [key for key in self.keys()]
-
-    def parameter_vector_to_parameters(self, parameter_vector: np.ndarray) -> Dict[str, float]:
-        parameters = {}
-        for i, name in enumerate(self.parameter_names):
-            parameters[name] = parameter_vector[i]
-        return parameters
-
-    @staticmethod
-    def parameters_to_parameter_vector(parameters: dict):
-        # TODO: deal with parameter cardinality > 1 (or abandon this interface altogether)
-        return np.array([parameter for parameter in parameters.values()])
-
-    def __str__(self) -> str:
-        parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
-        return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
 
     @property
     def scales(self):

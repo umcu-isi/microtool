@@ -128,16 +128,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             stride = int(prod(shape))
             i += stride
 
-    def set_free_parameters(self, parameters: Dict[str, np.ndarray]) -> None:
-        """
-        Sets the free acquisition parameters from an M×N matrix, where M is the number of parameters and N is the
-        number of measurements in the acquisition scheme. The M×N matrix may be flattened.
-
-        :param parameters: An M×N matrix with acquisition parameters.
-        """
-        for key in parameters.keys():
-            self[key].values = parameters[key]
-
     def set_free_parameter_bounds(self, bounds: List[Tuple[float, float]]) -> None:
         """
         Setter function for the parameter bounds, requires you to provide bounds for all parameters in sequence
@@ -160,17 +150,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         n = self.pulse_count
 
         return np.array([p.scale for _ in range(n) for p in self.values() if not p.fixed])
-
-    @property
-    def free_parameter_bounds(self) -> List[Tuple[Optional[float], Optional[float]]]:
-        """
-        Returns the bounds on the free tissue parameters.
-
-        :return: A list of M×N (min, max) pairs, where M is the number of parameters and N is the
-         number of measurements in the acquisition scheme. None is used to specify no bound.
-        """
-        n = self.pulse_count
-        return [(p.lower_bound, p.upper_bound) for _ in range(n) for p in self.values() if not p.fixed]
 
     @property
     def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], ...]]:
@@ -197,10 +176,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         return [key for key, value in self.items() if not value.fixed]
 
     @property
-    def fixed_parameter_keys(self) -> List[str]:
-        return list(set(self.keys()) - set(self.free_parameter_keys))
-
-    @property
     def pulse_count(self) -> int:
         parameters = list(self.free_parameters.values())
         return len(parameters[0])
@@ -224,7 +199,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
         # Adjusting bounds if a fixed parameter is involved in the inequality
         lb = np.zeros(pulse_num)
-        for key in self.fixed_parameter_keys:
+        for key in list(set(self.keys()) - set(self.free_parameter_keys)):
             lb = lb - parameter_coefficients[key] * self[key].values
 
         A = np.concatenate(blocks, axis=1)
@@ -299,7 +274,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             ),
             'DiffusionPulseInterval': AcquisitionParameters(
                 values=pulse_intervals, unit='ms', scale=10, fixed=True, lower_bound=0.1, upper_bound=1e3
-                                                            ),
+            ),
         })
 
     @property

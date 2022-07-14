@@ -1,4 +1,3 @@
-import warnings
 from typing import Dict, Union
 
 import numpy as np
@@ -137,13 +136,10 @@ class DmipyTissueModel(TissueModel):
         result = self._model.fit(dmipy_scheme, noisy_signal, **fit_options)
         return result
 
-    def set_init_parameter(self, parameter_name: str, value: np.ndarray) -> None:
-        self._model.set_initial_guess_parameter(parameter_name, value)
-
     def set_initial_parameters(self, parameters: Dict[str, np.ndarray]) -> None:
         for name, value in parameters.items():
             if name in self._model.parameter_names:
-                self.set_init_parameter(name, value)
+                self._model.set_initial_guess_parameter(name, value)
 
     @property
     def _dmipy_parameters(self) -> dict:
@@ -162,4 +158,3 @@ class DmipyTissueModel(TissueModel):
         for pv_name in self._model.partial_volume_names:
             parameters[pv_name] = self[pv_name].value
         return parameters
-

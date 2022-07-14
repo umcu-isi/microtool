@@ -1,11 +1,10 @@
+import pprint
+
+import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import cylinder_models, gaussian_models
-from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues
 
-from microtool.utils.gradient_sampling import sample_uniform
 from microtool.utils import schemes
-import numpy as np
-import pprint
 
 
 def main():

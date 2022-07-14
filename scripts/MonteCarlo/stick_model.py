@@ -10,7 +10,7 @@ from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models
 from scipy import stats
 
-from microtool import monte_carlo
+from microtool import monte_carlo, optimize
 from microtool.dmipy import DmipyTissueModel, DmipyAcquisitionSchemeWrapper
 
 currentdir = pathlib.Path('..')
@@ -37,8 +37,7 @@ def main():
 
     # Running monte carlo simulation
     n_sim = 10
-
-    stick_model_wrapped.optimize(scheme, noise_var)
+    optimize.optimize_scheme(scheme, stick_model_wrapped, noise_var)
 
     tissue_parameters = monte_carlo.run(scheme, stick_model_wrapped, noise_distribution, n_sim)
 
