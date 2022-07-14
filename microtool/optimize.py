@@ -113,8 +113,8 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel, noise_varianc
         jac = model.jacobian(scheme)
         return loss(jac, scales, include, noise_variance)
 
-    # if calc_loss(x0) >= 1e9:
-    #     raise ValueError("The starting scheme has a poor loss value, optimization will yield undesired results.")
+    if calc_loss(x0) >= 1e9:
+        raise ValueError("")
 
     result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints, options=options)
     if 'x' in result:
