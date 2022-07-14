@@ -30,15 +30,15 @@ RELAXATION_MODEL = tissue_model.RelaxationTissueModel(t1=900, t2=90)
 @pytest.mark.parametrize(
     "scheme_factory", [schemes.ir_scheme_increasing_parameters, schemes.ir_scheme_repeated_parameters]
 )
-def test_relaxation(scheme_factory, optimization_method):
+def test_optimizers(scheme_factory, optimization_method):
     """
     Testing if optimize_scheme actually reduces the loss
     """
     # copying to prevent test interferences
     model = copy(RELAXATION_MODEL)
 
-    # For now we test with 10 pulses for time efficiency
-    scheme = scheme_factory(n_pulses=10)
+    # For now we test with 3 pulses for time efficiency
+    scheme = scheme_factory(n_pulses=3)
 
     loss_non_optimal = optimize.compute_loss(model, scheme, NOISE, optimize.crlb_loss)
 

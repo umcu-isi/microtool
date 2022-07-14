@@ -33,6 +33,18 @@ class AcquisitionParameters:
     upper_bound: Optional[float] = None
     fixed: bool = False
 
+    def __post_init__(self):
+        flag = False
+        if self.lower_bound:
+            if np.any((self.values < self.lower_bound)):
+                flag = True
+        if self.upper_bound:
+            if np.any(self.values > self.upper_bound):
+                flag = True
+
+        if flag:
+            raise ValueError("One or more parameter values are out of bounds.")
+
     def __str__(self):
         fixed = ' (fixed parameter)' if self.fixed else ''
         return f'{self.values} {self.unit}{fixed}'
@@ -273,13 +285,21 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         theta = np.arccos(b_vectors[:, 2])
 
         super().__init__({
-            'DiffusionBValue': AcquisitionParameters(values=b_values, unit='s/mm²', scale=1000),
+            'DiffusionBValue': AcquisitionParameters(
+                values=b_values, unit='s/mm²', scale=1000, lower_bound=0.0, upper_bound=3e4
+            ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
-                values=phi, unit='rad', scale=1, lower_bound=None, fixed=True),
+                values=phi, unit='rad', scale=1, lower_bound=None, fixed=True
+            ),
             'DiffusionGradientAngleTheta': AcquisitionParameters(
-                values=theta, unit='rad', scale=1, lower_bound=None, fixed=True),
-            'DiffusionPulseWidth': AcquisitionParameters(values=pulse_widths, unit='ms', scale=10, fixed=True),
-            'DiffusionPulseInterval': AcquisitionParameters(values=pulse_intervals, unit='ms', scale=10, fixed=True),
+                values=theta, unit='rad', scale=1, lower_bound=None, fixed=True
+            ),
+            'DiffusionPulseWidth': AcquisitionParameters(
+                values=pulse_widths, unit='ms', scale=10, fixed=True, lower_bound=0.1, upper_bound=1e2
+            ),
+            'DiffusionPulseInterval': AcquisitionParameters(
+                values=pulse_intervals, unit='ms', scale=10, fixed=True, lower_bound=0.1, upper_bound=1e3
+                                                            ),
         })
 
     @property
@@ -410,9 +430,12 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
                  bounds: List[tuple] = None):
         super().__init__(
             {
-                'RepetitionTimeExcitation': AcquisitionParameters(values=repetition_times, unit='ms', scale=100),
-                'EchoTime': AcquisitionParameters(values=echo_times, unit='ms', scale=10, fixed=True),
-                'InversionTime': AcquisitionParameters(values=inversion_times, unit='ms', scale=100)
+                'RepetitionTimeExcitation': AcquisitionParameters(
+                    values=repetition_times, unit='ms', scale=100, lower_bound=10.0, upper_bound=1e4),
+                'EchoTime': AcquisitionParameters(
+                    values=echo_times, unit='ms', scale=10, fixed=True, lower_bound=.1, upper_bound=1e3),
+                'InversionTime': AcquisitionParameters(
+                    values=inversion_times, unit='ms', scale=100, lower_bound=10.0, upper_bound=1e4)
             }, bounds)
 
     @property

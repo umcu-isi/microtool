@@ -48,17 +48,8 @@ class BruteForce(Optimizer):
 
         nx = len(x0)
         if nx > 8:
-            warnings.warn("Optimizing a large number of parameters using bruteforce can take along time objective "
-                          "function evaluation scales with 10^parameters when bruteforce optimizing.")
-            while True:
-                yay_or_nay = input("Do you wish to proceed with optimization? [y/n]")
-                if yay_or_nay == 'y':
-                    break
-                elif yay_or_nay == 'n':
-                    sys.exit()
-                else:
-                    continue
-
+            raise ValueError("The dimensionality of the problem is too large for brute force optimization. Only up to "
+                             "8 dimensions currently supported.")
         # make the individual discretized domains
         domains = []
         previous_bound = ()
@@ -69,8 +60,44 @@ class BruteForce(Optimizer):
             else:
                 domains.append(np.linspace(bound[0], bound[1], num=self.Ns))
 
-        x_optimal, y_optimal = find_minimum(fun, domains, constraints)
+        x_optimal, y_optimal = self._find_minimum(fun, domains, constraints)
         return OptimizeResult(fun=y_optimal, x=x_optimal, succes=True)
+
+    @staticmethod
+    def _find_minimum(fun: callable, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
+        if constraints != ():
+            A = constraints.A
+            lb = constraints.lb
+            ub = constraints.ub
+
+            # iterate over the grid
+            y_optimal = np.inf
+            x_optimal = None
+            for combination in product(*domains, desc='Running brute force grid computation'):
+                combination = np.array(combination)
+                # check constraint
+                if is_constrained(combination, A, lb, ub):
+                    loss = np.inf
+                else:
+                    loss = fun(combination)
+
+                # update optimal value
+                if loss < y_optimal:
+                    x_optimal = combination
+                    y_optimal = loss
+        else:
+            # iterate over the grid
+            y_optimal = np.inf
+            x_optimal = None
+            for combination in product(*domains, desc='Running brute force grid computation'):
+                combination = np.array(combination)
+                loss = fun(combination)
+                # update optimal value
+                if loss < y_optimal:
+                    x_optimal = combination
+                    y_optimal = loss
+
+        return x_optimal, y_optimal
 
 
 class SOMA(Optimizer):
@@ -130,17 +157,14 @@ class SOMA(Optimizer):
         :return: scipy.OptimizeResult object, (really just a dictionary with a wrapper)
         """
         self.Nx = len(x0)
-        if self.max_fevals == None:
+        if self.max_fevals is None:
             self.max_fevals = self.Nx * 10 ** 4
 
         # TODO: guarantee bounds in higherlevel functions in tissuemodel
         bounds = options["bounds"]
         constraints = options['constraints']
 
-        if constraints is not None:
-            raise NotImplementedError("SOMA optimizer does not consider constraints.")
-
-        population = Population(self.population_sz, bounds, fun, self.max_fevals)
+        population = Population(self.population_sz, bounds, constraints, fun, self.max_fevals)
 
         migration = 0
         while (population.fevals < self.max_fevals) and (migration < self.max_migrations):
@@ -155,7 +179,8 @@ class Population:
     """This class defines the population in the SOMA algorithm
     """
 
-    def __init__(self, sz: int, bounds: np.ndarray, fun: callable, max_evals: int, values: np.ndarray = None):
+    def __init__(self, sz: int, bounds: np.ndarray, constraint, fun: callable, max_evals: int,
+                 values: np.ndarray = None):
         """
         :param sz: The population size
         :param bounds: The parameter bounds (or the search domain if you prefer this terminology)
@@ -165,6 +190,7 @@ class Population:
         """
         self.sz = sz
         bounds = np.array(bounds)
+        self.constraint = constraint
         self.lower_bound = bounds[:, 0]
         self.upper_bound = bounds[:, 1]
         self.Nx = len(bounds)
@@ -181,6 +207,12 @@ class Population:
 
         # computing the starting fitness values
         self._set_fitness()
+
+    def cost_fun(self, x: np.ndarray):
+        if is_constrained(x, self.constraint.A, self.constraint.lb, self.constraint.ub):
+            return np.inf
+        else:
+            return self.fun(x)
 
     def migrate(self, path_length: float, N_jump: int, PRT: float):
         """Executes a single population migration
@@ -220,7 +252,7 @@ class Population:
                 break
 
             # get the best place along the route from the moving individual
-            new_cost = np.array([self.fun(journey[i, :]) for i in range(N_jump)])
+            new_cost = np.array([self.cost_fun(journey[i, :]) for i in range(N_jump)])
             bestmove_id = np.argmin(new_cost)
             bestmove_cost = new_cost[bestmove_id]
             bestmove_parameters = journey[bestmove_id, :]
@@ -237,7 +269,7 @@ class Population:
 
     def _putback(self, journey: np.ndarray) -> np.ndarray:
         """This function puts the travelling individuals that move out of the search space back in.
-        It does so by assigning a random value lying inside the searchspace along the parameters that violate the constraints.
+        It does so by assigning a random value lying inside the searchspace along the parameters that violate the bounds.
 
         :param journey: A numpy array containing the travelling individuals parameters, shape (N_jumps, N_x)
         :return: corrected journey array s.t. all combinations of N_x lie in the search domain
@@ -254,7 +286,8 @@ class Population:
         """
         loss = np.zeros(self.sz)
         for i in range(self.sz):
-            loss[i] = self.fun(self._values[i, :])
+            parameter_combination = self._values[i, :]
+            loss[i] = self.cost_fun(parameter_combination)
         self._fitness = loss
         self.fevals += self.sz
 
@@ -287,39 +320,3 @@ def check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> N
         for bound in bounds:
             if bound is None:
                 raise ValueError(" Infinite boundaries not supported for this optimizer")
-
-
-def find_minimum(fun: callable, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
-    if constraints != ():
-        A = constraints.A
-        lb = constraints.lb
-        ub = constraints.ub
-
-        # iterate over the grid
-        y_optimal = np.inf
-        x_optimal = None
-        for combination in product(*domains, desc='Running brute force grid computation'):
-            combination = np.array(combination)
-            # check constraint
-            if is_constrained(combination, A, lb, ub):
-                loss = np.inf
-            else:
-                loss = fun(combination)
-
-            # update optimal value
-            if loss < y_optimal:
-                x_optimal = combination
-                y_optimal = loss
-    else:
-        # iterate over the grid
-        y_optimal = np.inf
-        x_optimal = None
-        for combination in product(*domains, desc='Running brute force grid computation'):
-            combination = np.array(combination)
-            loss = fun(combination)
-            # update optimal value
-            if loss < y_optimal:
-                x_optimal = combination
-                y_optimal = loss
-
-    return x_optimal, y_optimal

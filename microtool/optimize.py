@@ -103,7 +103,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel, noise_varianc
     x0 = scheme.free_parameter_vector / acquisition_parameter_scales
     if bounds is not None:
         scheme.set_free_parameter_bounds(bounds)
-    bounds = scheme.free_parameter_bounds
+    bounds = scheme.free_parameter_bounds_scaled
     constraints = scheme.get_constraints()
 
     # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
@@ -114,7 +114,9 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel, noise_varianc
         return loss(jac, scales, include, noise_variance)
 
     if calc_loss(x0) >= 1e9:
-        raise ValueError("")
+        raise ValueError("Testing shows that all optimizers fail if the initial scheme results in an illconditioned "
+                         "fischer matrix (causing high loss value). Please choose a different initial acquisition "
+                         "scheme")
 
     result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints, options=options)
     if 'x' in result:
