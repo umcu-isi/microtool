@@ -2,11 +2,12 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 import microtool.monte_carlo
+from microtool.optimize import optimize_scheme
 import numpy as np
 from scipy import stats
 import pathlib
 
-currentdir = pathlib.Path('..')
+currentdir = pathlib.Path(__file__).parent
 outputdir = currentdir / "results"
 outputdir.mkdir(exist_ok=True)
 
@@ -22,7 +23,7 @@ def main():
     # Setting and optimizing the inversion recovery scheme
     noise_var = 0.02
     ir_scheme = microtool.acquisition_scheme.InversionRecoveryAcquisitionScheme(tr, te, ti)
-    relaxation_model.optimize(ir_scheme, noise_var)
+    optimize_scheme(ir_scheme, relaxation_model, noise_var)
 
     # setting noise distribution for monte carlo simulation
     noise_distribution = stats.norm(loc=0, scale=noise_var)

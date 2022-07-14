@@ -8,13 +8,12 @@ In order to simulate the MR signal in response to a MICROtool acquisition scheme
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Union, List, Tuple
+from typing import Dict, Union, List
 
 import numpy as np
-from scipy.optimize import OptimizeResult, minimize, curve_fit
+from scipy.optimize import curve_fit
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
-from .optimize import LossFunction, crlb_loss, Optimizer
 
 
 @dataclass
@@ -76,59 +75,6 @@ class TissueModel(Dict[str, TissueParameter]):
         """
 
         raise NotImplementedError()
-
-    def optimize(
-            self,
-            scheme: AcquisitionScheme,
-            noise_var: float,
-            loss: LossFunction = crlb_loss,
-            method: Optional[Union[str, callable, Optimizer]] = None,
-            bounds: List[Tuple[float, float]] = None,
-            **options) -> OptimizeResult:
-        """
-        Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
-        The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
-        scales, and the noise variance. The loss function should return a scalar loss. N is the number of measurements
-        in the acquisition and M is the number of tissue parameters.
-
-        :param scheme: The MR acquisition scheme to be optimized.
-        :param noise_var: Noise variance on the MR signal attenuation.
-        :param loss: a function of type LossFunction.
-        :param method: Type of solver. See the documentation for scipy.optimize.minimize
-        :param bounds: Provide the bounds of acquisition parameters if desired
-        :return: A scipy.optimize.OptimizeResult object.
-        """
-
-        M = int(np.sum(np.array(self.include)))
-        N = len(scheme.free_parameter_vector)
-        if M > N:
-            raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
-                             f"AcquisitionScheme parameters ({N}) with meaningful result.")
-
-        scales = self.scales
-        include = self.include
-        acquisition_parameter_scales = scheme.free_parameter_scales
-        x0 = scheme.free_parameter_vector / acquisition_parameter_scales
-        if bounds is not None:
-            scheme.set_free_parameter_bounds(bounds)
-        bounds = scheme.free_parameter_bounds
-        constraints = scheme.get_constraints()
-
-        # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
-        # model's Jacobian matrix and evaluating the loss function.
-        def calc_loss(x: np.ndarray):
-            scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
-            jac = self.jacobian(scheme)
-            return loss(jac, scales, include, noise_var)
-
-        # if calc_loss(x0) >= 1e9:
-        #     raise ValueError("The starting scheme has a poor loss value, optimization will yield undesired results.")
-
-        result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints, options=options)
-        if 'x' in result:
-            scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
-
-        return result
 
     @property
     def parameters(self) -> Dict[str, Union[float, np.ndarray]]:

@@ -5,7 +5,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 import microtool.misst
-
+from microtool import optimize
+from microtool.tissue_model import TissueParameter
+from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 microtool.misst.set_misst_path(r'C:\development\MISST')
 
 # ## 2. Create a 'Cylinder' diffusion model and wrap it in a MisstTissueModel
@@ -14,10 +16,10 @@ microtool.misst.set_misst_path(r'C:\development\MISST')
 
 
 misst_model = {
-    'di': microtool.tissue_model.TissueParameter(value=2e-9, scale=1e-9),  # Intrinsic diffusivity in m²/s.
-    'rad': microtool.tissue_model.TissueParameter(value=5.2e-6, scale=1e-6, optimize=False),  # Cylinder radius in m.
-    'theta': microtool.tissue_model.TissueParameter(value=0.1, scale=1),  # Angle from z axis
-    'phi': microtool.tissue_model.TissueParameter(value=0.2, scale=1),  # Azimuthal angle
+    'di': TissueParameter(value=2e-9, scale=1e-9),  # Intrinsic diffusivity in m²/s.
+    'rad': TissueParameter(value=5.2e-6, scale=1e-6, optimize=False),  # Cylinder radius in m.
+    'theta': TissueParameter(value=0.1, scale=1),  # Angle from z axis
+    'phi': TissueParameter(value=0.2, scale=1),  # Azimuthal angle
 }
 
 # In[ ]:
@@ -36,7 +38,7 @@ b_vectors = np.array([[0, 1, 0], [1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 1, 0], [0,
 pulse_widths = np.full(b_values.shape, 10)  # ms
 pulse_intervals = np.full(b_values.shape, 30)  # ms
 
-diffusion_scheme = microtool.acquisition_scheme.DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths,
+diffusion_scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths,
                                                                            pulse_intervals)
 print(diffusion_scheme)
 
@@ -46,7 +48,8 @@ print(diffusion_scheme)
 
 
 noise_variance = 0.1
-diffusion_model.optimize(diffusion_scheme, noise_variance)
+optimize.optimize_scheme(diffusion_scheme, diffusion_model,noise_variance)
+
 
 # In[ ]:
 

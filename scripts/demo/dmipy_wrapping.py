@@ -4,7 +4,9 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.cylinder_models import C1Stick
 from matplotlib import pyplot as plt
 
-import microtool.dmipy
+from microtool.dmipy import DmipyTissueModel
+from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool import optimize
 
 # ## 1. Create a 'stick' diffusion model
 
@@ -17,7 +19,7 @@ dmipy_model = MultiCompartmentModel(models=[
 
 # ## 2. Wrap the dmipy model in a DmipyTissueModel
 
-diffusion_model = microtool.dmipy.DmipyTissueModel(dmipy_model)
+diffusion_model = DmipyTissueModel(dmipy_model)
 print(diffusion_model)
 
 # ## 3. Create an initial diffusion acquisition scheme
@@ -27,8 +29,8 @@ b_vectors = np.array([[0, 1, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
 pulse_widths = np.full(b_values.shape, 10)  # ms
 pulse_intervals = np.full(b_values.shape, 30)  # ms
 
-diffusion_scheme = microtool.acquisition_scheme.DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths,
-                                                                           pulse_intervals)
+diffusion_scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths,
+                                              pulse_intervals)
 print(diffusion_scheme)
 
 plt.figure(figsize=(6, 4))
@@ -37,17 +39,12 @@ plt.xlabel('Measurement')
 plt.ylabel('Signal attenuation')
 
 # ## 4. Calculate the Cramer-Rao lower bound loss
-
-jacobian = diffusion_model.jacobian(
-    diffusion_scheme)  # Jacobian of the signal with respect to the relevant tissue parameters.
-scales = [p.scale for p in diffusion_model.values()]  # Tissue parameter scales.
-include = [p.optimize for p in diffusion_model.values()]  # Include tissue parameter in optimization?
 noise_variance = 0.1
-microtool.optimize.crlb_loss(jacobian, scales, include, noise_variance)
+print("\nPre optimization loss: ", optimize.compute_loss(diffusion_model, diffusion_scheme, noise_variance, optimize.crlb_loss))
 
 # ## 5. Optimize the acquisition scheme
 
-optimizeresult = diffusion_model.optimize(diffusion_scheme, noise_variance)
+optimize_result = optimize.optimize_scheme(diffusion_scheme, diffusion_model, noise_variance)
 
 print(diffusion_scheme)
 plt.figure(figsize=(6, 4))
@@ -57,10 +54,5 @@ plt.ylabel('Signal attenuation')
 
 # ## 6. Calculate the Cramer-Rao lower bound loss again
 # It should be lower after optimizing the acquisition.
-
-jacobian = diffusion_model.jacobian(
-    diffusion_scheme)  # Jacobian of the signal with respect to the relevant tissue parameters.
-scales = [p.scale for p in diffusion_model.values()]  # Tissue parameter scales.
-include = [p.optimize for p in diffusion_model.values()]  # Include tissue parameter in optimization?
-noise_variance = 0.1
-microtool.optimize.crlb_loss(jacobian, scales, include, noise_variance)
+print("\nPost optimization loss: ", optimize.compute_loss(diffusion_model, diffusion_scheme, noise_variance, optimize.crlb_loss))
+plt.show()

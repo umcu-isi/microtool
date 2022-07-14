@@ -1,6 +1,7 @@
 import numpy as np
 from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues, DmipyAcquisitionScheme
 from .gradient_sampling import sample_uniform
+from microtool.acquisition_scheme import InversionRecoveryAcquisitionScheme
 
 
 def alexander2008() -> DmipyAcquisitionScheme:
@@ -33,3 +34,29 @@ def alexander2008() -> DmipyAcquisitionScheme:
     gradient_directions = np.concatenate([zero_directions, gradient_directions], axis=0)
 
     return acquisition_scheme_from_bvalues(bvalues, gradient_directions, delta, Delta)
+
+
+def ir_scheme_repeated_parameters(n_pulses: int) -> InversionRecoveryAcquisitionScheme:
+    """
+    helper function for making scheme with different number of pulses.
+
+    :param n_pulses:
+    :return: A not so decent IR acquisition scheme
+    """
+    tr = np.repeat(500, n_pulses)
+    te = np.repeat(20, n_pulses)
+    ti = np.repeat(400, n_pulses)
+    return InversionRecoveryAcquisitionScheme(tr, te, ti)
+
+
+def ir_scheme_increasing_parameters(n_pulses: int) -> InversionRecoveryAcquisitionScheme:
+    """
+    helper function for making scheme with different number of pulses.
+
+    :param n_pulses:
+    :return: A decent IR acquisition scheme
+    """
+    tr = np.repeat(500, n_pulses)
+    te = np.linspace(10, 20, n_pulses)
+    ti = np.linspace(50, 400, n_pulses)
+    return InversionRecoveryAcquisitionScheme(tr, te, ti)
