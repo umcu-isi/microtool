@@ -83,7 +83,7 @@ def plot_shells(shells: List[np.ndarray]) -> None:
         c = next(color)
         scale_factor = float(i + 1)
         ax.scatter3D(scale_factor * vecs[:, 0], scale_factor * vecs[:, 1], scale_factor * vecs[:, 2], color=c)
-        ax.plot_surface(*make_sphere(i + 1), alpha=0.2, color='gray')
+        ax.plot_surface(*make_sphere(i + 1), alpha=0.2 / (i+1), color='gray')
 
     plt.tight_layout()
 
