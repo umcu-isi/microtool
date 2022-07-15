@@ -219,7 +219,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
-    Defines a diffusion MR acquisition scheme.
+    Defines a diffusion MR acquisition scheme. (PGSE?)
 
     :param b_values: A list or numpy array of b-values in s/mm².
     :param b_vectors: A list or numpy array of direction cosines.
@@ -235,7 +235,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  pulse_intervals: Union[List[float], np.ndarray]):
 
         # check scale of b_values (in bounds or not)
-        if np.any((b_values[b_values != 0] < 1) | (b_values[b_values != 0] > 1e4)):
+        if np.any((b_values[b_values != 0] < 1) | (b_values[b_values != 0] > 3e4)):
             warnings.warn("The provided b-values are not clinically relevant, clinical b-values are expected in the "
                           "order of 1e3 s/mm^2 ")
 
