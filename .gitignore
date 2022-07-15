@@ -13,3 +13,6 @@
 # Data files
 *.npy
 *.pkl
+
+# Testing overviews
+/Test Results -*.html
