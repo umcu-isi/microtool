@@ -1,4 +1,4 @@
-from microtool.optimize import SOMA
+from microtool.optimization_methods import SOMA
 import numpy as np
 from scipy.optimize import minimize
 

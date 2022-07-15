@@ -1,6 +1,6 @@
 import numpy as np
 from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues, DmipyAcquisitionScheme
-from .gradient_sampling import sample_uniform
+from .gradient_sampling.uniform import sample_uniform
 from microtool.acquisition_scheme import InversionRecoveryAcquisitionScheme
 
 
