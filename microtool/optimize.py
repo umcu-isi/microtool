@@ -114,7 +114,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel, noise_varianc
         return loss(jac, scales, include, noise_variance)
 
     if calc_loss(x0) >= 1e9:
-        raise ValueError("Testing shows that all optimizers fail if the initial scheme results in an illconditioned "
+        raise ValueError("Testing shows that all optimizers fail if the initial scheme results in an ill conditioned "
                          "fischer matrix (causing high loss value). Please choose a different initial acquisition "
                          "scheme")
 

@@ -53,7 +53,6 @@ def convert_acquisition_scheme(
         )
 
 
-# TODO: Unittest this on a case where you know what the outcome should be.
 class DmipyAcquisitionSchemeWrapper(DiffusionAcquisitionScheme):
     """
     Class wrapper for pure dmipy acquisition schemes

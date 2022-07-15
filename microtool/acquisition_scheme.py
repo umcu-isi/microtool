@@ -235,9 +235,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  pulse_intervals: Union[List[float], np.ndarray]):
 
         # check scale of b_values (in bounds or not)
-        if np.any((b_values[b_values != 0] < 1) | (b_values[b_values != 0] > 3e4)):
+        if np.any((b_values[b_values != 0] < 1) | (b_values[b_values != 0] > 1e5)):
             warnings.warn("The provided b-values are not clinically relevant, clinical b-values are expected in the "
-                          "order of 1e3 s/mm^2 ")
+                          "order of 1e3 - 1e5 s/mm^2 ")
 
         # check scale of pulses ( in bounds or not)
         if np.any((pulse_widths > 1000) | (pulse_widths < 1)):
