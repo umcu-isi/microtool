@@ -12,7 +12,7 @@ from dmipy.signal_models import cylinder_models, gaussian_models
 from scipy import stats
 
 from microtool import monte_carlo
-from microtool.utils import schemes
+from microtool.utils import saved_schemes
 from microtool.dmipy import DmipyTissueModel
 
 currentdir = pathlib.Path(__file__).parent
@@ -24,7 +24,7 @@ def main():
     # ------------- Setting up dmipy objects -----------
     noise_var = 0.02
     # -------------ACQUISITION-------------------
-    scheme = schemes.alexander2008()
+    scheme = saved_schemes.alexander2008()
 
     # ------INTRA AXONAL MODEL-------------
     # Cylinder orientation angles theta, phi := mu

@@ -4,7 +4,7 @@ import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import cylinder_models, gaussian_models
 
-from microtool.utils import schemes
+from microtool.utils import saved_schemes
 
 
 def main():
@@ -14,7 +14,7 @@ def main():
 
     # --------------- Acquisition Scheme ----------------
 
-    scheme = schemes.alexander2008()
+    scheme = saved_schemes.alexander2008()
     scheme.print_acquisition_info
 
     # ------INTRA AXONAL MODEL-------------

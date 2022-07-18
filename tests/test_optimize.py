@@ -10,7 +10,7 @@ import numpy as np
 
 from microtool import tissue_model, optimization_methods
 from microtool.optimize import compute_loss, optimize_scheme
-from microtool.utils import schemes
+from microtool.utils import saved_schemes
 
 # --------- Loading optimization methods
 # scipy bound constrained and constrained optimization methods
@@ -30,7 +30,7 @@ RELAXATION_MODEL = tissue_model.RelaxationTissueModel(t1=900, t2=90)
 
 @pytest.mark.parametrize("optimization_method", METHODS)
 @pytest.mark.parametrize(
-    "scheme_factory", [schemes.ir_scheme_increasing_parameters, schemes.ir_scheme_repeated_parameters]
+    "scheme_factory", [saved_schemes.ir_scheme_increasing_parameters, saved_schemes.ir_scheme_repeated_parameters]
 )
 def test_optimizers(scheme_factory, optimization_method):
     """
@@ -54,4 +54,5 @@ def test_optimizers(scheme_factory, optimization_method):
         # We check if the best scheme was an improvement over its initial setting and this defines the succes of the optimizer;
         best_index = schemes.index(best_scheme)
         loss_optimal = [compute_loss(scheme, model, NOISE) for scheme in schemes]
+
         assert loss_optimal[best_index] < loss_non_optimal[best_index]
