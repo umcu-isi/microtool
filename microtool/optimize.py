@@ -115,7 +115,7 @@ def optimize_scheme(scheme: Union[AcquisitionScheme, List[AcquisitionScheme]], m
     best_scheme = schemes[np.argmin(initial_losses)]
     best_loss = np.min(initial_losses)
     best_result = None
-
+    optimized_losses = []
     for scheme in schemes:
         N = len(scheme.free_parameter_vector)
         if M > N:
@@ -147,5 +147,13 @@ def optimize_scheme(scheme: Union[AcquisitionScheme, List[AcquisitionScheme]], m
             best_scheme = scheme
             best_loss = current_loss
             best_result = result
+
+        optimized_losses.append(current_loss)
+
+    #TODO: If one of the schemes does optimize but is not the lowest loss of them all, what do we do?
+    if (np.array(optimized_losses).reshape(-1, len(initial_losses)) > initial_losses).all():
+        raise RuntimeError("Optimization was unsuccesfull, the optimized schemes have higher loss than the initial "
+                           "schemes, probably due to choice of optimizer. Please retry with different optimization "
+                           "method.")
 
     return best_scheme, best_result
