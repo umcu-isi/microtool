@@ -6,16 +6,18 @@ defining unittests and increase complexity to integration tests.
 from copy import copy
 
 import pytest
+import numpy as np
 
-from microtool import tissue_model, optimize, optimization_methods
+from microtool import tissue_model, optimization_methods
+from microtool.optimize import compute_loss, optimize_scheme
 from microtool.utils import schemes
 
 # --------- Loading optimization methods
 # scipy bound constrained and constrained optimization methods
 scipy_methods = ['Nelder-Mead', 'L-BFGS-B', 'Powell', 'TNC', 'COBYLA', "SLSQP", 'trust-constr']
 
-# Instantiating Optimizers with default control parameters for testing
-custom_methods = [optimizer() for optimizer in optimization_methods.Optimizer.__subclasses__()]
+# Instantiating Optimizers with default control parameters for testing (excluding bruteforce since its slow)
+custom_methods = [optimizer() for optimizer in optimization_methods.Optimizer.__subclasses__() if optimizer!=optimization_methods.BruteForce]
 METHODS = [*scipy_methods, *custom_methods]
 
 # --------- Basic tissuemodel for testing.
@@ -38,10 +40,18 @@ def test_optimizers(scheme_factory, optimization_method):
     model = copy(RELAXATION_MODEL)
 
     # For now we test with 3 pulses for time efficiency
-    scheme = scheme_factory(n_pulses=3)
+    schemes = list(map(scheme_factory, [3, 4, 5, 6]))
 
-    loss_non_optimal = optimize.compute_loss(model, scheme, NOISE, optimize.crlb_loss)
+    loss_non_optimal = [compute_loss(scheme, model, NOISE) for scheme in schemes]
 
-    result = optimize.optimize_scheme(scheme, model, NOISE, method=optimization_method)
-    loss_optimal = optimize.compute_loss(model, scheme, NOISE, optimize.crlb_loss)
-    assert loss_optimal < loss_non_optimal
+    # If all initial loss values are non optimal we should raise an error message!
+    if (np.array(loss_non_optimal) >= 1e9).all():
+        with pytest.raises(ValueError):
+            best_scheme, _ = optimize_scheme(schemes, model, NOISE, method=optimization_method, repeat=2)
+    else:
+        best_scheme, _ = optimize_scheme(schemes, model, NOISE, method=optimization_method, repeat=2)
+
+        # We check if the best scheme was an improvement over its initial setting and this defines the succes of the optimizer;
+        best_index = schemes.index(best_scheme)
+        loss_optimal = [compute_loss(scheme, model, NOISE) for scheme in schemes]
+        assert loss_optimal[best_index] < loss_non_optimal[best_index]

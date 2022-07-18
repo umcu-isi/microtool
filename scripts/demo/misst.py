@@ -48,7 +48,7 @@ print(diffusion_scheme)
 
 
 noise_variance = 0.1
-optimize.optimize_scheme(diffusion_scheme, diffusion_model,noise_variance)
+optimize.optimize_scheme(diffusion_scheme, diffusion_model, noise_variance)
 
 
 # In[ ]:

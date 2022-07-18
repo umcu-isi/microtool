@@ -40,7 +40,8 @@ plt.ylabel('Signal attenuation')
 
 # ## 4. Calculate the Cramer-Rao lower bound loss
 noise_variance = 0.1
-print("\nPre optimization loss: ", optimize.compute_loss(diffusion_model, diffusion_scheme, noise_variance, optimize.crlb_loss))
+print("\nPre optimization loss: ",
+      optimize.compute_loss(diffusion_scheme, diffusion_model, noise_variance, optimize.crlb_loss))
 
 # ## 5. Optimize the acquisition scheme
 
@@ -54,5 +55,6 @@ plt.ylabel('Signal attenuation')
 
 # ## 6. Calculate the Cramer-Rao lower bound loss again
 # It should be lower after optimizing the acquisition.
-print("\nPost optimization loss: ", optimize.compute_loss(diffusion_model, diffusion_scheme, noise_variance, optimize.crlb_loss))
+print("\nPost optimization loss: ",
+      optimize.compute_loss(diffusion_scheme, diffusion_model, noise_variance, optimize.crlb_loss))
 plt.show()

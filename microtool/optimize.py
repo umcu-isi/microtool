@@ -1,4 +1,4 @@
-from typing import Sequence, Callable, Optional, Union, List, Tuple
+from typing import Sequence, Callable, Optional, Union, List, Tuple, Any
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize
@@ -53,10 +53,10 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     return np.linalg.eigvalsh(information)[include].sum()
 
 
-def compute_loss(model: TissueModel,
-                 scheme: AcquisitionScheme,
+def compute_loss(scheme: AcquisitionScheme,
+                 model: TissueModel,
                  noise_var: float,
-                 loss: LossFunction) -> float:
+                 loss: LossFunction = crlb_loss) -> float:
     """
     Function for computing the loss given the following parameters
 
@@ -72,15 +72,18 @@ def compute_loss(model: TissueModel,
     return loss(jac, model_scales, model_include, noise_var)
 
 
-def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel, noise_variance: float,
+def optimize_scheme(scheme: Union[AcquisitionScheme, List[AcquisitionScheme]], model: TissueModel,
+                    noise_variance: float,
                     loss: LossFunction = crlb_loss,
                     method: Optional[Union[str, Optimizer]] = None,
-                    bounds: List[Tuple[float, float]] = None, **options) -> OptimizeResult:
+                    repeat: int = 1,
+                    **options) -> Tuple[AcquisitionScheme, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
     scales, and the noise variance. The loss function should return a scalar loss. N is the number of measurements
     in the acquisition and M is the number of tissue parameters.
+
 
     :param scheme: The MR acquisition scheme to be optimized. (NOTE: a reference of the scheme is passed,
                     so it will be changed.
@@ -88,38 +91,61 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel, noise_varianc
     :param noise_variance: Noise variance on the MR signal attenuation.
     :param loss: a function of type LossFunction.
     :param method: Type of solver. See the documentation for scipy.optimize.minimize
-    :param bounds: Provide the bounds of acquisition parameters if desired
+    :param repeat: Number of times the optimization process is repeated.
     :return: A scipy.optimize.OptimizeResult object.
     """
     M = int(np.sum(np.array(model.include)))
-    N = len(scheme.free_parameter_vector)
-    if M > N:
-        raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
-                         f"AcquisitionScheme parameters ({N}) with meaningful result.")
 
-    scales = model.scales
-    include = model.include
-    acquisition_parameter_scales = scheme.free_parameter_scales
-    x0 = scheme.free_parameter_vector / acquisition_parameter_scales
-    if bounds is not None:
-        scheme.set_free_parameter_bounds(bounds)
-    bounds = scheme.free_parameter_bounds_scaled
-    constraints = scheme.get_constraints()
+    # Allowing for multiple schemes to be passed as initial schemes
+    if not isinstance(scheme, list):
+        schemes = [scheme]
+    else:
+        schemes = scheme
 
-    # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
-    # model's Jacobian matrix and evaluating the loss function.
-    def calc_loss(x: np.ndarray):
-        scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
-        jac = model.jacobian(scheme)
-        return loss(jac, scales, include, noise_variance)
+    # Testing if there is at least 1 initial scheme that will have a chance of optimizing
+    initial_losses = np.array([compute_loss(scheme, model, noise_variance) for scheme in schemes])
+    if (initial_losses >= 1e9).all():
+        raise ValueError("The provided initial scheme(s) have ill conditioned loss value(s). Optimization will not "
+                         "succeed, please retry with different initial schemes.")
 
-    if calc_loss(x0) >= 1e9:
-        raise ValueError("Testing shows that all optimizers fail if the initial scheme results in an ill conditioned "
-                         "fischer matrix (causing high loss value). Please choose a different initial acquisition "
-                         "scheme")
+    # Copying the schemes for number repeated optimizations required.
+    schemes = [scheme for scheme in schemes for _ in range(repeat)]
 
-    result = minimize(calc_loss, x0, method=method, bounds=bounds, constraints=constraints, options=options)
-    if 'x' in result:
-        scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
+    # Set best_scheme to scheme with the lowest loss value
+    best_scheme = schemes[np.argmin(initial_losses)]
+    best_loss = np.min(initial_losses)
+    best_result = None
 
-    return result
+    for scheme in schemes:
+        N = len(scheme.free_parameter_vector)
+        if M > N:
+            raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
+                             f"AcquisitionScheme parameters ({N}) with meaningful result.")
+
+        scales = model.scales
+        include = model.include
+        acquisition_parameter_scales = scheme.free_parameter_scales
+        x0 = scheme.free_parameter_vector / acquisition_parameter_scales
+        scaled_bounds = scheme.free_parameter_bounds_scaled
+        constraints = scheme.get_constraints()
+
+        # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
+        # model's Jacobian matrix and evaluating the loss function.
+        def calc_loss_scipy(x: np.ndarray):
+            scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
+            jac = model.jacobian(scheme)
+            return loss(jac, scales, include, noise_variance)
+
+        result = minimize(calc_loss_scipy, x0, method=method, bounds=scaled_bounds, constraints=constraints, options=options)
+        if 'x' in result:
+            scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
+
+        # check if the optimized scheme is better than the current best scheme and update
+        # also save best optimization result.
+        current_loss = compute_loss(scheme, model, noise_variance)
+        if current_loss < best_loss:
+            best_scheme = scheme
+            best_loss = current_loss
+            best_result = result
+
+    return best_scheme, best_result
