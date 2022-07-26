@@ -2,7 +2,7 @@
 What scheme is flavius using?
 """
 
-from typing import List, Union
+from typing import List, Union, Dict
 
 import numpy as np
 
@@ -19,7 +19,12 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
     """
 
     def __init__(self, b_values: Union[List[float], np.ndarray], echo_times: Union[List[float], np.ndarray],
-                 max_gradient: np.ndarray):
+                 max_gradient: np.ndarray,
+                 max_slew_rate: np.ndarray,
+                 half_readout_time: np.ndarray,
+                 excitation_time_pi: np.ndarray,
+                 excitation_time_halfpi: np.ndarray
+                 ):
         # Check for b0 values? make sure initial scheme satisfies constraints.
 
         super().__init__({
@@ -31,6 +36,18 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
             ),
             'MaxPulseGradient': AcquisitionParameters(
                 values=max_gradient, unit='mT/m', scale=10, fixed=True
+            ),
+            'MaxSlewRate': AcquisitionParameters(
+                values=max_slew_rate, unit='mT/m/ms', scale=10, fixed=True
+            ),
+            'HalfReadTime': AcquisitionParameters(
+                values=half_readout_time, unit='ms', scale=10, fixed=True
+            ),
+            'PulseDurationPi': AcquisitionParameters(
+                values=excitation_time_pi, unit='ms', scale=10, fixed=True
+            ),
+            'PulseDurationHalfPi': AcquisitionParameters(
+                values=excitation_time_halfpi, unit='ms', scale=10, fixed=True
             )
         })
 
@@ -46,8 +63,8 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
     def max_gradient(self):
         return self['MaxPulseGradient'].values
 
-    def get_constraints(self) -> LinearConstraint:
-        return None
+    def get_constraints(self) -> Union[dict, List[dict]]:
+        raise NotImplementedError()
 
 
 def compute_echo_times(b_vals, slew_time, max_gradient):
