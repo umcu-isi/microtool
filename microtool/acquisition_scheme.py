@@ -180,7 +180,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         parameters = list(self.free_parameters.values())
         return len(parameters[0])
 
-    def make_constraints(self, parameter_coefficients: Dict[str, float]) -> LinearConstraint:
+    def make_linear_constraint(self, parameter_coefficients: Dict[str, float]) -> dict:
         """ This method constructs the scipy constraints for the inequality based on a dictionary of coefficients
         Assumes inequality of the form 0 <= c_1 * x_1 + c_2 * x_2 .... <= infty.
 
@@ -203,10 +203,14 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             lb = lb - parameter_coefficients[key] * self[key].values
 
         A = np.concatenate(blocks, axis=1)
-        ub = np.repeat(np.inf, pulse_num)
-        return LinearConstraint(A, lb, ub)
 
-    def get_constraints(self) -> LinearConstraint:
+        # The scipy compatible function defining the constraint as explained in docstring above.
+        def fun(x: np.ndarray):
+            return A @ x - lb
+
+        return {'type': 'ineq', 'fun': fun}
+
+    def get_constraints(self) -> Union[dict, List[dict]]:
         """
         Returns optimisation constraints on the scheme parameters. Implementation is child-class specific.
 
@@ -375,7 +379,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             for bvec in self.b_vectors:
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
-    def get_constraints(self) -> LinearConstraint:
+    def get_constraints(self) -> Union[dict, List[dict]]:
         # Matrix defining Δ > δ or equivalently 0 < Δ - δ < \infty
         parameter_coefficients = {
             'DiffusionBValue': 0,
@@ -384,7 +388,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             'DiffusionPulseWidth': -1,
             'DiffusionPulseInterval': 1
         }
-        return self.make_constraints(parameter_coefficients)
+        return self.make_linear_constraint(parameter_coefficients)
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
@@ -441,4 +445,4 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
             'InversionTime': -1,
         }
 
-        return self.make_constraints(parameter_signs)
+        return self.make_linear_constraint(parameter_signs)
