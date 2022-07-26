@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 import numpy as np
 from scipy.optimize import OptimizeResult
@@ -41,6 +41,9 @@ class BruteForce(Optimizer):
         """
         bounds = options['bounds']
         constraints = options['constraints']
+        if isinstance(constraints, list):
+            raise NotImplementedError("Bruteforce optimizer cant handle multiple constraints")
+
         # this checks if boundaries actually contains values for lower bound and upperbound
         check_bounded(bounds)
 
@@ -64,17 +67,13 @@ class BruteForce(Optimizer):
     @staticmethod
     def _find_minimum(fun: callable, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
         if constraints != ():
-            A = constraints.A
-            lb = constraints.lb
-            ub = constraints.ub
-
             # iterate over the grid
             y_optimal = np.inf
             x_optimal = None
             for combination in product(*domains, desc='Running brute force grid computation'):
                 combination = np.array(combination)
                 # check constraint
-                if is_constrained(combination, A, lb, ub):
+                if is_constrained(combination, constraints):
                     loss = np.inf
                 else:
                     loss = fun(combination)
@@ -161,7 +160,8 @@ class SOMA(Optimizer):
         # TODO: guarantee bounds in higherlevel functions in tissuemodel
         bounds = options["bounds"]
         constraints = options['constraints']
-
+        if isinstance(constraints, list):
+            raise NotImplementedError("SOMA currently does not support multiple constraints.")
         population = Population(self.population_sz, bounds, constraints, fun, self.max_fevals)
 
         migration = 0
@@ -207,7 +207,7 @@ class Population:
         self._set_fitness()
 
     def cost_fun(self, x: np.ndarray):
-        if is_constrained(x, self.constraint.A, self.constraint.lb, self.constraint.ub):
+        if is_constrained(x, self.constraint):
             return np.inf
         else:
             return self.fun(x)
@@ -290,17 +290,24 @@ class Population:
         self.fevals += self.sz
 
 
-def is_constrained(x: np.ndarray, A: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> bool:
-    """A function for checking if a given parameter combination breaks a given linear constraint.
+def is_constrained(x: np.ndarray, constraint: dict) -> bool:
+    """A function for checking if a given parameter combination breaks a given constraint.
 
-    :param A:
-    :param lb:
-    :param ub:
+    :param constraint: A scipy compatible constraint dictionary
     :param x: Parameter combination
     :return: boolean that is true if the parameter combination breaks the constraint
     """
-    transformed_parameters = A @ x
-    return np.any((lb >= transformed_parameters) | (transformed_parameters >= ub))
+
+    contraint_type = constraint['type']
+    constraint_function = constraint['fun']
+
+    if contraint_type == 'eq' and constraint_function(x) != 0:
+        # The constraint is broken if the constraint function is not zero (maybe need to introduce tolerance?)
+        return True
+    elif contraint_type == 'ineq' and (constraint_function(x) < 0).any():
+        return True
+    else:
+        return False
 
 
 def check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> None:
