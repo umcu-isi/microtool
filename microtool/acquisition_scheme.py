@@ -195,7 +195,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         free_param_keys = self.free_parameter_keys
 
         # blocks defining the linear inequality
-        blocks = [parameter_coefficients[key] * np.identity(pulse_num) for key in free_param_keys]
+        blocks = [parameter_coefficients[key] * np.identity(pulse_num) * self[key].scale for key in free_param_keys]
 
         # Adjusting bounds if a fixed parameter is involved in the inequality
         lb = np.zeros(pulse_num)
