@@ -5,6 +5,7 @@ The following expressions were found analytically
 """
 
 import numpy as np
+from typing import Union
 
 # 1/ ms mT
 gamma = 42.57747892 * 2 * np.pi
@@ -12,7 +13,7 @@ gamma = 42.57747892 * 2 * np.pi
 t90 = 4
 t180 = 6
 # s /micro m^2 ?
-b = 0.05
+b = np.linspace(0.05,3,num=500)
 # ms?
 t_half = 14
 
@@ -24,12 +25,12 @@ t_rise = G_max / S_max
 #
 
 def main():
-    print(minimal_echo_time(delta_max()))
+    print(minimal_echo_time(compute_delta_max()))
 
 
 def minimal_echo_time(delta_max):
     delta = np.linspace(1e-6, delta_max, num=1000)
-    return np.min(echo_time(delta))
+    return np.min(echo_time(delta), axis=0)
 
 
 def echo_time(delta):
@@ -41,8 +42,11 @@ def Delta(delta):
     return (B - t_rise / 30) * delta ** (-2) + (t_rise / 6) * delta ** (-1) + delta / 3
 
 
-def delta_max():
-    return min(compute_delta_max_1(), compute_delta_max_2())
+def compute_delta_max():
+    deltamax1 = compute_delta_max_1()
+    deltamax2 = compute_delta_max_2()
+    deltamax = np.min(np.array([deltamax1, deltamax2]).T, axis=1)
+    return deltamax
 
 
 def compute_delta_max_2():
@@ -77,10 +81,10 @@ def compute_delta_max_1():
     a1 = -t_rise / 4
     a0 = (-3 / 2) * (b / (gamma ** 2 * G_max ** 2)) + t_rise / 20
     return largest_real_cbrt(a2, a1, a0)
-    # compute polynomial coefficients based on scan parameters
 
 
-def largest_real_cbrt(a2: float, a1: float, a0: float) -> float:
+def largest_real_cbrt(a2: Union[float, np.ndarray], a1: Union[float, np.ndarray], a0: Union[float, np.ndarray]) -> \
+        Union[float, np.ndarray]:
     """
     Returns the largest real root of the cubic equation z^3 + a_2 * z^2 + a_1 * z + a_0 = 0.
     
@@ -89,7 +93,7 @@ def largest_real_cbrt(a2: float, a1: float, a0: float) -> float:
     :param a2: Coefficient of the quadratic term
     :param a1: Coefficient of the linear term
     :param a0: Constant offset
-    :return: The largest real root
+    :return: The largest real root(s) in shape (N_parameter values, 1)
     """
     Q = (3 * a1 - a2 ** 2) / 9
     R = (9 * a2 * a1 - 27 * a0 - 2 * a2 ** 3) / 54
@@ -102,10 +106,15 @@ def largest_real_cbrt(a2: float, a1: float, a0: float) -> float:
     z2 = -(1 / 3) * a2 - 0.5 * (S + T) + 0.5j * np.sqrt(3) * (S - T)
     z3 = -(1 / 3) * a2 - 0.5 * (S + T) - 0.5j * np.sqrt(3) * (S - T)
 
-    roots = np.array([z1, z2, z3])
+    # If there is a parameter array solutions are stored in shape (number of parametervalues, 3 or number of solutions)
+    roots = np.array([z1, z2, z3]).T
     # we consider numbers real if imaginary part is zero to some tolerance
     real_root_mask = np.isclose(np.imag(roots), np.zeros(roots.shape))
-    return np.real(max(roots[real_root_mask]))
+    # Masking out the imaginary roots
+    masked_roots = np.ma.masked_where(np.logical_not(real_root_mask), roots)
+    largest_real_roots = np.max(np.real(masked_roots), axis=1)
+
+    return largest_real_roots
 
 
 if __name__ == '__main__':
