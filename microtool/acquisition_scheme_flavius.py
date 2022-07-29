@@ -2,12 +2,12 @@
 What scheme is flavius using?
 """
 
-from typing import List, Union, Dict
+from typing import List, Union
 
 import numpy as np
 
 from microtool.acquisition_scheme import AcquisitionScheme, AcquisitionParameters
-from scipy.optimize import LinearConstraint
+from microtool.utils.solve_echo_time import minimal_echo_time
 
 
 class FlaviusAcquisitionScheme(AcquisitionScheme):
@@ -23,7 +23,7 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
                  max_slew_rate: np.ndarray,
                  half_readout_time: np.ndarray,
                  excitation_time_pi: np.ndarray,
-                 excitation_time_halfpi: np.ndarray
+                 excitation_time_half_pi: np.ndarray
                  ):
         # Check for b0 values? make sure initial scheme satisfies constraints.
 
@@ -40,6 +40,9 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
             'MaxSlewRate': AcquisitionParameters(
                 values=max_slew_rate, unit='mT/m/ms', scale=10, fixed=True
             ),
+            'RiseTime': AcquisitionParameters(
+                values=max_gradient / max_slew_rate, unit='ms', scale=10, fixed=True
+            ),
             'HalfReadTime': AcquisitionParameters(
                 values=half_readout_time, unit='ms', scale=10, fixed=True
             ),
@@ -47,7 +50,7 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
                 values=excitation_time_pi, unit='ms', scale=10, fixed=True
             ),
             'PulseDurationHalfPi': AcquisitionParameters(
-                values=excitation_time_halfpi, unit='ms', scale=10, fixed=True
+                values=excitation_time_half_pi, unit='ms', scale=10, fixed=True
             )
         })
 
@@ -59,21 +62,25 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
     def b_values(self):
         return self['DiffusionBvalue'].values
 
-    @property
-    def max_gradient(self):
-        return self['MaxPulseGradient'].values
-
     def get_constraints(self) -> Union[dict, List[dict]]:
-        raise NotImplementedError()
+
+        t180 = self['PulseDurationPi'].values
+        t90 = self['PulseDurationHalfPi'].values
+        G_max = self['MaxPulseGradient'].values
+        t_rise = self['RiseTime'].values
+        t_half = self['HalfReadTime'].values
+
+        def fun(x: np.ndarray) -> np.ndarray:
+            # get b-values from x
+            b = self.get_parameter_from_parameter_vector('DiffusionBvalue', x)
+            # get echotimes from x
+            TE = self.get_parameter_from_parameter_vector('EchoTime', x)
+            # compute the minimal echotimes associated with b-values and other parameters
+            TE_min = minimal_echo_time(b, t90, t180, t_half, G_max, t_rise)
+
+            # The constraint is satisfied if actual TE is higher than minimal TE
+            return TE - TE_min
+
+        return {'type': 'ineq', 'fun': fun}
 
 
-def compute_echo_times(b_vals, slew_time, max_gradient):
-    """
-    Computing the echo times as proposed by the script that chantal provided.
-
-    :param b_vals:
-    :param slew_time:
-    :param max_gradient:
-    :return:
-    """
-    raise NotImplementedError()

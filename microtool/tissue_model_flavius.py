@@ -1,9 +1,7 @@
-from typing import Dict, Union
-
 import numpy as np
 
 from microtool.acquisition_scheme_flavius import FlaviusAcquisitionScheme
-from microtool.tissue_model import TissueModel, TissueParameter, FittedTissueModel
+from microtool.tissue_model import TissueModel, TissueParameter
 
 
 class FlaviusSignalModel(TissueModel):
@@ -44,9 +42,3 @@ class FlaviusSignalModel(TissueModel):
 
         jac = [te * S0 * b_D * te_t2 / T2 ** 2, - bvalues * S0 * b_D * te_t2, b_D * te_t2]
         return np.array(jac).T
-
-    def fit(self, scheme: FlaviusAcquisitionScheme, noisy_signal: np.ndarray, **fit_options) -> FittedTissueModel:
-        raise NotImplementedError
-
-    def set_initial_parameters(self, parameters: Dict[str, Union[np.ndarray, float]]) -> None:
-        raise NotImplementedError

@@ -9,6 +9,9 @@ from microtool.optimize import optimize_scheme
 from microtool.tissue_model_flavius import FlaviusSignalModel
 from microtool.acquisition_scheme_flavius import FlaviusAcquisitionScheme
 
+# dont print so many digits
+np.set_printoptions(formatter={'float': '{: .2e}'.format})
+
 # -------- Defining the signal model
 # white matter diffusivity (mm^2/s)
 D = 0.8 * 1e-3
@@ -16,8 +19,15 @@ D = 0.8 * 1e-3
 T2 = 80
 signal_model = FlaviusSignalModel(T2, D)
 # -------- Defining Acquisition scheme
-# maximum gradient strength (mT/m)
-gradient_strength = np.array(200.0)
+
+scan_parameters = {
+        'excitation_time_half_pi': 4,
+        'excitation_time_pi': 6,
+        'half_readout_time': 14,
+        'max_gradient': 200,
+        'max_slew_rate': 1300
+    }
+
 # b_values s/mm^2
 b = np.array(
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 6, 6, 6, 6, 6, 6, 6, 6, 10,
@@ -28,7 +38,7 @@ TE = np.array(
     [30, 55, 57, 59, 68, 74, 90, 110, 125, 150, 30, 55, 57, 59, 68, 74, 90, 110, 125, 150, 55, 57, 59, 68, 74, 90, 110,
      125, 150, 57, 59, 68, 74, 90, 110, 125, 150, 59, 68, 74, 90, 110, 125, 150])
 
-scheme = FlaviusAcquisitionScheme(b, TE, gradient_strength)
+scheme = FlaviusAcquisitionScheme(b, TE, **scan_parameters)
 
 print("Pre optimized Scheme:\n", scheme)
 plt.figure("Pre optimized signal ")
