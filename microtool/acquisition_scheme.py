@@ -149,7 +149,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         """
         n = self.pulse_count
 
-        return np.array([p.scale for _ in range(n) for p in self.values() if not p.fixed])
+        return np.repeat(np.array([p.scale for p in self.values() if not p.fixed]),[n for _ in range(len(self.free_parameters))])
 
     @property
     def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], ...]]:
