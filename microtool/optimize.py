@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Sequence, Callable, Optional, Union, List, Tuple, Any
 
 import numpy as np
@@ -109,7 +110,7 @@ def optimize_scheme(scheme: Union[AcquisitionScheme, List[AcquisitionScheme]], m
                          "succeed, please retry with different initial schemes.")
 
     # Copying the schemes for number repeated optimizations required.
-    schemes = [scheme for scheme in schemes for _ in range(repeat)]
+    schemes = [deepcopy(scheme) for scheme in schemes for _ in range(repeat)]
 
     # Set best_scheme to scheme with the lowest loss value
     best_scheme = schemes[np.argmin(initial_losses)]
