@@ -183,9 +183,10 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     def get_parameter_from_parameter_vector(self, parameter: str, x: np.ndarray):
         """
 
-        :param parameter: The name of the parameter of which you want to get the values from scipy array
-        :param x: the scipy array (i.e. the flattend free parameter array)
-        :return:
+        :param parameter: The name of the parameter of which you want to get the values from scipy array :param x:
+        the scipy array (i.e. the flattend free parameter array)
+        :return: The parameter values in the scipy array (
+        rescaled, so no longer in optimization scale but physical values)
         """
         i = 0
         for key in self.free_parameter_keys:

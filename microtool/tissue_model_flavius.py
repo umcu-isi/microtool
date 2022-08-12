@@ -5,11 +5,12 @@ from microtool.tissue_model import TissueModel, TissueParameter
 
 
 class FlaviusSignalModel(TissueModel):
-    """
-
-    """
-
     def __init__(self, t2: float, diffusivity: float, s0: float = 1.0):
+        """
+        :param t2: The tissues T2 in [ms]
+        :param diffusivity: The tissue diffusivity in [mm^2 / s]
+        :param s0: signal at the zeroth measurement [dimensionless]
+        """
         super().__init__({
             'T2': TissueParameter(value=t2, scale=t2),
             'Diffusivity': TissueParameter(value=diffusivity, scale=diffusivity),

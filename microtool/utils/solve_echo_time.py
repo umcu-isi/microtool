@@ -6,24 +6,30 @@ The following expressions were found analytically
 
 from typing import Union
 
+import matplotlib.pyplot as plt
 import numpy as np
 
-# 1/ ms mT
-GAMMA = 2.6752218744e8 * 1e-3 *1e-3  # Convert from 1/s/T to 1/ms/mT.
+
+GAMMA = 42.57747892 * 2 * np.pi  # MHz / T == 1/ms . 1/mT
 
 
 def main():
-    b = np.linspace(0.05, 3, num=500)
+    b = np.linspace(0.05, 3, num=500) * 1e6  # s/mm^2
     scan_parameters = {
-        't90': 4,
-        't180': 6,
-        't_half': 14,
-        'G_max': 200e-6,
-        'S_max': 1300e-6
+        't90': 4,  # ms
+        't180': 6,  # ms
+        't_half': 14,  # ms
+        'G_max': 200e-3,  # mT/mm
+        'S_max': 1300e-3 # mT/mm/ms
     }
 
     scan_parameters['t_rise'] = scan_parameters['G_max'] / scan_parameters['S_max']
     print(minimal_echo_time(b, **scan_parameters))
+    plt.plot(minimal_echo_time(b, **scan_parameters), b*1e-3)
+    plt.xlabel("TE_min")
+    plt.ylabel("b")
+    plt.tight_layout()
+    plt.show()
 
 
 def minimal_echo_time(b, t90, t180, t_half, G_max, t_rise, **ignored_arguments):

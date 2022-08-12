@@ -32,16 +32,16 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
                 values=b_values, unit='s/mm^2', scale=1000, lower_bound=0.0, upper_bound=3e4
             ),
             'EchoTime': AcquisitionParameters(
-                values=echo_times, unit='ms', scale=10, lower_bound=.1, upper_bound=1e3
+                values=echo_times, unit='ms', scale=10, lower_bound=.1, upper_bound=2e2
             ),
             'MaxPulseGradient': AcquisitionParameters(
-                values=max_gradient, unit='mT/m', scale=10, fixed=True
+                values=max_gradient, unit='mT/mm', scale=1, fixed=True
             ),
             'MaxSlewRate': AcquisitionParameters(
-                values=max_slew_rate, unit='mT/m/ms', scale=10, fixed=True
+                values=max_slew_rate, unit='mT/mm/ms', scale=1, fixed=True
             ),
             'RiseTime': AcquisitionParameters(
-                values=max_gradient / max_slew_rate, unit='ms', scale=10, fixed=True
+                values=max_gradient / max_slew_rate, unit='ms', scale=1, fixed=True
             ),
             'HalfReadTime': AcquisitionParameters(
                 values=half_readout_time, unit='ms', scale=10, fixed=True
@@ -63,7 +63,6 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
         return self['DiffusionBvalue'].values
 
     def get_constraints(self) -> Union[dict, List[dict]]:
-
         t180 = self['PulseDurationPi'].values
         t90 = self['PulseDurationHalfPi'].values
         G_max = self['MaxPulseGradient'].values
@@ -73,7 +72,10 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
         def fun(x: np.ndarray) -> np.ndarray:
             # get b-values from x
             b = self.get_parameter_from_parameter_vector('DiffusionBvalue', x)
-            # get echotimes from x
+            # note that b is in s/mm^2 but all other time dimensions are ms.
+            # so we convert to ms/mm^2
+            b *= 1e3
+            # get echotimes from x, (units are # ms)
             TE = self.get_parameter_from_parameter_vector('EchoTime', x)
             # compute the minimal echotimes associated with b-values and other parameters
             TE_min = minimal_echo_time(b, t90, t180, t_half, G_max, t_rise)
@@ -82,5 +84,3 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
             return TE - TE_min
 
         return {'type': 'ineq', 'fun': fun}
-
-
