@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Sequence, Callable, Optional, Union, List, Tuple, Any
+from typing import Sequence, Callable, Optional, Union, List, Tuple, Any, TypeVar, Type
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize
@@ -73,12 +73,16 @@ def compute_loss(scheme: AcquisitionScheme,
     return loss(jac, model_scales, model_include, noise_var)
 
 
-def optimize_scheme(scheme: Union[AcquisitionScheme, List[AcquisitionScheme]], model: TissueModel,
+# A way of typehinting all the derived classes of AcquisitionScheme
+AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
+
+
+def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model: TissueModel,
                     noise_variance: float,
                     loss: LossFunction = crlb_loss,
                     method: Optional[Union[str, Optimizer]] = None,
                     repeat: int = 1,
-                    **options) -> Tuple[AcquisitionScheme, Optional[OptimizeResult]]:
+                    **options) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -137,7 +141,8 @@ def optimize_scheme(scheme: Union[AcquisitionScheme, List[AcquisitionScheme]], m
             jac = model.jacobian(scheme)
             return loss(jac, scales, include, noise_variance)
 
-        result = minimize(calc_loss_scipy, x0, method=method, bounds=scaled_bounds, constraints=constraints, options=options)
+        result = minimize(calc_loss_scipy, x0, method=method, bounds=scaled_bounds, constraints=constraints,
+                          options=options)
         if 'x' in result:
             scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
@@ -151,7 +156,7 @@ def optimize_scheme(scheme: Union[AcquisitionScheme, List[AcquisitionScheme]], m
 
         optimized_losses.append(current_loss)
 
-    #TODO: If one of the schemes does optimize but is not the lowest loss of them all, what do we do?
+    # TODO: If one of the schemes does optimize but is not the lowest loss of them all, what do we do?
     if (np.array(optimized_losses).reshape(-1, len(initial_losses)) > initial_losses).all():
         raise RuntimeError("Optimization was unsuccesfull, the optimized schemes have higher loss than the initial "
                            "schemes, probably due to choice of optimizer. Please retry with different optimization "
