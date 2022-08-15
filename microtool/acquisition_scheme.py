@@ -438,7 +438,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         """
         return self['InversionTime'].values
 
-    def get_constraints(self) -> LinearConstraint:
+    def get_constraints(self) -> dict:
         parameter_signs = {
             'RepetitionTimeExcitation': 1,
             'EchoTime': -1,
