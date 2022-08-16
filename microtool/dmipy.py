@@ -79,8 +79,8 @@ class DmipyTissueModel(TissueModel):
         """
 
         :param model: MultiCompartment model
-        :param volume_fractions: The relative volume fractions of the models (order in the sameway you initialized the
-        multicompartment model)
+        :param volume_fractions: The relative volume fractions of the models (order in the same way you initialized the
+                                 multicompartment model)
         """
         super().__init__()
         # Extract the scalar tissue parameters from individual models.
@@ -95,6 +95,8 @@ class DmipyTissueModel(TissueModel):
             # check if the volume_fractions match the length of this dictionary
             if len(volume_fractions) != len(vf_keys):
                 raise ValueError("Not enough volume fractions provided for the number of models.")
+            if np.sum(volume_fractions) != 1:
+                raise ValueError("Provide volume fractions do not sum to 1.")
             # Including the volume fractions as TissueParameters to the DmipyTissueModel
             for i, key in enumerate(vf_keys):
                 self.update({key: TissueParameter(value=volume_fractions[i], scale=1., optimize=False)})
