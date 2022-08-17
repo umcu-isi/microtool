@@ -33,7 +33,7 @@ def main():
     # making a legend in the last subplot
     plt.legend()
 
-    fit_results_std = pd.DataFrame.from_dict(fit_results_mean, orient='columns')
+    fit_results_std = pd.DataFrame.from_dict(fit_results_std, orient='columns')
     fit_results_mean = pd.DataFrame.from_dict(fit_results_mean, orient='columns')
 
     # making a bar chart where the mean value is represented for every parameter on the x-axis and different colors
