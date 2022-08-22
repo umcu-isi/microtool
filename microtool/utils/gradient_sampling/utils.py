@@ -125,7 +125,7 @@ def eigenvector_to_angles(vector: np.ndarray) -> np.ndarray:
     return np.stack([theta, phi], axis=-1)
 
 
-def angles_to_eigenvectors(angles: np.ndarray) -> np.ndarray:
+def angles_to_unitvectors(angles: np.ndarray) -> np.ndarray:
     """
     Returns unit vector given an array of spherical angles
     :param angles: array in the form theta, phi; polar, azimuthal, shape (n_angles, 2)
@@ -146,7 +146,7 @@ def angles_to_eigenvectors(angles: np.ndarray) -> np.ndarray:
 
 
 def sample_sphere_vectors(ns: int = 100) -> np.ndarray:
-    return angles_to_eigenvectors(sample_sphere_angles(ns))
+    return angles_to_unitvectors(sample_sphere_angles(ns))
 
 
 def sample_sphere_angles(ns: int = 100) -> np.ndarray:
