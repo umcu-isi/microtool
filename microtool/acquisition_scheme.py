@@ -5,13 +5,14 @@ from typing import Union, List, Tuple, Dict, Optional
 
 import numpy as np
 from pathlib import Path
-
+from microtool.utils import gradient_sampling
 from scipy.optimize import LinearConstraint
 from math import prod
 
-
 # TODO: Linear constraints? For example: Δ > δ  and TR > TI + TE
 # TODO: Check constraints on initialization
+from microtool.utils.gradient_sampling.utils import angles_to_unitvectors
+
 
 @dataclass
 class AcquisitionParameters:
@@ -149,19 +150,20 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         """
         n = self.pulse_count
 
-        return np.repeat(np.array([p.scale for p in self.values() if not p.fixed]),[n for _ in range(len(self.free_parameters))])
+        return np.repeat(np.array([p.scale for p in self.values() if not p.fixed]),
+                         [len(p.values) for p in self.values() if not p.fixed])
 
     @property
     def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], ...]]:
         """
         :return: The free parameters bounds divided by their scales. List of min max pairs
         """
-        n = self.pulse_count
+
         bounds = []
         for key in self.free_parameter_keys:
             p = self[key]
             p_bounds = (p.lower_bound, p.upper_bound)
-            for _ in range(n):
+            for _ in range(len(p.values)):
                 bounds.append(tuple([None if bound is None else bound / p.scale for bound in p_bounds]))
 
         return bounds
@@ -177,10 +179,15 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
     @property
     def pulse_count(self) -> int:
-        parameters = list(self.free_parameters.values())
-        return len(parameters[0])
+        max_parameter_length = 0
+        for parameter in self.values():
+            par_length = len(parameter.values)
+            if par_length > max_parameter_length:
+                max_parameter_length = par_length
 
-    def make_linear_constraint(self, parameter_coefficients: Dict[str, float]) -> dict:
+        return max_parameter_length
+
+    def make_linear_constraint(self, parameter_coefficients: Dict[str, float]) -> Optional[dict]:
         """ This method constructs the scipy constraints for the inequality based on a dictionary of coefficients
         Assumes inequality of the form 0 <= c_1 * x_1 + c_2 * x_2 .... <= infty.
 
@@ -203,6 +210,11 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
             lb = lb - parameter_coefficients[key] * self[key].values
 
         A = np.concatenate(blocks, axis=1)
+
+        # in the case that the free parameters are not involved in the constraint we need not check the constraint
+        # during optimization
+        if np.sum(A!=0) == 0:
+            return None
 
         # The scipy compatible function defining the constraint as explained in docstring above.
         def fun(x: np.ndarray):
@@ -389,6 +401,104 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             'DiffusionPulseInterval': 1
         }
         return self.make_linear_constraint(parameter_coefficients)
+
+
+class ShellScheme(DiffusionAcquisitionScheme):
+    def __init__(self,
+                 b_values: Union[List[float], np.ndarray],
+                 b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
+                 pulse_widths: Union[List[float], np.ndarray],
+                 pulse_intervals: Union[List[float], np.ndarray]):
+
+        super().__init__(b_values, b_vectors, pulse_widths, pulse_intervals)
+
+        # For now we fix the b-value
+        self['DiffusionBValue'].fixed = True
+
+        # store the initial gradient directions to define the rotation angles with
+        self.initial_theta = np.copy(self['DiffusionGradientAngleTheta'].values)
+        self.initial_phi = np.copy(self["DiffusionGradientAnglePhi"].values)
+
+        # check how many distinct shells there are by b-value and initialize zero rotation angle for all shells
+        self.unique_bvals = np.unique(b_values)
+        # get the indices of the unique b-values using a dict
+        self.bval_indices = {}
+        for bval in self.unique_bvals:
+            self.bval_indices[bval] = np.where(b_values == bval)[0]
+
+        # initialise angles for all nonzero b-shells but the first one
+        n_angles = np.sum(self.unique_bvals > 0) - 1
+
+        # We store the angles in sequence of increasing b-value for every non zero shell but the first one
+        self.update({
+            'ShellRotationAngleTheta': AcquisitionParameters(
+                values=np.zeros(n_angles), unit='rad', scale=1, lower_bound=None
+            ),
+            'ShellRotationAnglePhi': AcquisitionParameters(
+                values=np.zeros(n_angles), unit='rad', scale=1, lower_bound=None
+            )
+        })
+
+    def _rotate_shells(self) -> None:
+        """
+        Rotates the shells in other words updates the gradient directions based on the shell angles
+        :return:
+        """
+        d_theta = self['ShellRotationAngleTheta'].values
+        d_phi = self['ShellRotationAnglePhi'].values
+
+        # prepend two zeros if there are b0 values
+        if np.sum(self.unique_bvals == 0) != 0:
+            d_theta = np.pad(d_theta, 2, 'constant', constant_values=0)
+            d_phi = np.pad(d_phi, 2, 'constant', constant_values=0)
+        # prepend one zero if there is not a b0 value
+        else:
+            d_theta = np.pad(d_theta, 1, 'constant', constant_values=0)
+            d_phi = np.pad(d_phi, 1, 'constant', constant_values=0)
+
+        for i, indices in enumerate(self.bval_indices.values()):
+            self['DiffusionGradientAngleTheta'].values[indices] = self.initial_theta[indices] + d_theta[i]
+            self['DiffusionGradientAnglePhi'].values[indices] = self.initial_phi[indices] + d_phi[i]
+
+    def set_free_parameter_vector(self, vector: np.ndarray) -> None:
+        # Same function as on base class
+        super().set_free_parameter_vector(vector)
+        # We update the gradient angles based on the shell rotation angles
+        self._rotate_shells()
+
+    def get_constraints(self) -> Union[dict, List[dict]]:
+        # Matrix defining Δ > δ or equivalently 0 < Δ - δ < \infty
+        parameter_coefficients = {
+            'DiffusionBValue': 0,
+            'DiffusionGradientAnglePhi': 0,
+            'DiffusionGradientAngleTheta': 0,
+            'DiffusionPulseWidth': -1,
+            'DiffusionPulseInterval': 1,
+            "ShellRotationAngleTheta": 0,
+            "ShellRotationAnglePhi": 0
+        }
+        return self.make_linear_constraint(parameter_coefficients)
+
+    def plot_shells(self):
+        """
+        Function to visualize the shells.
+        """
+        # first we get the indices of the non zero b-values
+        indices = []
+        for b_val in self.unique_bvals[self.unique_bvals > 0]:
+            indices.append(self.bval_indices[b_val])
+
+        angles = []
+        for shell in indices:
+            theta = self['DiffusionGradientAngleTheta'].values[shell]
+            phi = self['DiffusionGradientAnglePhi'].values[shell]
+
+            angles.append(np.array([theta, phi]).T)
+
+        # convert them to unit vectors
+        shells = list(map(angles_to_unitvectors, angles))
+        # using the visualiser from the gradient_sampling module
+        gradient_sampling.utils.plot_shells(shells)
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
