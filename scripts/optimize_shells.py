@@ -6,19 +6,19 @@ from matplotlib import pyplot as plt
 from microtool.acquisition_scheme import ShellScheme
 from microtool.dmipy import DmipyTissueModel
 from microtool.optimize import optimize_scheme
-from microtool.utils.gradient_sampling.uniform import sample_uniform
+from microtool.utils.gradient_sampling.shell_rigid_rotation import sample_shells_rotation
 
 
 def main():
     # --------- initial acquisition scheme
-    shells = [2, 2, 4, 8]
+    shells = [2, 20, 20, 20]
     b_values = np.repeat(np.array([0, 1000, 2000, 3000]), shells)
-    b_vectors = np.concatenate(list(map(sample_uniform, shells)))
+    b_vectors = np.concatenate(sample_shells_rotation(shells))
     pulse_widths = np.repeat(20, len(b_values))
     pulse_intervals = np.repeat(40, len(b_values))
     scheme = ShellScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
     print(scheme)
-    scheme.plot_shells()
+    scheme.plot_shells_projected()
 
     # -------- Tissue model
     mu = (np.pi / 2., np.pi / 2.)  # in radians
@@ -31,7 +31,7 @@ def main():
     new_scheme, _ = optimize_scheme(scheme, stick_model_wrapped, noise_variance=0.02)
     print(new_scheme)
     # --------- plotting result
-    new_scheme.plot_shells()
+    new_scheme.plot_shells_projected()
     plt.show()
 
 

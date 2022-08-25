@@ -213,7 +213,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
         # in the case that the free parameters are not involved in the constraint we need not check the constraint
         # during optimization
-        if np.sum(A!=0) == 0:
+        if np.sum(A != 0) == 0:
             return None
 
         # The scipy compatible function defining the constraint as explained in docstring above.
@@ -416,8 +416,8 @@ class ShellScheme(DiffusionAcquisitionScheme):
         self['DiffusionBValue'].fixed = True
 
         # store the initial gradient directions to define the rotation angles with
-        self.initial_theta = np.copy(self['DiffusionGradientAngleTheta'].values)
-        self.initial_phi = np.copy(self["DiffusionGradientAnglePhi"].values)
+        self.initial_theta = np.copy(self.theta)
+        self.initial_phi = np.copy(self.phi)
 
         # check how many distinct shells there are by b-value and initialize zero rotation angle for all shells
         self.unique_bvals = np.unique(b_values)
@@ -479,11 +479,12 @@ class ShellScheme(DiffusionAcquisitionScheme):
         }
         return self.make_linear_constraint(parameter_coefficients)
 
-    def plot_shells(self):
+    @property
+    def shell_angles(self) -> List[np.ndarray]:
         """
-        Function to visualize the shells.
+        :return: The angles with which the shell is rotated w.r.t. the first non-zero shell
         """
-        # first we get the indices of the non zero b-values
+        # The indices for the non zero b-values in property arrays. (b-value, angles, etc etc)
         indices = []
         for b_val in self.unique_bvals[self.unique_bvals > 0]:
             indices.append(self.bval_indices[b_val])
@@ -495,11 +496,20 @@ class ShellScheme(DiffusionAcquisitionScheme):
 
             angles.append(np.array([theta, phi]).T)
 
-        # convert them to unit vectors
-        shells = list(map(angles_to_unitvectors, angles))
+        return angles
+
+    def plot_shells(self):
+        """
+        Function to visualize the shells.
+        """
+        # convert the angles to unit vectors
+        shells = list(map(angles_to_unitvectors, self.shell_angles))
         # using the visualiser from the gradient_sampling module
         gradient_sampling.utils.plot_shells(shells)
 
+    def plot_shells_projected(self):
+        shells = list(map(angles_to_unitvectors, self.shell_angles))
+        gradient_sampling.utils.plot_shells_projected(shells)
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
