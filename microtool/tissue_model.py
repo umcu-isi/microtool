@@ -13,7 +13,7 @@ from typing import Dict, Union, List
 import numpy as np
 from scipy.optimize import curve_fit
 
-from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
+from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme
 
 
 @dataclass
@@ -196,3 +196,47 @@ class RelaxationTissueModel(TissueModel):
         popt, _ = curve_fit(signal_fun, np.arange(len(tr)), noisy_signal, initial_parameters, bounds=bounds)
 
         return FittedTissueModel(self, popt)
+
+
+class ExponentialTissueModel(TissueModel):
+    def __init__(self, T2: float, S0: float = 1.0):
+        """
+        Set the tissue parameters
+        """
+        super().__init__({
+            'T2': TissueParameter(value=T2, scale=T2),
+            'S0': TissueParameter(value=S0, scale=S0, optimize=True)
+        })
+
+    def __call__(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        Implement the signal equation S = S0 * exp(-TE/T2) here
+        :return:
+        """
+        TE = scheme.echo_times
+        T2 = self['T2'].value
+        S0 = self['S0'].value
+        return S0 * np.exp(- TE / T2)
+
+    def jacobian(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        This is the analytics way of computing the jacobian.
+        :param scheme:
+        :return:
+        """
+        TE = scheme.echo_times
+        T2 = self['T2'].value
+        S0 = self['S0'].value
+
+        # the base signal
+        S = S0 * np.exp(-TE / T2)
+        # return np.array([-TE * S, 1]).T
+        return np.array([-TE * S, S / S0]).T
+
+    def jacobian_num(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        Uses finite differences to compute the
+        :param scheme:
+        :return:
+        """
+        raise NotImplementedError('I still need to do this')

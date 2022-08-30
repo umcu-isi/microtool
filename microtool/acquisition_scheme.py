@@ -149,7 +149,8 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         """
         n = self.pulse_count
 
-        return np.repeat(np.array([p.scale for p in self.values() if not p.fixed]),[n for _ in range(len(self.free_parameters))])
+        return np.repeat(np.array([p.scale for p in self.values() if not p.fixed]),
+                         [n for _ in range(len(self.free_parameters))])
 
     @property
     def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], ...]]:
@@ -446,3 +447,18 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         }
 
         return self.make_linear_constraint(parameter_signs)
+
+
+class EchoScheme(AcquisitionScheme):
+    def __init__(self, TE: np.ndarray):
+        super().__init__({
+            'EchoTime': AcquisitionParameters(values=TE, unit='ms', scale=10, lower_bound=0.0)
+        })
+
+    @property
+    def echo_times(self):
+        return self['EchoTime'].values
+
+    def get_constraints(self) -> Union[dict, List[dict]]:
+        """ For now without constraints. """
+        return None
