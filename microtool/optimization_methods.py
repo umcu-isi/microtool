@@ -41,6 +41,7 @@ class BruteForce(Optimizer):
         """
         bounds = options['bounds']
         constraints = options['constraints']
+
         if isinstance(constraints, list):
             raise NotImplementedError("Bruteforce optimizer cant handle multiple constraints")
 
@@ -66,7 +67,18 @@ class BruteForce(Optimizer):
 
     @staticmethod
     def _find_minimum(fun: callable, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
-        if constraints != ():
+        if constraints is None or constraints == ():
+            # iterate over the grid
+            y_optimal = np.inf
+            x_optimal = None
+            for combination in product(*domains, desc='Running brute force grid computation'):
+                combination = np.array(combination)
+                loss = fun(combination)
+                # update optimal value
+                if loss < y_optimal:
+                    x_optimal = combination
+                    y_optimal = loss
+        else:
             # iterate over the grid
             y_optimal = np.inf
             x_optimal = None
@@ -78,17 +90,6 @@ class BruteForce(Optimizer):
                 else:
                     loss = fun(combination)
 
-                # update optimal value
-                if loss < y_optimal:
-                    x_optimal = combination
-                    y_optimal = loss
-        else:
-            # iterate over the grid
-            y_optimal = np.inf
-            x_optimal = None
-            for combination in product(*domains, desc='Running brute force grid computation'):
-                combination = np.array(combination)
-                loss = fun(combination)
                 # update optimal value
                 if loss < y_optimal:
                     x_optimal = combination
@@ -297,7 +298,8 @@ def is_constrained(x: np.ndarray, constraint: dict) -> bool:
     :param x: Parameter combination
     :return: boolean that is true if the parameter combination breaks the constraint
     """
-
+    if constraint is None:
+        return False
     contraint_type = constraint['type']
     constraint_function = constraint['fun']
 
