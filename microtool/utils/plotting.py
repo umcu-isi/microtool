@@ -1,6 +1,6 @@
 from typing import Dict, List, Tuple
 
-from microtool.optimize import LossFunction
+from microtool.optimize import LossFunction, crlb_loss
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.tissue_model import TissueModel
 from copy import copy
@@ -11,7 +11,7 @@ Domains = List[Tuple[float, float]]
 
 
 class LossInspector:
-    def __init__(self, loss_function: LossFunction, scheme: AcquisitionScheme, model: TissueModel, noise_var: float):
+    def __init__(self, scheme: AcquisitionScheme, model: TissueModel, noise_var: float, loss_function: LossFunction = crlb_loss):
         """
 
         :param loss_function: The loss function we wish to inspect

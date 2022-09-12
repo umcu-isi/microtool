@@ -26,15 +26,15 @@ plt.ylabel('Signal attenuation')
 
 # ## 3. Optimize the acquisition scheme
 noise_variance = 0.02
-optimize.optimize_scheme(ir_scheme, relaxation_model, noise_variance)
+scheme_optimal, _ = optimize.optimize_scheme(ir_scheme, relaxation_model, noise_variance)
 
-print(ir_scheme)
+print(scheme_optimal)
 plt.figure(figsize=(6, 4))
-plt.plot(relaxation_model(ir_scheme), '.')
+plt.plot(relaxation_model(scheme_optimal), '.')
 plt.xlabel('Measurement')
 plt.ylabel('Signal attenuation')
 
-lossinspector = LossInspector(optimize.crlb_loss, ir_scheme, relaxation_model, noise_var=noise_variance)
+lossinspector = LossInspector(scheme_optimal, relaxation_model, noise_var=noise_variance, loss_function=optimize.crlb_loss)
 lossinspector.plot({"InversionTime": 1,"RepetitionTimeExcitation": 2})
 
 plt.show()
