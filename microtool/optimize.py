@@ -67,29 +67,11 @@ def compute_loss(scheme: AcquisitionScheme,
     :param loss:
     :return:
     """
-    model_scales = [value.scale for value in model.values()]
-    model_include = [value.optimize for value in model.values()]
     jac = model.jacobian(scheme)
-    return loss(jac, model_scales, model_include, noise_var)
+    return loss(jac, model.scales, model.include, noise_var)
 
 
-def compute_crlb(scheme: AcquisitionScheme,
-                 model: TissueModel,
-                 noise_var: float) -> np.ndarray:
-    """
-
-    :param scheme:
-    :param model:
-    :param noise_var:
-    :return:
-    """
-    model_scales = [value.scale for value in model.values()]
-    model_include = [value.optimize for value in model.values()]
-    jac = model.jacobian(scheme)
-    return crlb_of_parameters(jac, model_scales, model_include, noise_var)
-
-
-# A way of typehinting all the derived classes of AcquisitionScheme
+# A way of type hinting all the derived classes of AcquisitionScheme
 AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
 
 
