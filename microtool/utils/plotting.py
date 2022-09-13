@@ -1,3 +1,4 @@
+import math
 from typing import Dict, List, Tuple
 
 from microtool.optimize import LossFunction, crlb_loss
@@ -177,3 +178,28 @@ class LossInspector:
             if lb >= domain[0] or ub <= domain[1]:
                 raise ValueError(f"Domains for {parameter_name} are out of parameter bounds")
 
+
+def show_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) -> plt.Figure:
+    """
+    Makes subplots of all the acquisition parameters
+    :param scheme:
+    :return: matplotlib figure
+    """
+    n_par = len(scheme)
+    if n_par < 3:
+        n_cols = n_par
+    else:
+        n_cols = 3
+
+    n_rows = math.ceil(n_par / n_cols)
+    fig = plt.figure(title)
+    for i, parameter in enumerate(scheme):
+        ax = plt.subplot(n_rows,n_cols,i+1)
+        y = scheme[parameter].values
+        x = np.arange(len(y))
+        ax.plot(x,y, '.')
+        ax.set_xlabel("Measurement")
+        ax.set_ylabel(parameter)
+    plt.suptitle(title)
+    plt.tight_layout()
+    return fig
