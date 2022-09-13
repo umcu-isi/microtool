@@ -269,7 +269,7 @@ class ExponentialTissueModel(TissueModel):
 
         # TODO create default value and add as a fitting option
         # hard coding the fitting bounds for now
-        bounds = (np.array([0,0]),np.array([3000,np.inf]))
-        popt, _ = curve_fit(signal_fun, np.arange(len(te)), noisy_signal, initial_parameters,bounds=bounds)
+        bounds = (np.array([0,0]),np.array([np.inf,np.inf]))
+        popt, _ = curve_fit(signal_fun, np.arange(len(te)), noisy_signal, initial_parameters,bounds=bounds, maxfev=4**2 * 100)
 
         return FittedTissueModel(self, popt)
