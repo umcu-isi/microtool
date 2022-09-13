@@ -4,9 +4,12 @@ and how the noise distribution affects the estimated tissueparameters.
 
 IMPORTANT: Always execute run inside a if name main clause! otherwise the parralel processing throws a cryptic error
 """
-from typing import Union, List, Dict
+import math
+from typing import Union, List, Dict, Optional
 
 import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
 from scipy import stats
 from scipy.stats.sampling import NumericalInversePolynomial
 
@@ -23,7 +26,8 @@ MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 INIT_MODEL = MultiCompartmentModel(models=[gaussian_models.G2Zeppelin(), cylinder_models.C1Stick()])
 
 
-def run(scheme: Union[AcquisitionScheme, DmipyAcquisitionScheme], model: TissueModel, noise_distribution: stats.rv_continuous,
+def run(scheme: Union[AcquisitionScheme, DmipyAcquisitionScheme], model: TissueModel,
+        noise_distribution: stats.rv_continuous,
         n_sim: int, cascade: bool = True, test_mode=False, **fit_options) -> MonteCarloResult:
     """
     NEEDS TO BE EXECUTED IN if __name__ == "__main__" clause!!!! otherwise obscure parralel processing error.
@@ -92,3 +96,42 @@ def _stickzeppelin_to_cylinderzeppelin(parameters: Dict[str, np.ndarray]) -> Dic
         'partial_volume_0': parameters['partial_volume_0'],
         'partial_volume_1': parameters['partial_volume_1']
     }
+
+
+def show(results: pd.DataFrame, ground_truth: TissueModel,
+         super_title: str = "") -> plt.Figure:
+    """
+    This function plots all the tissue parameters histgrams in one figure.
+
+    :param results: A dataframe containing the simulation result
+    :param ground_truth: The tissue model used in the simulation
+    :param super_title: A title for the figure window and inside the plot in case many plots are compared
+    :return: The figure object
+    """
+
+    # if there are less than 3 plots make that the number of columns
+    n_tissue_parameters = len(ground_truth)
+    ncols = 3
+    if n_tissue_parameters < ncols:
+        ncols = n_tissue_parameters
+
+    n_rows = math.ceil(n_tissue_parameters / ncols)
+    fig = plt.figure(super_title)
+
+    for i, parameter in enumerate(results.keys()):
+        ax = plt.subplot(n_rows, ncols, i + 1)
+
+        gt_parameter = ground_truth[parameter]
+        scale = gt_parameter.scale
+        value = gt_parameter.value / gt_parameter.scale
+
+        # making the histogram
+        ax.hist(results[parameter] / scale - value, bins='scott')
+        ax.set_xlabel(r"$\Delta$")
+        # plotting ground truth as vertical lines
+        ax.vlines(0, 0, 1, transform=ax.get_xaxis_transform(), colors="red", label="Ground Truth")
+        ax.set_title(parameter)
+
+    plt.suptitle(super_title + ", n_sim = {}".format(max(results.shape)))
+    plt.tight_layout()
+    return fig
