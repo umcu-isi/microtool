@@ -239,4 +239,37 @@ class ExponentialTissueModel(TissueModel):
         :param scheme:
         :return:
         """
-        raise NotImplementedError('I still need to do this')
+        raise NotImplementedError()
+
+    def fit(self, scheme: EchoScheme, noisy_signal: np.ndarray, **fit_options) -> FittedTissueModel:
+        """
+
+        :param scheme:
+        :param noisy_signal:
+        :param fit_options:
+        :return:
+        """
+        # extracting the echo times from the scheme
+        te = scheme.echo_times
+
+        # Whether or not to include a parameter in the fitting process?
+        include = self.include
+
+        # initial parameters in case we want to exclude some parameter from the fitting process
+        initial_parameters = list(self.parameters.values())
+
+        # the function defining the signal in form compatible with scipy curve fitting
+        def signal_fun(measurement,t2,s0):
+            if not include[0]:
+                t2 = initial_parameters[0]
+            if not include[1]:
+                s0 = initial_parameters[1]
+
+            return s0*np.exp(-te/t2)
+
+        # TODO create default value and add as a fitting option
+        # hard coding the fitting bounds for now
+        bounds = (np.array([0,0]),np.array([3000,np.inf]))
+        popt, _ = curve_fit(signal_fun, np.arange(len(te)), noisy_signal, initial_parameters,bounds=bounds)
+
+        return FittedTissueModel(self, popt)
