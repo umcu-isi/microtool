@@ -204,7 +204,7 @@ class ExponentialTissueModel(TissueModel):
         Set the tissue parameters
         """
         super().__init__({
-            'T2': TissueParameter(value=T2, scale=T2),
+            'T2': TissueParameter(value=T2, scale=T2, optimize=True),
             'S0': TissueParameter(value=S0, scale=S0, optimize=True)
         })
 

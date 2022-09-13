@@ -7,12 +7,10 @@ from copy import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
-Domains = List[Tuple[float, float]]
-
 
 class LossInspector:
     def __init__(self, scheme: AcquisitionScheme, model: TissueModel, noise_var: float,
-                 loss_function: LossFunction = crlb_loss):
+                 loss_function: LossFunction = crlb_loss, N_samples: int = 100):
         """
 
         :param loss_function: The loss function we wish to inspect
@@ -24,6 +22,7 @@ class LossInspector:
         self.model = model
         self.noise_var = noise_var
         self.loss_function = loss_function
+        self.N_samples = N_samples
 
     def compute_loss(self, x: np.ndarray) -> float:
         """
@@ -38,7 +37,7 @@ class LossInspector:
         jac = self.model.jacobian(self.scheme)
         return self.loss_function(jac, tissue_scales, tissue_include, self.noise_var)
 
-    def plot(self, parameters: List[Dict[str, int]], domains: Domains = None) -> None:
+    def plot(self, parameters: List[Dict[str, int]], domains: List[Tuple[float, float]] = None) -> None:
         """
         Allows for plotting a loss function as a function of 2 or 1 parameter(s) close to a minimum found by
         optimization.
@@ -65,7 +64,7 @@ class LossInspector:
         # extracting the indices of the parameters we want to plot
         parameter_idx = []
         for parameter in parameters:
-            parameter_idx.append(self.scheme.get_free_parameter_idx(*parameter.keys(),*parameter.values()))
+            parameter_idx.append(self.scheme.get_free_parameter_idx(*parameter.keys(), *parameter.values()))
 
         parameters_optimal = [x_optimal[i] for i in parameter_idx]
         # make domains if not provided
@@ -77,7 +76,7 @@ class LossInspector:
             domains = np.array(domains)
 
         # discretizing domains
-        domains = np.linspace(domains[:, 0], domains[:, 1], endpoint=True)
+        domains = np.linspace(domains[:, 0], domains[:, 1], endpoint=True, num=self.N_samples)
 
         # getting plotting parameters scales to get correct axes later
         scales = []
@@ -110,8 +109,8 @@ class LossInspector:
             ax.legend()
             ax.set_zlabel("Loss")
             labels = [list(parameter.keys()) for parameter in parameters]
-            ax.set_xlabel(*labels[0])
-            ax.set_ylabel(*labels[1])
+            ax.set_xlabel(labels[0][0] + "[" + str(*parameters[0].values()) + "]")
+            ax.set_ylabel(labels[1][0] + "[" + str(*parameters[1].values()) + "]")
             fig.tight_layout()
         else:
             # Normal plot if investigating 1 parameter
@@ -128,12 +127,12 @@ class LossInspector:
             plt.figure()
             plt.plot(domains[:, 0] * scales[0], vloss(domains[:, 0]))
             plt.plot(parameters_optimal[0] * scales[0], loss(parameters_optimal[0]), 'ro', label="Optimal point")
-            plt.xlabel(list(parameters[0].keys())[0])
+            plt.xlabel(list(parameters[0].keys())[0] + " [" + str(parameters[0].values()) + "]")
             plt.ylabel("Loss function")
             plt.legend()
             plt.tight_layout()
 
-    def _make_domains(self, parameters: List[Dict[str, int]]) -> Domains:
+    def _make_domains(self, parameters: List[Dict[str, int]]) -> List[Tuple[float, float]]:
         """
         :param parameters: Dictionary with parameter key and pulse id
         :return: Domains of 0.1 around optimum (or at parameter boundary otherwise)
@@ -155,7 +154,7 @@ class LossInspector:
             domains.append((lb, ub))
         return domains
 
-    def _check_domains(self, parameters: List[Dict[str,int]], domains:List[np.ndarray]):
+    def _check_domains(self, parameters: List[Dict[str, int]], domains: List[np.ndarray]):
         """
         :param parameters: Dictionary for
         :param domains:
@@ -165,7 +164,16 @@ class LossInspector:
             raise ValueError("Provide as many domains as parameters.")
 
         for i, domain in enumerate(domains):
-            parameter_name = parameters[i].keys()
+            parameter_name = list(parameters[i].keys())[0]
             scheme_parameter = self.scheme[parameter_name]
-            if scheme_parameter.lower_bound >= domain[0] or scheme_parameter.upper_bound <= domain[1]:
+
+            lb = scheme_parameter.lower_bound
+            ub = scheme_parameter.upper_bound
+            if lb is None:
+                lb = -np.inf
+            if ub is None:
+                ub = np.inf
+
+            if lb >= domain[0] or ub <= domain[1]:
                 raise ValueError(f"Domains for {parameter_name} are out of parameter bounds")
+
