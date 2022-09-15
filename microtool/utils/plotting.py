@@ -1,4 +1,8 @@
+import math
 from typing import Dict, List, Tuple
+
+import pandas as pd
+from scipy.stats import norm
 
 from microtool.optimize import LossFunction
 from microtool.acquisition_scheme import AcquisitionScheme
@@ -50,7 +54,6 @@ class LossInspector:
         # check if the provided parameters are actually in the scheme
         for key in parameters.keys():
             if key not in self.scheme.free_parameters:
-
                 raise ValueError("The provided acquisition parameter key(s) do not match the provided schemes free "
                                  f"parameters choices are {self.scheme.free_parameter_keys}")
 
@@ -69,7 +72,6 @@ class LossInspector:
         else:
             domains = self._make_domains(parameters)
             domains = np.array(domains)
-
 
         # discretizing domains
         domains = np.linspace(domains[:, 0], domains[:, 1], endpoint=True)
@@ -98,8 +100,9 @@ class LossInspector:
             ax = plt.axes(projection='3d')
             Z = vloss(X1, X2)
 
-            ax.plot_surface(X1 * scales[0], X2 * scales[1], Z, alpha = 0.5, color='grey')
-            ax.plot(*[parameters_optimal[i] * scales[i] for i in range(2)], loss(*parameters_optimal), 'ro', label="Optimal point")
+            ax.plot_surface(X1 * scales[0], X2 * scales[1], Z, alpha=0.5, color='grey')
+            ax.plot(*[parameters_optimal[i] * scales[i] for i in range(2)], loss(*parameters_optimal), 'ro',
+                    label="Optimal point")
             ax.legend()
             ax.set_zlabel("Loss")
             labels = list(parameters.keys())
@@ -159,3 +162,53 @@ class LossInspector:
             scheme_parameter = self.scheme[parameter_name]
             if scheme_parameter.lower_bound >= domain[0] or scheme_parameter.upper_bound <= domain[1]:
                 raise ValueError(f"Domains for {parameter_name} are out of parameter bounds")
+
+
+def plot_gaussian_fit(parameter_distribution: pd.DataFrame, gaussian_fit: pd.DataFrame,
+                      color: str = None, fig_label: str = "parameter distributions") -> plt.Figure:
+    """
+    Plots the gaussian fitting to a parameter distribution. The fit results are returned (i.e. the mean and standard
+    deviation that fits best
+
+    :param parameter_distribution: The pandas dataframe containing the parameter
+    distribution
+    :param ground_truth: the ground truth tissuemodel used in the simulation
+    :param color: the color
+    used for plotting
+    :param label: The label used for the histograms (of none provided recalling the function will plot into the same figure)
+    :return: The figure object
+    """
+    fig = plt.figure(fig_label)
+    n_rows = math.ceil(parameter_distribution.shape[1] / 3)
+
+    for i, parameter in enumerate(parameter_distribution.keys()):
+        ax = plt.subplot(n_rows, 3, i + 1)
+
+        # Making a histogram
+        ax.hist(parameter_distribution[parameter], bins='scott', alpha=0.5, color=color)
+
+        # Plotting the fitted normal distribution as well
+        xmin, xmax = plt.xlim()
+        x = np.linspace(xmin, xmax, 100)
+        fitted_mean = gaussian_fit['mean'][parameter]
+        fitted_std = gaussian_fit['std'][parameter]
+        ax.plot(x, norm.pdf(x, fitted_mean, fitted_std), color=color)
+
+        ax.set_xlabel(r"$\Delta$")
+        # plotting ground truth as vertical lines
+        ax.vlines(0, 0, 1, transform=ax.get_xaxis_transform(), colors="black")
+        ax.set_title(parameter)
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_dataframe_index(df: pd.DataFrame, index_name: str, ax: plt.Axes) -> None:
+    """
+    Plots an index from a pandas dataframe to the given axes object
+    :param df: The dataframe
+    :param index_name: The index you wish to plot
+    :param ax: The axes you wish to plot to
+    :return:
+    """
+    df.loc[index_name].to_frame(index_name).T.plot.bar(ylabel=r'std_fitted', xticks=[], title=index_name, ax=ax)
