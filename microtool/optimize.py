@@ -100,6 +100,13 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
     """
     M = int(np.sum(np.array(model.include)))
 
+    # Checking if optimization options are provided.
+    if 'options' in kwargs.keys():
+        optimizer_options = kwargs['options']
+    else:
+        optimizer_options = None
+
+
     # Allowing for multiple schemes to be passed as initial schemes
     if not isinstance(scheme, list):
         schemes = [scheme]
@@ -141,7 +148,7 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
             return loss(jac, scales, include, noise_variance)
 
         result = minimize(calc_loss_scipy, x0, method=method, bounds=scaled_bounds, constraints=constraints,
-                          options=kwargs['options'])
+                          options=optimizer_options)
 
         if 'x' in result:
             scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
