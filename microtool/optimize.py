@@ -7,6 +7,7 @@ from scipy.optimize import OptimizeResult, minimize
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.optimization_methods import Optimizer
 from microtool.tissue_model import TissueModel
+from copy import deepcopy
 
 # A LossFunction takes an N×M Jacobian matrix, a sequence of M parameter scales, a boolean sequence that specifies which
 # parameters should be included in the loss, and the noise variance. It should return a scalar loss.
@@ -67,13 +68,11 @@ def compute_loss(scheme: AcquisitionScheme,
     :param loss:
     :return:
     """
-    model_scales = [value.scale for value in model.values()]
-    model_include = [value.optimize for value in model.values()]
     jac = model.jacobian(scheme)
-    return loss(jac, model_scales, model_include, noise_var)
+    return loss(jac, model.scales, model.include, noise_var)
 
 
-# A way of typehinting all the derived classes of AcquisitionScheme
+# A way of type hinting all the derived classes of AcquisitionScheme
 AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
 
 
@@ -82,7 +81,7 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
                     loss: LossFunction = crlb_loss,
                     method: Optional[Union[str, Optimizer]] = None,
                     repeat: int = 1,
-                    **options) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
+                    **kwargs) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -142,7 +141,8 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
             return loss(jac, scales, include, noise_variance)
 
         result = minimize(calc_loss_scipy, x0, method=method, bounds=scaled_bounds, constraints=constraints,
-                          options=options)
+                          options=kwargs['options'])
+
         if 'x' in result:
             scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
@@ -153,6 +153,14 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
             best_scheme = scheme
             best_loss = current_loss
             best_result = result
+
+        if not best_result["success"]:
+            print(result)
+            raise RuntimeError("Optimization procedure was unsuccesfull. "
+                               "Possible solutions include but are not limited to: Changing the "
+                               "optimizer setings, changing the optimization method or changing the initial scheme to a more suitable one."
+                               "If you are using a scipy optimizer its settings can be changed by passing options to this function. "
+                               "If you are using a microtool optimization method please consult the optimization_methods module for more details.")
 
         optimized_losses.append(current_loss)
 

@@ -2,16 +2,15 @@
 Module containing sampling scheme for shell organised b-vectors using rigid rotation optimization based on the following
 paper DOI:10.1002/mrm.24717
 """
-import math
 from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-from microtool.utils.gradient_sampling.utils import plot_shells, total_potential
-from microtool.utils.gradient_sampling.uniform import sample_uniform
-from scipy.spatial.transform import Rotation
 from scipy.optimize import minimize
+from scipy.spatial.transform import Rotation
+
+from microtool.utils.gradient_sampling.uniform import sample_uniform
+from microtool.utils.gradient_sampling.utils import plot_shells, total_potential
 
 
 def test_rotation():

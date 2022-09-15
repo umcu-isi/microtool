@@ -1,17 +1,20 @@
+import math
 from typing import Dict, List, Tuple
 
-from microtool.optimize import LossFunction
+import pandas as pd
+from scipy.stats import norm
+
+from microtool.optimize import LossFunction, crlb_loss
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.tissue_model import TissueModel
 from copy import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
-Domains = List[Tuple[float, float]]
-
 
 class LossInspector:
-    def __init__(self, loss_function: LossFunction, scheme: AcquisitionScheme, model: TissueModel, noise_var: float):
+    def __init__(self, scheme: AcquisitionScheme, model: TissueModel, noise_var: float,
+                 loss_function: LossFunction = crlb_loss, N_samples: int = 100):
         """
 
         :param loss_function: The loss function we wish to inspect
@@ -23,6 +26,7 @@ class LossInspector:
         self.model = model
         self.noise_var = noise_var
         self.loss_function = loss_function
+        self.N_samples = N_samples
 
     def compute_loss(self, x: np.ndarray) -> float:
         """
@@ -37,7 +41,7 @@ class LossInspector:
         jac = self.model.jacobian(self.scheme)
         return self.loss_function(jac, tissue_scales, tissue_include, self.noise_var)
 
-    def plot(self, parameters: Dict[str, int], domains: Domains = None) -> None:
+    def plot(self, parameters: List[Dict[str, int]], domains: List[Tuple[float, float]] = None) -> None:
         """
         Allows for plotting a loss function as a function of 2 or 1 parameter(s) close to a minimum found by
         optimization.
@@ -47,20 +51,25 @@ class LossInspector:
         :param domains: The domains for which you wish to inspect the parameters
         :raises: ValueError if domains are out of bounds or if arguments are incompatible
         """
-        # check if the provided parameters are actually in the scheme
-        for key in parameters.keys():
-            if key not in self.scheme.free_parameters:
 
-                raise ValueError("The provided acquisition parameter key(s) do not match the provided schemes free "
-                                 f"parameters choices are {self.scheme.free_parameter_keys}")
+        for parameter in parameters:
+            for key, pulse_id in parameter.items():
+                # check if the provided parameters are actually in the scheme
+                if key not in self.scheme.free_parameters:
+                    raise ValueError("The provided acquisition parameter key(s) do not match the provided schemes free "
+                                     f"parameters choices are {self.scheme.free_parameter_keys}")
 
-        # check if provided pulse id is the correct value
-        for key, pulse_id in parameters.items():
-            if pulse_id >= self.scheme.pulse_count or pulse_id < 0:
-                raise ValueError(f"Invalid pulse id provided for {key}.")
+                    # check if provided pulse id is the correct value
+                    if pulse_id >= self.scheme.pulse_count or pulse_id < 0:
+                        raise ValueError(f"Invalid pulse id provided for {key}.")
 
         x_optimal = self.scheme.free_parameter_vector / self.scheme.free_parameter_scales
-        parameter_idx = [self.scheme.get_free_parameter_idx(key, value) for key, value in parameters.items()]
+
+        # extracting the indices of the parameters we want to plot
+        parameter_idx = []
+        for parameter in parameters:
+            parameter_idx.append(self.scheme.get_free_parameter_idx(*parameter.keys(), *parameter.values()))
+
         parameters_optimal = [x_optimal[i] for i in parameter_idx]
         # make domains if not provided
         if domains:
@@ -70,13 +79,13 @@ class LossInspector:
             domains = self._make_domains(parameters)
             domains = np.array(domains)
 
-
         # discretizing domains
-        domains = np.linspace(domains[:, 0], domains[:, 1], endpoint=True)
+        domains = np.linspace(domains[:, 0], domains[:, 1], endpoint=True, num=self.N_samples)
 
         # getting plotting parameters scales to get correct axes later
         scales = []
-        for key in parameters.keys():
+        for parameter in parameters:
+            key = list(parameter.keys())[0]
             scales.append(self.scheme[key].scale)
 
         # 3d plots for 2 investigated parameters
@@ -98,13 +107,14 @@ class LossInspector:
             ax = plt.axes(projection='3d')
             Z = vloss(X1, X2)
 
-            ax.plot_surface(X1 * scales[0], X2 * scales[1], Z, alpha = 0.5, color='grey')
-            ax.plot(*[parameters_optimal[i] * scales[i] for i in range(2)], loss(*parameters_optimal), 'ro', label="Optimal point")
+            ax.plot_surface(X1 * scales[0], X2 * scales[1], Z, alpha=0.5, color='grey')
+            ax.plot(*[parameters_optimal[i] * scales[i] for i in range(2)], loss(*parameters_optimal), 'ro',
+                    label="Optimal point")
             ax.legend()
             ax.set_zlabel("Loss")
-            labels = list(parameters.keys())
-            ax.set_xlabel(labels[0])
-            ax.set_ylabel(labels[1])
+            labels = [list(parameter.keys()) for parameter in parameters]
+            ax.set_xlabel(labels[0][0] + "[" + str(*parameters[0].values()) + "]")
+            ax.set_ylabel(labels[1][0] + "[" + str(*parameters[1].values()) + "]")
             fig.tight_layout()
         else:
             # Normal plot if investigating 1 parameter
@@ -121,20 +131,22 @@ class LossInspector:
             plt.figure()
             plt.plot(domains[:, 0] * scales[0], vloss(domains[:, 0]))
             plt.plot(parameters_optimal[0] * scales[0], loss(parameters_optimal[0]), 'ro', label="Optimal point")
-            plt.xlabel(list(parameters.keys())[0])
+            plt.xlabel(list(parameters[0].keys())[0] + " [" + str(parameters[0].values()) + "]")
             plt.ylabel("Loss function")
             plt.legend()
             plt.tight_layout()
 
-    def _make_domains(self, parameters: Dict[str, int]) -> Domains:
+    def _make_domains(self, parameters: List[Dict[str, int]]) -> List[Tuple[float, float]]:
         """
         :param parameters: Dictionary with parameter key and pulse id
         :return: Domains of 0.1 around optimum (or at parameter boundary otherwise)
         """
         domains = []
-        for parameter, pulse_id in parameters.items():
+        for parameter in parameters:
             # for default domains we just
-            tissue_parameter = self.scheme[parameter]
+            key = list(parameter.keys())[0]
+            tissue_parameter = self.scheme[key]
+            pulse_id = list(parameter.values())[0]
 
             lb = tissue_parameter.values[pulse_id] / tissue_parameter.scale - 0.1
             ub = tissue_parameter.values[pulse_id] / tissue_parameter.scale + 0.1
@@ -146,7 +158,7 @@ class LossInspector:
             domains.append((lb, ub))
         return domains
 
-    def _check_domains(self, parameters, domains):
+    def _check_domains(self, parameters: List[Dict[str, int]], domains: List[Tuple[float, float]]):
         """
         :param parameters: Dictionary for
         :param domains:
@@ -154,8 +166,104 @@ class LossInspector:
         """
         if len(parameters) != len(domains):
             raise ValueError("Provide as many domains as parameters.")
+
         for i, domain in enumerate(domains):
-            parameter_name = list(parameters.keys())[i]
+            parameter_name = list(parameters[i].keys())[0]
             scheme_parameter = self.scheme[parameter_name]
-            if scheme_parameter.lower_bound >= domain[0] or scheme_parameter.upper_bound <= domain[1]:
+
+            lb = scheme_parameter.lower_bound
+            ub = scheme_parameter.upper_bound
+            if lb is None:
+                lb = -np.inf
+            if ub is None:
+                ub = np.inf
+
+            if lb >= domain[0] or ub <= domain[1]:
                 raise ValueError(f"Domains for {parameter_name} are out of parameter bounds")
+
+
+def plot_parameter_distributions(parameter_distribution: pd.DataFrame, gaussian_fit: pd.DataFrame = None,
+                                 color: str = None, fig_label: str = "parameter distributions") -> plt.Figure:
+    """
+    Plots the parameter distributions. Also a gaussian fitting if its provided.
+    Calling this function with the same fig_label argument plot the results in the same figure.
+
+    :param parameter_distribution: The pandas dataframe containing the parameter
+    distribution
+    :param guassian_fit: The result of the gaussian fitting
+    :param color: the color
+    used for plotting
+    :param label: The label used for the histograms (of none provided recalling the function will plot into the same figure)
+    :return: The figure object
+    """
+    fig = plt.figure(fig_label)
+
+    # if there are less than 3 plots make that the number of columns
+    n_tissue_parameters = min(parameter_distribution.shape)
+
+    if n_tissue_parameters < 3:
+        ncols = n_tissue_parameters
+    else:
+        ncols = 3
+
+    n_rows = math.ceil(parameter_distribution.shape[1] / ncols)
+
+    for i, parameter in enumerate(parameter_distribution.keys()):
+        ax = plt.subplot(n_rows, ncols, i + 1)
+
+        # Making a histogram
+        ax.hist(parameter_distribution[parameter], bins='scott', alpha=0.5, color=color)
+
+        # Plotting the fitted normal distribution as well if provided
+        if gaussian_fit is not None:
+            xmin, xmax = plt.xlim()
+            x = np.linspace(xmin, xmax, 100)
+            fitted_mean = gaussian_fit['mean'][parameter]
+            fitted_std = gaussian_fit['std'][parameter]
+            ax.plot(x, norm.pdf(x, fitted_mean, fitted_std), color=color)
+
+        ax.set_xlabel(r"$\Delta$")
+        # plotting ground truth as vertical lines
+        ax.vlines(0, 0, 1, transform=ax.get_xaxis_transform(), colors="black")
+        ax.set_title(parameter)
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_dataframe_index(df: pd.DataFrame, index_name: str, ax: plt.Axes) -> None:
+    """
+    Plots an index from a pandas dataframe to the given axes object
+    :param df: The dataframe
+    :param index_name: The index you wish to plot
+    :param ax: The axes you wish to plot to
+    :return:
+    """
+    df.loc[index_name].to_frame(index_name).T.plot.bar(ylabel=r'std_fitted', xticks=[], title=index_name, ax=ax)
+
+
+def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) -> plt.Figure:
+    """
+    Makes subplots of all the acquisition parameters
+    :param scheme:
+    :return: matplotlib figure
+    """
+    n_par = len(scheme)
+    if n_par < 3:
+        n_cols = n_par
+    else:
+        n_cols = 3
+
+    n_rows = math.ceil(n_par / n_cols)
+    fig = plt.figure(title)
+    for i, parameter in enumerate(scheme):
+        ax = plt.subplot(n_rows, n_cols, i + 1)
+        y = scheme[parameter].values
+        x = np.arange(len(y))
+        ax.plot(x, y, '.')
+        ax.set_xlabel("Measurement")
+        ax.set_ylabel(parameter)
+    plt.suptitle(title)
+    plt.tight_layout()
+    return fig
+

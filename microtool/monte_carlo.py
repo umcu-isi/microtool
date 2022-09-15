@@ -23,7 +23,8 @@ MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
 INIT_MODEL = MultiCompartmentModel(models=[gaussian_models.G2Zeppelin(), cylinder_models.C1Stick()])
 
 
-def run(scheme: Union[AcquisitionScheme, DmipyAcquisitionScheme], model: TissueModel, noise_distribution: stats.rv_continuous,
+def run(scheme: Union[AcquisitionScheme, DmipyAcquisitionScheme], model: TissueModel,
+        noise_distribution: stats.rv_continuous,
         n_sim: int, cascade: bool = True, test_mode=False, **fit_options) -> MonteCarloResult:
     """
     NEEDS TO BE EXECUTED IN if __name__ == "__main__" clause!!!! otherwise obscure parralel processing error.
@@ -92,3 +93,5 @@ def _stickzeppelin_to_cylinderzeppelin(parameters: Dict[str, np.ndarray]) -> Dic
         'partial_volume_0': parameters['partial_volume_0'],
         'partial_volume_1': parameters['partial_volume_1']
     }
+
+

@@ -13,7 +13,8 @@ from typing import Dict, Union, List
 import numpy as np
 from scipy.optimize import curve_fit
 
-from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
+from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
+    FlaviusAcquisitionScheme
 
 
 @dataclass
@@ -196,3 +197,121 @@ class RelaxationTissueModel(TissueModel):
         popt, _ = curve_fit(signal_fun, np.arange(len(tr)), noisy_signal, initial_parameters, bounds=bounds)
 
         return FittedTissueModel(self, popt)
+
+
+class ExponentialTissueModel(TissueModel):
+    def __init__(self, T2: float, S0: float = 1.0):
+        """
+        Set the tissue parameters
+        """
+        super().__init__({
+            'T2': TissueParameter(value=T2, scale=T2, optimize=True),
+            'S0': TissueParameter(value=S0, scale=S0, optimize=True)
+        })
+
+    def __call__(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        Implement the signal equation S = S0 * exp(-TE/T2) here
+        :return:
+        """
+        TE = scheme.echo_times
+        T2 = self['T2'].value
+        S0 = self['S0'].value
+        return S0 * np.exp(- TE / T2)
+
+    def jacobian(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        This is the analytics way of computing the jacobian.
+        :param scheme:
+        :return:
+        """
+        TE = scheme.echo_times
+        T2 = self['T2'].value
+        S0 = self['S0'].value
+
+        # the base signal
+        S = S0 * np.exp(-TE / T2)
+        # return np.array([-TE * S, 1]).T
+        return np.array([-TE * S, S / S0]).T
+
+    def jacobian_num(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        Uses finite differences to compute the
+        :param scheme:
+        :return:
+        """
+        raise NotImplementedError()
+
+    def fit(self, scheme: EchoScheme, noisy_signal: np.ndarray, **fit_options) -> FittedTissueModel:
+        """
+
+        :param scheme:
+        :param noisy_signal:
+        :param fit_options:
+        :return:
+        """
+        # extracting the echo times from the scheme
+        te = scheme.echo_times
+
+        # Whether or not to include a parameter in the fitting process?
+        include = self.include
+
+        # initial parameters in case we want to exclude some parameter from the fitting process
+        initial_parameters = list(self.parameters.values())
+
+        # the function defining the signal in form compatible with scipy curve fitting
+        def signal_fun(measurement,t2,s0):
+            if not include[0]:
+                t2 = initial_parameters[0]
+            if not include[1]:
+                s0 = initial_parameters[1]
+
+            return s0*np.exp(-te/t2)
+
+        # TODO create default value and add as a fitting option
+        # hard coding the fitting bounds for now
+        bounds = (np.array([0,0]),np.array([np.inf,np.inf]))
+        popt, _ = curve_fit(signal_fun, np.arange(len(te)), noisy_signal, initial_parameters,bounds=bounds, maxfev=4**2 * 100)
+
+        return FittedTissueModel(self, popt)
+
+
+class FlaviusSignalModel(TissueModel):
+    def __init__(self, t2: float, diffusivity: float, s0: float = 1.0):
+        """
+        :param t2: The tissues T2 in [ms]
+        :param diffusivity: The tissue diffusivity in [mm^2 / s]
+        :param s0: signal at the zeroth measurement [dimensionless]
+        """
+        super().__init__({
+            'T2': TissueParameter(value=t2, scale=t2),
+            'Diffusivity': TissueParameter(value=diffusivity, scale=diffusivity),
+            'S0': TissueParameter(value=s0, scale=s0, optimize=False),
+        })
+
+    def __call__(self, scheme: FlaviusAcquisitionScheme) -> np.ndarray:
+        # The signal equation for this model S = S0*exp(-b.*D).*exp(-TE/T2)
+
+        bvalues = scheme.b_values
+        te = scheme.echo_times
+
+        b_D = np.exp(-bvalues * self['Diffusivity'].value)
+        te_t2 = np.exp(- te / self['T2'].value)
+        return self['S0'].value * b_D * te_t2
+
+    def jacobian(self, scheme: FlaviusAcquisitionScheme) -> np.ndarray:
+        # Acquisition parameters
+        bvalues = scheme.b_values
+        te = scheme.echo_times
+
+        # tissuemodel parameters
+        D = self['Diffusivity'].value
+        T2 = self['T2'].value
+        S0 = self['S0'].value
+
+        # Exponents
+        b_D = np.exp(-bvalues * D)
+        te_t2 = np.exp(- te / T2)
+
+        jac = [te * S0 * b_D * te_t2 / T2 ** 2, - bvalues * S0 * b_D * te_t2, b_D * te_t2]
+        return np.array(jac).T

@@ -31,9 +31,11 @@ class HiddenPrints:
 
 def get_df_from_pickle(path: Union[str, bytes, PathLike]) -> pd.DataFrame:
     """
+    The dmipy results require some fiddling to get to a correct dataframe. Therefore I made this function that puts
+    it in expected form.
 
     :param path: Path to a .pkl file containing dmipy MonteCarlo result
-    :return: a pandas dataframe of the parameter distributions aquired during the monte carlo simulation
+    :return: Pandas dataframe of the parameter distributions acquired during the monte carlo simulation
     """
     parameter_list = get_pickle(path)
     parameter_dict = collapse_dict(parameter_list)
@@ -41,7 +43,6 @@ def get_df_from_pickle(path: Union[str, bytes, PathLike]) -> pd.DataFrame:
     return pd.DataFrame(better_parameter_dict)
 
 
-# TODO: better performence if unpack vectors and collapse dict are merged
 def collapse_dict(parameter_list: List[Dict[str, Union[float, np.ndarray]]]) -> Dict[str, list]:
     # Making one big dictionary out of the list of seperate parameters (dictionaries)
     collapsed = {}
