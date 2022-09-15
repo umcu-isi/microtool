@@ -87,6 +87,20 @@ def plot_shells(shells: List[np.ndarray]) -> None:
 
     plt.tight_layout()
 
+def plot_shells_projected(shells: List[np.ndarray]) -> None:
+    plt.figure()
+    ax = plt.axes(projection='3d')
+
+    color = iter(plt.cm.rainbow(np.linspace(0, 1, len(shells))))
+    for i, vecs in enumerate(shells):
+        c = next(color)
+        scale_factor = float(i + 1)
+        ax.scatter3D(vecs[:, 0], vecs[:, 1], vecs[:, 2], color=c, label=f'shell {i+1}')
+
+    ax.legend()
+    ax.plot_surface(*make_sphere(1), alpha=0.2 , color='gray')
+    plt.tight_layout()
+
 
 def plot_vectors(vectors: np.ndarray, title: str) -> None:
     """
@@ -125,7 +139,7 @@ def eigenvector_to_angles(vector: np.ndarray) -> np.ndarray:
     return np.stack([theta, phi], axis=-1)
 
 
-def angles_to_eigenvectors(angles: np.ndarray) -> np.ndarray:
+def angles_to_unitvectors(angles: np.ndarray) -> np.ndarray:
     """
     Returns unit vector given an array of spherical angles
     :param angles: array in the form theta, phi; polar, azimuthal, shape (n_angles, 2)
@@ -146,7 +160,7 @@ def angles_to_eigenvectors(angles: np.ndarray) -> np.ndarray:
 
 
 def sample_sphere_vectors(ns: int = 100) -> np.ndarray:
-    return angles_to_eigenvectors(sample_sphere_angles(ns))
+    return angles_to_unitvectors(sample_sphere_angles(ns))
 
 
 def sample_sphere_angles(ns: int = 100) -> np.ndarray:
