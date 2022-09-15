@@ -51,7 +51,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     # matrix; see equation 2 in Alexander, 2008 (DOI 0.1002/mrm.21646). This is the same as the sum of the reciprocal
     # eigenvalues of the information matrix, which can be calculated at a lower computational cost because of symmetry.
     # Rescaling has already been done by multiplying the Jacobian by the parameter scales.
-    return np.linalg.eigvalsh(information)[include].sum()
+    return (1/np.linalg.eigvalsh(information)[include]).sum()
 
 
 def compute_loss(scheme: AcquisitionScheme,
