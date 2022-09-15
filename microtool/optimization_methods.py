@@ -160,6 +160,7 @@ class SOMA(Optimizer):
 
         # TODO: guarantee bounds in higherlevel functions in tissuemodel
         bounds = options["bounds"]
+        check_bounded(bounds)
         constraints = options['constraints']
         if isinstance(constraints, list):
             raise NotImplementedError("SOMA currently does not support multiple constraints.")
@@ -326,4 +327,5 @@ def check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> N
     for bounds in allbounds:
         for bound in bounds:
             if bound is None:
-                raise ValueError(" Infinite boundaries not supported for this optimizer")
+                raise ValueError("One or more acquisition parameters are not bounded. "
+                                 "Infinite boundaries not supported for this optimizer")
