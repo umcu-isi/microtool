@@ -81,7 +81,7 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
                     loss: LossFunction = crlb_loss,
                     method: Optional[Union[str, Optimizer]] = None,
                     repeat: int = 1,
-                    **options) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
+                    **kwargs) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -141,7 +141,7 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
             return loss(jac, scales, include, noise_variance)
 
         result = minimize(calc_loss_scipy, x0, method=method, bounds=scaled_bounds, constraints=constraints,
-                          options=options)
+                          options=kwargs['options'])
 
         if 'x' in result:
             scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
@@ -155,9 +155,12 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
             best_result = result
 
         if not best_result["success"]:
-            raise RuntimeError("Optimization procedure was unsuccesfull, use debugger to look at result for more "
-                               "information. Possible solutions include but are not limited to: Changing the "
-                               "optimizer, changing the initial scheme and giving up on life.")
+            print(result)
+            raise RuntimeError("Optimization procedure was unsuccesfull. "
+                               "Possible solutions include but are not limited to: Changing the "
+                               "optimizer setings, changing the optimization method or changing the initial scheme to a more suitable one."
+                               "If you are using a scipy optimizer its settings can be changed by passing options to this function. "
+                               "If you are using a microtool optimization method please consult the optimization_methods module for more details.")
 
         optimized_losses.append(current_loss)
 
