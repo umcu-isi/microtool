@@ -68,13 +68,11 @@ def compute_loss(scheme: AcquisitionScheme,
     :param loss:
     :return:
     """
-    model_scales = [value.scale for value in model.values()]
-    model_include = [value.optimize for value in model.values()]
     jac = model.jacobian(scheme)
-    return loss(jac, model_scales, model_include, noise_var)
+    return loss(jac, model.scales, model.include, noise_var)
 
 
-# A way of typehinting all the derived classes of AcquisitionScheme
+# A way of type hinting all the derived classes of AcquisitionScheme
 AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
 
 
@@ -144,6 +142,7 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
 
         result = minimize(calc_loss_scipy, x0, method=method, bounds=scaled_bounds, constraints=constraints,
                           options=options)
+
         if 'x' in result:
             scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
@@ -154,6 +153,11 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
             best_scheme = scheme
             best_loss = current_loss
             best_result = result
+
+        if not best_result["success"]:
+            raise RuntimeError("Optimization procedure was unsuccesfull, use debugger to look at result for more "
+                               "information. Possible solutions include but are not limited to: Changing the "
+                               "optimizer, changing the initial scheme and giving up on life.")
 
         optimized_losses.append(current_loss)
 

@@ -13,7 +13,7 @@ from typing import Dict, Union, List
 import numpy as np
 from scipy.optimize import curve_fit
 
-from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme
+from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme
 
 
 @dataclass
@@ -194,5 +194,82 @@ class RelaxationTissueModel(TissueModel):
         bounds = (np.array([0, 0, 0]), np.array([7000, 3000, np.inf]))
         # The scipy fitting routine
         popt, _ = curve_fit(signal_fun, np.arange(len(tr)), noisy_signal, initial_parameters, bounds=bounds)
+
+        return FittedTissueModel(self, popt)
+
+
+class ExponentialTissueModel(TissueModel):
+    def __init__(self, T2: float, S0: float = 1.0):
+        """
+        Set the tissue parameters
+        """
+        super().__init__({
+            'T2': TissueParameter(value=T2, scale=T2, optimize=True),
+            'S0': TissueParameter(value=S0, scale=S0, optimize=True)
+        })
+
+    def __call__(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        Implement the signal equation S = S0 * exp(-TE/T2) here
+        :return:
+        """
+        TE = scheme.echo_times
+        T2 = self['T2'].value
+        S0 = self['S0'].value
+        return S0 * np.exp(- TE / T2)
+
+    def jacobian(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        This is the analytics way of computing the jacobian.
+        :param scheme:
+        :return:
+        """
+        TE = scheme.echo_times
+        T2 = self['T2'].value
+        S0 = self['S0'].value
+
+        # the base signal
+        S = S0 * np.exp(-TE / T2)
+        # return np.array([-TE * S, 1]).T
+        return np.array([-TE * S, S / S0]).T
+
+    def jacobian_num(self, scheme: EchoScheme) -> np.ndarray:
+        """
+        Uses finite differences to compute the
+        :param scheme:
+        :return:
+        """
+        raise NotImplementedError()
+
+    def fit(self, scheme: EchoScheme, noisy_signal: np.ndarray, **fit_options) -> FittedTissueModel:
+        """
+
+        :param scheme:
+        :param noisy_signal:
+        :param fit_options:
+        :return:
+        """
+        # extracting the echo times from the scheme
+        te = scheme.echo_times
+
+        # Whether or not to include a parameter in the fitting process?
+        include = self.include
+
+        # initial parameters in case we want to exclude some parameter from the fitting process
+        initial_parameters = list(self.parameters.values())
+
+        # the function defining the signal in form compatible with scipy curve fitting
+        def signal_fun(measurement,t2,s0):
+            if not include[0]:
+                t2 = initial_parameters[0]
+            if not include[1]:
+                s0 = initial_parameters[1]
+
+            return s0*np.exp(-te/t2)
+
+        # TODO create default value and add as a fitting option
+        # hard coding the fitting bounds for now
+        bounds = (np.array([0,0]),np.array([np.inf,np.inf]))
+        popt, _ = curve_fit(signal_fun, np.arange(len(te)), noisy_signal, initial_parameters,bounds=bounds, maxfev=4**2 * 100)
 
         return FittedTissueModel(self, popt)
