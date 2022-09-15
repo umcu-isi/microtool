@@ -178,8 +178,8 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     @property
     def pulse_count(self) -> int:
         max_parameter_length = 0
-        for parameter in self.values():
-            par_length = len(parameter.values)
+        for parameter in self.free_parameters:
+            par_length = len(self.free_parameters[parameter])
             if par_length > max_parameter_length:
                 max_parameter_length = par_length
 
@@ -219,17 +219,17 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         # blocks defining the linear inequality
         blocks = [parameter_coefficients[key] * np.identity(pulse_num) * self[key].scale for key in free_param_keys]
 
-        # Adjusting bounds if a fixed parameter is involved in the inequality
-        lb = np.zeros(pulse_num)
-        for key in list(set(self.keys()) - set(self.free_parameter_keys)):
-            lb = lb - parameter_coefficients[key] * self[key].values
-
         A = np.concatenate(blocks, axis=1)
 
         # in the case that the free parameters are not involved in the constraint we need not check the constraint
         # during optimization
         if np.sum(A != 0) == 0:
             return None
+
+        # Adjusting bounds if a fixed parameter is involved in the inequality
+        lb = np.zeros(pulse_num)
+        for key in list(set(self.keys()) - set(self.free_parameter_keys)):
+            lb = lb - parameter_coefficients[key] * self[key].values
 
         # The scipy compatible function defining the constraint as explained in docstring above.
         def fun(x: np.ndarray):
