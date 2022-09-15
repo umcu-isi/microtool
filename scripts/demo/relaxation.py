@@ -34,7 +34,7 @@ plt.plot(relaxation_model(scheme_optimal), '.')
 plt.xlabel('Measurement')
 plt.ylabel('Signal attenuation')
 
-lossinspector = LossInspector(scheme_optimal, relaxation_model, noise_var=noise_variance, loss_function=optimize.crlb_loss)
-lossinspector.plot({"InversionTime": 1,"RepetitionTimeExcitation": 2})
+lossinspector = LossInspector(scheme_optimal, relaxation_model, noise_var=noise_variance)
+lossinspector.plot([{"InversionTime": 1},{"RepetitionTimeExcitation": 2}])
 
 plt.show()
