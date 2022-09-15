@@ -7,6 +7,7 @@ from scipy.optimize import OptimizeResult, minimize
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.optimization_methods import Optimizer
 from microtool.tissue_model import TissueModel
+from copy import deepcopy
 
 # A LossFunction takes an N×M Jacobian matrix, a sequence of M parameter scales, a boolean sequence that specifies which
 # parameters should be included in the loss, and the noise variance. It should return a scalar loss.

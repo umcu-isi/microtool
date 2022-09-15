@@ -180,6 +180,23 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         parameters = list(self.free_parameters.values())
         return len(parameters[0])
 
+    def get_parameter_from_parameter_vector(self, parameter: str, x: np.ndarray):
+        """
+
+        :param parameter: The name of the parameter of which you want to get the values from scipy array :param x:
+        the scipy array (i.e. the flattend free parameter array)
+        :return: The parameter values in the scipy array (
+        rescaled, so no longer in optimization scale but physical values)
+        """
+        i = 0
+        for key in self.free_parameter_keys:
+            scale = self[key].scale
+            shape = self[key].values.shape
+            stride = int(prod(shape))
+            if parameter == key:
+                return x[i:(i+stride)].reshape(shape) * scale
+            i += stride
+
     def make_linear_constraint(self, parameter_coefficients: Dict[str, float]) -> dict:
         """ This method constructs the scipy constraints for the inequality based on a dictionary of coefficients
         Assumes inequality of the form 0 <= c_1 * x_1 + c_2 * x_2 .... <= infty.
