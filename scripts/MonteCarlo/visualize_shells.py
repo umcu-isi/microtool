@@ -6,7 +6,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 from microtool.utils.IO import get_df_from_pickle, get_pickle
-from microtool.utils.plotting import plot_gaussian_fit, plot_dataframe_index
+from microtool.utils.plotting import plot_parameter_distributions, plot_dataframe_index
 from microtool.utils.parameter_distributions import fit_gaussian, scale
 
 resultdir = pathlib.Path(__file__).parent / 'results' / "shell_distribution_experiments"
@@ -29,7 +29,7 @@ def main():
         # Scaling w.r.t. the ground truth values from the tissuemodel
         df_scaled = scale(df, gt)
         fit_results = fit_gaussian(df_scaled)
-        plot_gaussian_fit(df_scaled, fit_results, colors[i])
+        plot_parameter_distributions(df_scaled, fit_results, color=colors[i])
         fit_results_mean[filename.split('_')[2]] = fit_results['mean']
         fit_results_std[filename.split('_')[2]] = fit_results['std']
 

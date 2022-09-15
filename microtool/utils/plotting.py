@@ -54,15 +54,14 @@ class LossInspector:
 
         for parameter in parameters:
             for key, pulse_id in parameter.items():
-            # check if the provided parameters are actually in the scheme
+                # check if the provided parameters are actually in the scheme
+                if key not in self.scheme.free_parameters:
+                    raise ValueError("The provided acquisition parameter key(s) do not match the provided schemes free "
+                                     f"parameters choices are {self.scheme.free_parameter_keys}")
 
-            if key not in self.scheme.free_parameters:
-                raise ValueError("The provided acquisition parameter key(s) do not match the provided schemes free "
-                                 f"parameters choices are {self.scheme.free_parameter_keys}")
-
-                # check if provided pulse id is the correct value
-                if pulse_id >= self.scheme.pulse_count or pulse_id < 0:
-                    raise ValueError(f"Invalid pulse id provided for {key}.")
+                    # check if provided pulse id is the correct value
+                    if pulse_id >= self.scheme.pulse_count or pulse_id < 0:
+                        raise ValueError(f"Invalid pulse id provided for {key}.")
 
         x_optimal = self.scheme.free_parameter_vector / self.scheme.free_parameter_scales
 
@@ -159,7 +158,7 @@ class LossInspector:
             domains.append((lb, ub))
         return domains
 
-    def _check_domains(self, parameters: List[Dict[str, int]], domains: List[np.ndarray]):
+    def _check_domains(self, parameters: List[Dict[str, int]], domains: List[Tuple[float, float]]):
         """
         :param parameters: Dictionary for
         :param domains:
@@ -183,35 +182,45 @@ class LossInspector:
                 raise ValueError(f"Domains for {parameter_name} are out of parameter bounds")
 
 
-def plot_gaussian_fit(parameter_distribution: pd.DataFrame, gaussian_fit: pd.DataFrame,
-                      color: str = None, fig_label: str = "parameter distributions") -> plt.Figure:
+def plot_parameter_distributions(parameter_distribution: pd.DataFrame, gaussian_fit: pd.DataFrame = None,
+                                 color: str = None, fig_label: str = "parameter distributions") -> plt.Figure:
     """
-    Plots the gaussian fitting to a parameter distribution. The fit results are returned (i.e. the mean and standard
-    deviation that fits best
+    Plots the parameter distributions. Also a gaussian fitting if its provided.
+    Calling this function with the same fig_label argument plot the results in the same figure.
 
     :param parameter_distribution: The pandas dataframe containing the parameter
     distribution
-    :param ground_truth: the ground truth tissuemodel used in the simulation
+    :param guassian_fit: The result of the gaussian fitting
     :param color: the color
     used for plotting
     :param label: The label used for the histograms (of none provided recalling the function will plot into the same figure)
     :return: The figure object
     """
     fig = plt.figure(fig_label)
-    n_rows = math.ceil(parameter_distribution.shape[1] / 3)
+
+    # if there are less than 3 plots make that the number of columns
+    n_tissue_parameters = min(parameter_distribution.shape)
+
+    if n_tissue_parameters < 3:
+        ncols = n_tissue_parameters
+    else:
+        ncols = 3
+
+    n_rows = math.ceil(parameter_distribution.shape[1] / ncols)
 
     for i, parameter in enumerate(parameter_distribution.keys()):
-        ax = plt.subplot(n_rows, 3, i + 1)
+        ax = plt.subplot(n_rows, ncols, i + 1)
 
         # Making a histogram
         ax.hist(parameter_distribution[parameter], bins='scott', alpha=0.5, color=color)
 
-        # Plotting the fitted normal distribution as well
-        xmin, xmax = plt.xlim()
-        x = np.linspace(xmin, xmax, 100)
-        fitted_mean = gaussian_fit['mean'][parameter]
-        fitted_std = gaussian_fit['std'][parameter]
-        ax.plot(x, norm.pdf(x, fitted_mean, fitted_std), color=color)
+        # Plotting the fitted normal distribution as well if provided
+        if gaussian_fit is not None:
+            xmin, xmax = plt.xlim()
+            x = np.linspace(xmin, xmax, 100)
+            fitted_mean = gaussian_fit['mean'][parameter]
+            fitted_std = gaussian_fit['std'][parameter]
+            ax.plot(x, norm.pdf(x, fitted_mean, fitted_std), color=color)
 
         ax.set_xlabel(r"$\Delta$")
         # plotting ground truth as vertical lines
@@ -233,7 +242,7 @@ def plot_dataframe_index(df: pd.DataFrame, index_name: str, ax: plt.Axes) -> Non
     df.loc[index_name].to_frame(index_name).T.plot.bar(ylabel=r'std_fitted', xticks=[], title=index_name, ax=ax)
 
 
-def show_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) -> plt.Figure:
+def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) -> plt.Figure:
     """
     Makes subplots of all the acquisition parameters
     :param scheme:
@@ -257,3 +266,4 @@ def show_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) ->
     plt.suptitle(title)
     plt.tight_layout()
     return fig
+

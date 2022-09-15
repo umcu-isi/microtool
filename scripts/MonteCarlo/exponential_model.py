@@ -1,16 +1,17 @@
+import pathlib
 import pickle
 
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from scipy import stats
 
 from microtool import monte_carlo
 from microtool.acquisition_scheme import EchoScheme
 from microtool.optimize import optimize_scheme
 from microtool.tissue_model import ExponentialTissueModel
-from microtool.utils.plotting import show_acquisition_parameters
-from scipy import stats
-import pathlib
+from microtool.utils.parameter_distributions import scale
+from microtool.utils.plotting import plot_acquisition_parameters, plot_parameter_distributions
 
 currentdir = pathlib.Path(__file__).parent
 outputdir = currentdir / "results" / "exponential_model_validation"
@@ -35,7 +36,7 @@ if __name__ == "__main__":
     scheme_opt, _ = optimize_scheme(scheme, model, noise)
 
     # Monte Carlo simulations
-    n_sim = 10000
+    n_sim = 100
     noise_distribution = stats.norm(loc=0, scale=noise)
     result = monte_carlo.run(scheme_opt, model, noise_distribution, n_sim=n_sim, cascade=False)
 
@@ -48,10 +49,16 @@ if __name__ == "__main__":
     with open(outputdir / "T2_distribution_non_optimal_scheme_nsim_{}.pkl".format(n_sim), 'wb') as f:
         pickle.dump(non_optimal_result, f)
 
-    # showing the results
-    monte_carlo.show(pd.DataFrame(result), model)
-    monte_carlo.show(pd.DataFrame(non_optimal_result), model)
 
-    show_acquisition_parameters(scheme_opt)
-    show_acquisition_parameters(scheme)
+    # scaling the distributions with respect to the groundtruth values in the tissuemodel
+    optimal_scaled_parameters = scale(pd.DataFrame(result), model)
+    non_optimal_scaled_parameters = scale(pd.DataFrame(non_optimal_result),model)
+
+    # plotting the distributions
+    plot_parameter_distributions(optimal_scaled_parameters,fig_label="optimal")
+    plot_parameter_distributions(non_optimal_scaled_parameters,fig_label="non_optimal")
+
+    # plotting the aquisition parameters
+    plot_acquisition_parameters(scheme_opt)
+    plot_acquisition_parameters(scheme)
     plt.show()
