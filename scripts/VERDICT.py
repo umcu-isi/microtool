@@ -18,7 +18,7 @@ def main():
     # Initialize diameter of the cell i.e. sphere in the middle of optimization domain
     sphere = sphere_models.S4SphereGaussianPhaseApproximation(diffusion_constant=0.9e-9, diameter=10e-6)
     ball = gaussian_models.G1Ball(lambda_iso=0.9e-9)
-    stick = cylinder_models.C1Stick(mu=[0, 0], lambda_par=6.5e-9)
+    stick = cylinder_models.C1Stick(mu=[np.pi/2, np.pi/2], lambda_par=6.5e-9)
 
     verdict_model = MultiCompartmentModel(models=[sphere, ball, stick])
 
@@ -70,6 +70,11 @@ def main():
 
     print(scheme)
 
+
+
+    # -------------- Optimization
+    best_scheme, _ = optimize_scheme(scheme, verdict_model, 0.02)
+
     # Signal plotting
     plt.figure('Signal plot')
     plt.plot(verdict_model(scheme), '.')
@@ -77,9 +82,6 @@ def main():
     plt.xticks(range(scheme.pulse_count), np.array(range(scheme.pulse_count)) + 1)
     plt.ylabel(r'$S/S_0$')
     plt.show()
-
-    # -------------- Optimization
-    best_scheme, _ = optimize_scheme(scheme, verdict_model, 0.02)
 
 
 def convert_to_dmipy_acquisition_parameter(par_b0, par_measurements, n_directions):
