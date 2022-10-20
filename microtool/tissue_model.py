@@ -221,7 +221,7 @@ class ExponentialTissueModel(TissueModel):
 
     def jacobian(self, scheme: EchoScheme) -> np.ndarray:
         """
-        This is the analytics way of computing the jacobian.
+        This is the analytical way of computing the jacobian.
         :param scheme:
         :return:
         """
@@ -232,7 +232,7 @@ class ExponentialTissueModel(TissueModel):
         # the base signal
         S = S0 * np.exp(-TE / T2)
         # return np.array([-TE * S, 1]).T
-        return np.array([-TE * S, S / S0]).T
+        return np.array([(TE/T2**2) * S, S / S0]).T
 
     def jacobian_num(self, scheme: EchoScheme) -> np.ndarray:
         """
