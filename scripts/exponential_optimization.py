@@ -48,6 +48,6 @@ plt.tight_layout()
 
 # plotting the loss landscape
 inspector = LossInspector(scheme_opt, model, noise)
-inspector.plot([{'EchoTime': 0}, {'EchoTime': 1}], domains=[(1e-5, 0.0002), (14, 23)])
+inspector.plot([{'EchoTime': 0}, {'EchoTime': 1}])
 
 plt.show()
