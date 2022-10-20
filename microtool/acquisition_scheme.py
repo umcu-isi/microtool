@@ -216,6 +216,10 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
         # we make the linear constraint only on parameters that actually change
         free_param_keys = self.free_parameter_keys
 
+        # if all free param keys have zero coefficient we can do without constraint
+        free_param_coefficients = np.array([parameter_coefficients[key] for key in free_param_keys])
+        if np.all(free_param_coefficients == 0):
+            return None
         # blocks defining the linear inequality
         blocks = [parameter_coefficients[key] * np.identity(pulse_num) * self[key].scale for key in free_param_keys]
 
@@ -415,6 +419,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             'DiffusionPulseWidth': -1,
             'DiffusionPulseInterval': 1
         }
+
         return self.make_linear_constraint(parameter_coefficients)
 
 
