@@ -66,11 +66,53 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
     if np.linalg.cond(information) > CONDITION_THRESHOLD:
         return CONDITION_THRESHOLD
 
-
     # The loss is the sum of the cramer roa lower bound for every tissue parameter. This is the same as the sum of
     # the reciprocal eigenvalues of the information matrix, which can be calculated at a lower computational cost
     # because of symmetry of the information matrix.
     return (1 / np.linalg.eigvalsh(information)).sum()
+
+
+def crlb_loss_inversion(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool], noise_var: float) -> float:
+    """
+
+    :param jac:
+    :param scales:
+    :param include:
+    :param noise_var:
+    :return:
+    """
+
+    # Extracting the jacobian w.r.t the included parameters only
+    # casting to numpy array if not done already
+    include = np.array(include)
+    scales = np.array(scales)
+    N_measurements = jac.shape[0]
+    jacobian_mask = np.tile(include, (N_measurements, 1))
+    jac_included = jac[jacobian_mask].reshape((N_measurements, -1))
+
+    # Scaling the jacobian
+    jac_rescaled = jac_included * scales[include]
+
+    # Removing variables that are not influencing the signal
+    # jac_rescaled_reset = jac_rescaled[jac_rescaled!=0].reshape(N_measurements,-1)
+
+    # Calculate the Fisher information matrix on the rescaled Jacobian.
+    # A properly scaled matrix gives an interpretable condition number and a
+    # more robust inverse.
+
+    information = fisher_information(jac_rescaled, noise_var)
+
+    # An ill-conditioned information matrix should result in a high loss.
+    if np.linalg.cond(information) > CONDITION_THRESHOLD:
+        return CONDITION_THRESHOLD
+
+    # computing the CRLB for every parameter trough inversion of Fisher matrix and getting the diagonal
+    crlb = np.linalg.inv(information).diagonal()
+
+    # rescaling the CRLB (we square the scales since the information is computed by matrix product of scaled fisher
+    # information and so in essence we scaled twice). Also we multiply since the inversion effectively inverted the
+    # scaling as well.
+    return float(np.sum(crlb * (scales[include] ** 2)))
 
 
 def compute_loss(scheme: AcquisitionScheme,
@@ -131,7 +173,7 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
         schemes = scheme
 
     # Testing if there is at least 1 initial scheme that will have a chance of optimizing
-    initial_losses = np.array([compute_loss(scheme, model, noise_variance) for scheme in schemes])
+    initial_losses = np.array([compute_loss(scheme, model, noise_variance, loss=loss) for scheme in schemes])
     # if (initial_losses >= CONDITION_THRESHOLD).all():
     #     raise ValueError("The provided initial scheme(s) have ill conditioned loss value(s). Optimization will not "
     #                      "succeed, please retry with different initial schemes.")
