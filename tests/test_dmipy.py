@@ -10,14 +10,15 @@ We want to test the following aspects:
 2.) When simulating signal using dmipytissuemodelwrapper we get the same result
 as simulating signal using the same pure dmipy model and scheme.
 
-
+3.) When computing the jacobian trough the finite differences method we get a result that agrees with analytical mehtods
 """
 import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models
+from dmipy.signal_models.gaussian_models import G1Ball
 
-from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel, convert_acquisition_scheme
+from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel, convert_acquisition_scheme, AnalyticBall
 
 
 def test_scheme_wrapping():
@@ -86,27 +87,47 @@ class TestTissueModelWrapping:
             np.testing.assert_allclose(np.array(value).flatten(), expected)
 
 
-def test_model_scheme_integration():
+class TestModelSchemeIntegration:
     """
-    This tests if the DmipyAcquisitionSchemeWrapper and the DmipyTissueModel work together to generate the correct signal
-    the other tests should be passed before testing this, otherwise failure is guaranteed.
+    All tests for which the microtool scheme and model wrappers are used together
     """
-
-    # Acquisition aspects
+    # Acquisition aspects constant between tests
     acq_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
     acq_wrapped = DmipyAcquisitionSchemeWrapper(acq_scheme)
 
-    # Tissuemodel aspects
-    # simplest tissuemodel available in dmipy
-    mu = (np.pi / 2., np.pi / 2.)  # in radians
-    lambda_par = 1.7e-9  # in m^2/s
-    stick = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
-    stick_model = MultiCompartmentModel(models=[stick])
-    stick_model_wrapped = DmipyTissueModel(stick_model)
-    parameters = {'C1Stick_1_mu': mu, 'C1Stick_1_lambda_par': lambda_par}
+    def test_simulate_signal(self):
+        """
+        Testing if simulate signal works if we wrap the dmipy objects in microtool. We use a stick model for the test.
+        """
+        # Tissuemodel aspects
+        # simplest tissuemodel available in dmipy
+        mu = (np.pi / 2., np.pi / 2.)  # in radians
+        lambda_par = 1.7e-9  # in m^2/s
+        stick = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
+        stick_model = MultiCompartmentModel(models=[stick])
+        stick_model_wrapped = DmipyTissueModel(stick_model)
+        parameters = {'C1Stick_1_mu': mu, 'C1Stick_1_lambda_par': lambda_par}
 
-    # signal computation
-    wrapped_signal = stick_model_wrapped(acq_wrapped)
-    naked_signal = stick_model.simulate_signal(acq_scheme, parameters)
-    # assert list(wrapped_signal) == list(naked_signal)
-    np.testing.assert_allclose(wrapped_signal, naked_signal, rtol=0, atol=1e-5)
+        # signal computation
+        wrapped_signal = stick_model_wrapped(self.acq_wrapped)
+        naked_signal = stick_model.simulate_signal(self.acq_scheme, parameters)
+
+        np.testing.assert_allclose(wrapped_signal, naked_signal, rtol=1e-6,atol=1e-5)
+
+    def test_finite_differences(self):
+        """
+        Testing finite differences method for the computation of the jacobian
+        """
+        # dmipy model
+        lambda_iso = 1.7e-9
+
+        analytic_ball = AnalyticBall(lambda_iso)
+
+        # Scheme --------------
+        dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
+        mt_scheme = DmipyAcquisitionSchemeWrapper(dmipy_scheme)
+
+        jac_analytic = analytic_ball.jacobian_analytic(mt_scheme)
+        jac_numeric = analytic_ball.jacobian(mt_scheme)
+        # There are some rounding errors but we can reach a relative tolerance 1e-5 which should be enough.
+        np.testing.assert_allclose(jac_numeric, jac_analytic, rtol=1e-5)

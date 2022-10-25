@@ -1,3 +1,8 @@
+"""
+This script shows that in order to fit more complex models a cascading technique is needed. Meaning that more
+simple models are used to find an estimate for parameters in more complex models.
+"""
+
 import pprint
 
 import numpy as np

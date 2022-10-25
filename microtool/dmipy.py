@@ -1,8 +1,10 @@
+from copy import copy
 from typing import Dict, Union
 
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
 from dmipy.core.modeling_framework import MultiCompartmentModel
+from dmipy.signal_models.gaussian_models import G1Ball
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.tissue_model import TissueModel, TissueParameter
@@ -105,11 +107,14 @@ class DmipyTissueModel(TissueModel):
         self.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
         self._model = model
 
+        # JACOBIAN HELPER VARIABLES ----------------------------
+
         # Get the baseline parameter vector, but don't include S0.
         self._parameter_baseline = np.array([parameter.value for parameter in self.values()])[:-1]
 
         # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
-        h = np.array([parameter.scale * 1e-6 for parameter in self.values()])[:-1]
+        step_size = 1e-6
+        h = np.array([parameter.scale * step_size for parameter in self.values()])[:-1]
         self._parameter_vectors = self._parameter_baseline + np.diag(h)
         self._reciprocal_h = (1 / h).reshape(-1, 1)
 
@@ -125,11 +130,15 @@ class DmipyTissueModel(TissueModel):
 
         # Evaluate the dmipy model on the baseline and on the parameter vectors with finite differences.
         s0 = self['S0'].value
+        # baseline signal for UNvaried tissueparameters
         baseline = self._model.simulate_signal(dmipy_scheme, self._parameter_baseline)
+        # d S for all the different tissue parameters
         differences = s0 * (self._model.simulate_signal(dmipy_scheme, self._parameter_vectors) - baseline)
 
-        # Divide by the finite differences to obtain the derivatives, and add the derivatives for S0.
-        return np.concatenate((differences * self._reciprocal_h, [baseline])).T
+        # Divide by the finite differences to obtain the derivatives,
+        # and concatenate the derivatives for S0 (i.e. the baseline signal).
+        jac = np.concatenate((differences * self._reciprocal_h, [baseline])).T
+        return jac
 
     def fit(self, scheme: DmipyAcquisitionScheme, noisy_signal: np.ndarray, **fit_options):
         dmipy_scheme = convert_acquisition_scheme(scheme)
@@ -159,3 +168,27 @@ class DmipyTissueModel(TissueModel):
         for pv_name in self._model.partial_volume_names:
             parameters[pv_name] = self[pv_name].value
         return parameters
+
+
+class AnalyticBall(DmipyTissueModel):
+    """
+    Quick and dirty inheritance of dmipytissue model. Purpose is simply to overwrite the jacobian
+    """
+
+    def __init__(self, lambda_iso: float):
+        model = G1Ball(lambda_iso)
+        super().__init__(MultiCompartmentModel([model]))
+
+    def jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        bvals = copy(scheme.b_values)
+
+        # convert to SI units
+        bvals *= 1e6
+
+        S0 = self['S0'].value
+        Diso = self['G1Ball_1_lambda_iso'].value
+
+        # d S / d D_iso , d S / d S_0
+
+        jac = np.array([- bvals * S0 * np.exp(-bvals * Diso), np.exp(-bvals * Diso)]).T
+        return jac

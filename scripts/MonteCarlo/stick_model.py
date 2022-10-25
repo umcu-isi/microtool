@@ -13,8 +13,8 @@ from scipy import stats
 from microtool import monte_carlo, optimize
 from microtool.dmipy import DmipyTissueModel, DmipyAcquisitionSchemeWrapper
 
-currentdir = pathlib.Path('..')
-outputdir = currentdir / "results"
+currentdir = pathlib.Path(__file__).parent
+outputdir = currentdir / "results" / "stick_model"
 outputdir.mkdir(exist_ok=True)
 
 
@@ -24,7 +24,7 @@ def main():
     acq_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
     scheme = DmipyAcquisitionSchemeWrapper(acq_scheme)
     # simplest tissuemodel available in dmipy
-    mu = (np.pi / 2., np.pi / 2.)  # in radians
+    mu = (np.pi/2,np.pi/2)  # in radians
     lambda_par = 1.7e-9  # in m^2/s
     stick = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
     stick_model = MultiCompartmentModel(models=[stick])
@@ -37,9 +37,9 @@ def main():
 
     # Running monte carlo simulation
     n_sim = 10
-    optimize.optimize_scheme(scheme, stick_model_wrapped, noise_var)
+    optimal_scheme, _ = optimize.optimize_scheme(scheme, stick_model_wrapped, noise_var)
 
-    tissue_parameters = monte_carlo.run(scheme, stick_model_wrapped, noise_distribution, n_sim)
+    tissue_parameters = monte_carlo.run(optimal_scheme, stick_model_wrapped, noise_distribution, n_sim)
 
     with open(outputdir / "TPD.pkl", "wb") as f:
         pickle.dump(tissue_parameters, f)

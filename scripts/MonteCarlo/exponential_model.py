@@ -8,7 +8,7 @@ from scipy import stats
 
 from microtool import monte_carlo
 from microtool.acquisition_scheme import EchoScheme
-from microtool.optimize import optimize_scheme
+from microtool.optimize import optimize_scheme, crlb_loss_inversion
 from microtool.tissue_model import ExponentialTissueModel
 from microtool.utils.parameter_distributions import scale
 from microtool.utils.plotting import plot_acquisition_parameters, plot_parameter_distributions
@@ -34,11 +34,13 @@ if __name__ == "__main__":
 
     # optimization
     scheme_opt, _ = optimize_scheme(scheme, model, noise)
+    scheme_alt, _ = optimize_scheme(scheme, model, noise, loss=crlb_loss_inversion)
 
     # Monte Carlo simulations
     n_sim = 100
     noise_distribution = stats.norm(loc=0, scale=noise)
     result = monte_carlo.run(scheme_opt, model, noise_distribution, n_sim=n_sim, cascade=False)
+    result2 = monte_carlo.run(scheme_alt,model, noise_distribution,n_sim=n_sim,cascade=False)
 
     # saving result
     with open(outputdir / "T2_distribution_optimal_scheme_nsim_{}.pkl".format(n_sim), 'wb') as f:
@@ -49,16 +51,18 @@ if __name__ == "__main__":
     with open(outputdir / "T2_distribution_non_optimal_scheme_nsim_{}.pkl".format(n_sim), 'wb') as f:
         pickle.dump(non_optimal_result, f)
 
-
     # scaling the distributions with respect to the groundtruth values in the tissuemodel
     optimal_scaled_parameters = scale(pd.DataFrame(result), model)
-    non_optimal_scaled_parameters = scale(pd.DataFrame(non_optimal_result),model)
+    alt_scaled_parameters = scale(pd.DataFrame(result2),model)
+    non_optimal_scaled_parameters = scale(pd.DataFrame(non_optimal_result), model)
 
     # plotting the distributions
-    plot_parameter_distributions(optimal_scaled_parameters,fig_label="optimal")
-    plot_parameter_distributions(non_optimal_scaled_parameters,fig_label="non_optimal")
+    plot_parameter_distributions(optimal_scaled_parameters, fig_label="optimal")
+    plot_parameter_distributions(non_optimal_scaled_parameters, fig_label="non_optimal")
+    plot_parameter_distributions(alt_scaled_parameters,fig_label="Alternative")
 
     # plotting the aquisition parameters
     plot_acquisition_parameters(scheme_opt)
     plot_acquisition_parameters(scheme)
+    plot_acquisition_parameters(scheme_alt)
     plt.show()

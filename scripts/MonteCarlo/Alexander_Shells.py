@@ -8,7 +8,7 @@ from microtool import monte_carlo
 from microtool.utils import saved_schemes, saved_models
 
 currentdir = pathlib.Path(__file__).parent
-outputdir = currentdir / "results"
+outputdir = currentdir / "results" / "shell_distribution_experiments"
 outputdir.mkdir(exist_ok=True)
 
 

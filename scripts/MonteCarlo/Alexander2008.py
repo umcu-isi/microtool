@@ -12,7 +12,7 @@ from microtool import monte_carlo
 from microtool.utils import saved_schemes, saved_models
 
 currentdir = pathlib.Path(__file__).parent
-outputdir = currentdir / "results"
+outputdir = currentdir / "results" / "multi_compartment"
 outputdir.mkdir(exist_ok=True)
 
 
@@ -27,7 +27,7 @@ def main():
     print("Using the following model:\n", mc_model)
 
     # ----------- Optimizing the scheme ------------------
-    # mc_model.optimize(scheme, noise_var)
+    mc_model.optimize(scheme, noise_var)
     print("Using the optimized scheme:\n", scheme)
     scheme.print_acquisition_info
     # ------------ Monte Carlo --------------------

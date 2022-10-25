@@ -77,8 +77,8 @@ t_half = scheme_optimized['HalfReadTime'].values
 # Changing to ms/mm^2 for computing minimal echo time.
 b_plot = np.linspace(0.1, 15e3, num=500) * 1e3
 plt.plot(minimal_echo_time(b_plot, t90, t180, t_half, G_max, t_rise), b_plot * 1e-3, label="Analytic lowerbound")
-plt.xlabel("TE")
-plt.ylabel('b')
+plt.xlabel("TE [ms]")
+plt.ylabel(r'b [$mm^2/s$]')
 plt.legend()
 
 plt.show()
