@@ -115,7 +115,8 @@ class DmipyTissueModel(TissueModel):
         # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
         step_size = 1e-6
         h = np.array([parameter.scale * step_size for parameter in self.values()])[:-1]
-        self._parameter_vectors = self._parameter_baseline + np.diag(h)
+        self._parameter_vectors_forward = self._parameter_baseline + 0.5*np.diag(h)
+        self._parameter_vectors_backward = self._parameter_baseline - 0.5*np.diag(h)
         self._reciprocal_h = (1 / h).reshape(-1, 1)
 
     def __call__(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
@@ -133,11 +134,13 @@ class DmipyTissueModel(TissueModel):
         # baseline signal for UNvaried tissueparameters
         baseline = self._model.simulate_signal(dmipy_scheme, self._parameter_baseline)
         # d S for all the different tissue parameters
-        differences = s0 * (self._model.simulate_signal(dmipy_scheme, self._parameter_vectors) - baseline)
+        forward_diff = self._model.simulate_signal(dmipy_scheme, self._parameter_vectors_forward)
+        backward_diff = self._model.simulate_signal(dmipy_scheme, self._parameter_vectors_backward)
+        central_diff = s0 * (forward_diff - backward_diff)
 
-        # Divide by the finite differences to obtain the derivatives,
+        # Divide by the finite differences to obtain the derivatives (central difference method),
         # and concatenate the derivatives for S0 (i.e. the baseline signal).
-        jac = np.concatenate((differences * self._reciprocal_h, [baseline])).T
+        jac = np.concatenate((central_diff * self._reciprocal_h, [baseline])).T
         return jac
 
     def fit(self, scheme: DmipyAcquisitionScheme, noisy_signal: np.ndarray, **fit_options):

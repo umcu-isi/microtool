@@ -16,7 +16,7 @@ import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models
-from dmipy.signal_models.gaussian_models import G1Ball
+
 
 from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel, convert_acquisition_scheme, AnalyticBall
 
