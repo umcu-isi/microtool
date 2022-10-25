@@ -10,6 +10,7 @@ from scipy import stats
 
 from microtool import monte_carlo
 from microtool.utils import saved_schemes, saved_models
+from microtool.optimize import optimize_scheme
 
 currentdir = pathlib.Path(__file__).parent
 outputdir = currentdir / "results" / "multi_compartment"
@@ -27,6 +28,7 @@ def main():
     print("Using the following model:\n", mc_model)
 
     # ----------- Optimizing the scheme ------------------
+    sheme_opt, _ = optimize_scheme(scheme,mc_model, noise_var)
     mc_model.optimize(scheme, noise_var)
     print("Using the optimized scheme:\n", scheme)
     scheme.print_acquisition_info
@@ -36,7 +38,7 @@ def main():
     noise_distribution = stats.norm(loc=0, scale=noise_var)
 
     # Running monte carlo simulation
-    n_sim = 2
+    n_sim = 100
 
     tissue_parameters = monte_carlo.run(scheme, mc_model, noise_distribution, n_sim, cascade=True)
 
