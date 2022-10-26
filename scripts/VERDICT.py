@@ -4,12 +4,16 @@ DOI:10.1002/nbm.4019
 """
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.optimize
 from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import sphere_models, cylinder_models, gaussian_models
+
+import microtool.optimization_methods
 from microtool.utils.gradient_sampling.uniform import sample_uniform
 from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel
-from microtool.optimize import optimize_scheme
+from microtool.optimize import optimize_scheme, crlb_loss_inversion
+from microtool.utils import plotting
 
 
 def main():
@@ -18,16 +22,16 @@ def main():
     # Initialize diameter of the cell i.e. sphere in the middle of optimization domain
     sphere = sphere_models.S4SphereGaussianPhaseApproximation(diffusion_constant=0.9e-9, diameter=10e-6)
     ball = gaussian_models.G1Ball(lambda_iso=0.9e-9)
-    stick = cylinder_models.C1Stick(mu=[np.pi/2, np.pi/2], lambda_par=6.5e-9)
+    stick = cylinder_models.C1Stick(mu=[np.pi / 2, np.pi / 2], lambda_par=6.5e-9)
 
     verdict_model = MultiCompartmentModel(models=[sphere, ball, stick])
 
     print('The multicompartment model has the following parameters', verdict_model.parameter_names)
 
     # We fix the extra cellular diffusivuty in accordance with panagiotakis black magic number from 2014
-    verdict_model.set_fixed_parameter('G1Ball_1_lambda_iso', 0.9e-9)
+    # verdict_model.set_fixed_parameter('G1Ball_1_lambda_iso', 0.9e-9)
     # We set the optimization such that the pseudo diffusioin coefficient is larger than 3.05 um^2/ms
-    verdict_model.set_parameter_optimization_bounds('C1Stick_1_lambda_par', [3.05e-9, 10e-9])
+    # verdict_model.set_parameter_optimization_bounds('C1Stick_1_lambda_par', [3.05e-9, 10e-9])
 
     verdict_model = DmipyTissueModel(verdict_model, np.array([.3, .3, .4]))
     print("The verdict tissue model:", verdict_model)
@@ -70,17 +74,20 @@ def main():
 
     print(scheme)
 
-
-
     # -------------- Optimization
-    best_scheme, _ = optimize_scheme(scheme, verdict_model, 0.02)
+    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, loss=crlb_loss_inversion, method=microtool.optimization_methods.SOMA())
 
-    # Signal plotting
-    plt.figure('Signal plot')
-    plt.plot(verdict_model(scheme), '.')
-    plt.xlabel('Measurement')
-    plt.xticks(range(scheme.pulse_count), np.array(range(scheme.pulse_count)) + 1)
-    plt.ylabel(r'$S/S_0$')
+    print(opt_result)
+
+    # --------------- Generating figures
+    optimized_parameter_fig = plotting.plot_acquisition_parameters(best_scheme, "Acquisition Parameters")
+    plt.savefig("optimized_parameter_fig_soma.png")
+    init_parameter_fig = plotting.plot_acquisition_parameters(scheme, "Acquisition Parameters")
+    plt.savefig("init_parameter_fig_soma.png")
+    fig_init_signal = plotting.plot_signal(scheme, verdict_model)
+    plt.savefig("init_signal_fig_soma.png")
+    fig_optimized_signal = plotting.plot_signal(best_scheme, verdict_model)
+    plt.savefig("optimized_signal_soma.png")
     plt.show()
 
 
