@@ -66,7 +66,7 @@ class BruteForce(Optimizer):
         return OptimizeResult(fun=y_optimal, x=x_optimal, succes=True)
 
     @staticmethod
-    def _find_minimum(fun: callable, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
+    def _find_minimum(fun: callable, args: tuple,domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
         if constraints is None or constraints == ():
             # iterate over the grid
             y_optimal = np.inf
@@ -88,7 +88,7 @@ class BruteForce(Optimizer):
                 if is_constrained(combination, constraints):
                     loss = np.inf
                 else:
-                    loss = fun(combination)
+                    loss = fun(combination, *args)
 
                 # update optimal value
                 if loss < y_optimal:
@@ -164,7 +164,8 @@ class SOMA(Optimizer):
         constraints = options['constraints']
         if isinstance(constraints, list):
             raise NotImplementedError("SOMA currently does not support multiple constraints.")
-        population = Population(self.population_sz, bounds, constraints, fun, self.max_fevals)
+
+        population = Population(self.population_sz, bounds, constraints, fun, args, self.max_fevals)
 
         migration = 0
         while (population.fevals < self.max_fevals) and (migration < self.max_migrations):
@@ -179,7 +180,7 @@ class Population:
     """This class defines the population in the SOMA algorithm
     """
 
-    def __init__(self, sz: int, bounds: np.ndarray, constraint, fun: callable, max_evals: int,
+    def __init__(self, sz: int, bounds: np.ndarray, constraint, fun: callable, args:tuple, max_evals: int,
                  values: np.ndarray = None):
         """
         :param sz: The population size
@@ -195,6 +196,7 @@ class Population:
         self.upper_bound = bounds[:, 1]
         self.Nx = len(bounds)
         self.fun = fun
+        self.args = args
         self.max_fevals = max_evals
 
         self.fevals = 0
@@ -212,7 +214,7 @@ class Population:
         if is_constrained(x, self.constraint):
             return np.inf
         else:
-            return self.fun(x)
+            return self.fun(x, *self.args)
 
     def migrate(self, path_length: float, N_jump: int, PRT: float):
         """Executes a single population migration
