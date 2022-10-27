@@ -2,6 +2,7 @@ from copy import deepcopy
 from typing import Sequence, Callable, Optional, Union, List, Tuple, Any, TypeVar, Type
 
 import numpy as np
+import scipy
 from scipy.optimize import OptimizeResult, minimize
 
 from microtool.acquisition_scheme import AcquisitionScheme
@@ -74,6 +75,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
 
 def crlb_loss_inversion(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool], noise_var: float) -> float:
     """
+    A different way to compute the loss where we do matrix inversion and rescale the crlb after computation.
 
     :param jac:
     :param scales:
@@ -93,13 +95,9 @@ def crlb_loss_inversion(jac: np.ndarray, scales: Sequence[float], include: Seque
     # Scaling the jacobian
     jac_rescaled = jac_included * scales[include]
 
-    # Removing variables that are not influencing the signal
-    # jac_rescaled_reset = jac_rescaled[jac_rescaled!=0].reshape(N_measurements,-1)
-
     # Calculate the Fisher information matrix on the rescaled Jacobian.
     # A properly scaled matrix gives an interpretable condition number and a
     # more robust inverse.
-
     information = fisher_information(jac_rescaled, noise_var)
 
     # An ill-conditioned information matrix should result in a high loss.
@@ -107,7 +105,7 @@ def crlb_loss_inversion(jac: np.ndarray, scales: Sequence[float], include: Seque
         return CONDITION_THRESHOLD
 
     # computing the CRLB for every parameter trough inversion of Fisher matrix and getting the diagonal
-    crlb = np.linalg.inv(information).diagonal()
+    crlb = scipy.linalg.inv(information).diagonal()
 
     # rescaling the CRLB (we square the scales since the information is computed by matrix product of scaled fisher
     # information and so in essence we scaled twice). Also we multiply since the inversion effectively inverted the
@@ -130,6 +128,51 @@ def compute_loss(scheme: AcquisitionScheme,
     """
     jac = model.jacobian(scheme)
     return loss(jac, model.scales, model.include, noise_var)
+
+
+def compute_loss_init(scheme: AcquisitionScheme,
+                      model: TissueModel,
+                      noise_var: float,
+                      loss: LossFunction = crlb_loss) -> float:
+    """
+    Function for computing the loss given the following parameters
+
+    :param model: The tissuemodel for which you wish to know the loss
+    :param scheme: The acquisition scheme for which you wish to know the loss
+    :param noise_var:
+    :param loss:
+    :return:
+    """
+    jac = model.jacobian(scheme)
+
+    include = np.array(model.include)
+
+    # the parameters we included for optimization but to which the signal is insensitive
+    # (jac is signal derivative for all parameters)
+    insensitive_parameters = include & np.all(jac == 0, axis=0)
+
+    if np.any(insensitive_parameters):
+        raise RuntimeError(
+            f"Initial AcquisitionScheme error: the parameters {np.array(model.parameter_names)[insensitive_parameters]} have a zero signal derivative for all measurements. "
+            f"Optimizing will not result in a scheme that better estimates these parameters. "
+            f"Exclude them from optimization if you are okay with that.")
+
+    output = loss(jac, model.scales, include, noise_var)
+    if output > CONDITION_THRESHOLD:
+        raise RuntimeError(
+            f"Initial AcquisitionScheme error: the initial acquisition scheme results in ill conditioned fisher information matrix, possibly due to model degeneracy. "
+            f"Try a different initial AcquisitionScheme, or alternatively simplify you TissueModel.")
+    return output
+
+
+def calc_loss_scipy(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noise_variance: float,
+                    loss: LossFunction):
+    scales = model.scales
+    include = model.include
+    acquisition_parameter_scales = scheme.free_parameter_scales
+    scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
+    jac = model.jacobian(scheme)
+    return loss(jac, scales, include, noise_variance)
 
 
 # A way of type hinting all the derived classes of AcquisitionScheme
@@ -173,10 +216,7 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
         schemes = scheme
 
     # Testing if there is at least 1 initial scheme that will have a chance of optimizing
-    initial_losses = np.array([compute_loss(scheme, model, noise_variance, loss=loss) for scheme in schemes])
-    # if (initial_losses >= CONDITION_THRESHOLD).all():
-    #     raise ValueError("The provided initial scheme(s) have ill conditioned loss value(s). Optimization will not "
-    #                      "succeed, please retry with different initial schemes.")
+    initial_losses = np.array([compute_loss_init(scheme, model, noise_variance, loss=loss) for scheme in schemes])
 
     # Copying the schemes for number repeated optimizations required.
     schemes = [deepcopy(scheme) for scheme in schemes for _ in range(repeat)]
@@ -201,20 +241,24 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
 
         # Calculating the loss involves passing the new parameters to the acquisition scheme, calculating the tissue
         # model's Jacobian matrix and evaluating the loss function.
-        def calc_loss_scipy(x: np.ndarray):
-            scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
-            jac = model.jacobian(scheme)
-            return loss(jac, scales, include, noise_variance)
-
-        result = minimize(calc_loss_scipy, x0, method=method, bounds=scaled_bounds, constraints=constraints,
-                          options=optimizer_options)
+        scipy_loss_args = (scheme, model, noise_variance, loss)
+        if method == 'differential_evolution':
+            # converting dictionary constraints of microtool tissuemodel to scipy NonLinear constraint
+            # constraints = scipy.optimize.NonlinearConstraint(constraints['fun'],0,np.inf)
+            result = scipy.optimize.differential_evolution(calc_loss_scipy, bounds=scaled_bounds,
+                                                           args=scipy_loss_args,
+                                                           x0=x0, workers=-1, disp=True)
+        else:
+            result = minimize(calc_loss_scipy, x0, args=scipy_loss_args,
+                              method=method, bounds=scaled_bounds, constraints=constraints,
+                              options=optimizer_options)
 
         if 'x' in result:
             scheme.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
         # check if the optimized scheme is better than the current best scheme and update
         # also save best optimization result.
-        current_loss = compute_loss(scheme, model, noise_variance)
+        current_loss = compute_loss(scheme, model, noise_variance, loss=loss)
         if current_loss < best_loss:
             best_scheme = scheme
             best_loss = current_loss
@@ -222,18 +266,19 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
 
         if not best_result["success"]:
             print(result)
-            raise RuntimeError("Optimization procedure was unsuccesfull. "
-                               "Possible solutions include but are not limited to: Changing the "
-                               "optimizer setings, changing the optimization method or changing the initial scheme to a more suitable one."
-                               "If you are using a scipy optimizer its settings can be changed by passing options to this function. "
-                               "If you are using a microtool optimization method please consult the optimization_methods module for more details.")
+            raise RuntimeError(
+                "Optimization procedure was unsuccesfull. "
+                "Possible solutions include but are not limited to: Changing the "
+                "optimizer setings, changing the optimization method or changing the initial scheme to a more suitable one."
+                "If you are using a scipy optimizer its settings can be changed by passing options to this function. "
+                "If you are using a microtool optimization method please consult the optimization_methods module for more details.")
 
         optimized_losses.append(current_loss)
 
     # TODO: If one of the schemes does optimize but is not the lowest loss of them all, what do we do?
     if (np.array(optimized_losses).reshape(-1, len(initial_losses)) > initial_losses).all():
         raise RuntimeError("Optimization was unsuccesfull, the optimized schemes have higher loss than the initial "
-                           "schemes, probably due to choice of optimizer. Please retry with different optimization "
-                           "method.")
+                           "schemes, probably due to choice of optimizer method and or settings. "
+                           "Please retry with different optimization method.")
 
     return best_scheme, best_result
