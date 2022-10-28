@@ -113,7 +113,7 @@ class DmipyTissueModel(TissueModel):
                 raise ValueError("Provide volume fractions that sum to 1.")
             # Including the volume fractions as TissueParameters to the DmipyTissueModel
             for i, key in enumerate(vf_keys):
-                self.update({key: TissueParameter(value=volume_fractions[i], scale=1., optimize=False)})
+                self.update({key: TissueParameter(value=volume_fractions[i], scale=1.)})
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
         self.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
