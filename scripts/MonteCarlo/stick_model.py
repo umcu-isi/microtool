@@ -8,10 +8,12 @@ import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models
+from matplotlib import pyplot as plt
 from scipy import stats
 
 from microtool import monte_carlo, optimize
 from microtool.dmipy import DmipyTissueModel, DmipyAcquisitionSchemeWrapper
+from microtool.utils import plotting
 
 currentdir = pathlib.Path(__file__).parent
 outputdir = currentdir / "results" / "stick_model"
@@ -38,7 +40,8 @@ def main():
     # Running monte carlo simulation
     n_sim = 10
     optimal_scheme, _ = optimize.optimize_scheme(scheme, stick_model_wrapped, noise_var)
-
+    plotting.plot_acquisition_parameters(optimal_scheme)
+    plt.show()
     tissue_parameters = monte_carlo.run(optimal_scheme, stick_model_wrapped, noise_distribution, n_sim)
 
     with open(outputdir / "TPD.pkl", "wb") as f:

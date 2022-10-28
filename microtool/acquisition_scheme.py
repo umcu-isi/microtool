@@ -296,7 +296,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         super().__init__({
             'DiffusionBValue': AcquisitionParameters(
-                values=b_values, unit='s/mm²', scale=1000, lower_bound=0.0, upper_bound=3e4
+                values=b_values, unit='s/mm²', scale=1000, lower_bound=0.0, upper_bound=5e3
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1, lower_bound=None, fixed=True
