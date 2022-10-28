@@ -245,9 +245,11 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
         if method == 'differential_evolution':
             # converting dictionary constraints of microtool tissuemodel to scipy NonLinear constraint
             # constraints = scipy.optimize.NonlinearConstraint(constraints['fun'],0,np.inf)
-            result = scipy.optimize.differential_evolution(calc_loss_scipy, bounds=scaled_bounds,
-                                                           args=scipy_loss_args,
-                                                           x0=x0, workers=-1, disp=True)
+            result = differential_evolution(calc_loss_scipy, bounds=scaled_bounds,
+                                            args=scipy_loss_args,
+                                            x0=x0, workers=-1, disp=True, updating='deferred')
+        elif method == 'dual_annealing':
+            result = dual_annealing(calc_loss_scipy, scaled_bounds, scipy_loss_args, x0=x0)
         else:
             result = minimize(calc_loss_scipy, x0, args=scipy_loss_args,
                               method=method, bounds=scaled_bounds, constraints=constraints,
