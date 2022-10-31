@@ -10,6 +10,7 @@ import numpy as np
 from microtool.utils import gradient_sampling
 from microtool.utils.gradient_sampling.utils import angles_to_unitvectors
 from microtool.utils.solve_echo_time import minimal_echo_time
+from tabulate import tabulate
 
 
 @dataclass
@@ -78,7 +79,18 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
     def __str__(self) -> str:
         parameters = '\n'.join(
             f'    - {key}: {value} in range ({value.lower_bound}, {value.upper_bound})' for key, value in self.items())
-        return f'Acquisition scheme with {self.pulse_count} measurements and {len(self)} scalar parameters:\n{parameters} '
+
+        table = {}
+        for key, value in self.items():
+            if value.fixed:
+                entry = {f"{key} [{value.unit}] (fixed)": value.values}
+            else:
+                entry = {f"{key} [{value.unit}] in {value.lower_bound, value.upper_bound}": value.values}
+
+            table.update(entry)
+
+        table_str = tabulate(table,headers='keys')
+        return f'Acquisition scheme with {self.pulse_count} measurements and {len(self)} scalar parameters:\n{table_str}'
 
     @property
     def free_parameters(self) -> Dict[str, np.ndarray]:
@@ -296,7 +308,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         super().__init__({
             'DiffusionBValue': AcquisitionParameters(
-                values=b_values, unit='s/mm²', scale=1000, lower_bound=0.0, upper_bound=3e4
+                values=b_values, unit='s/mm²', scale=1000, lower_bound=0.0, upper_bound=5e3
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1, lower_bound=None, fixed=True

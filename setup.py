@@ -13,7 +13,7 @@ setuptools.setup(
         "Operating System :: Microsoft :: Windows",
         "Development Status :: 2 - Pre-Alpha"
     ],
-    python_requires='==3.8',
+    python_requires='==3.8.*',
     install_requires=['numpy', 'scipy'],
     extras_require={
         'dmipy support': ['dmipy']

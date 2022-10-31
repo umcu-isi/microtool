@@ -10,21 +10,31 @@ from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.tissue_model import TissueModel, TissueParameter
 
 
-def get_parameters(diffusion_model: MultiCompartmentModel) -> Dict[str, TissueParameter]:
+# TODO: deal with fractional parameter relations!
+def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParameter]:
     """
-    Compiles a list of all tissue parameters present in the given multi-compartment model.
+    Compiles a dictionary of all tissue parameters present in the given multi-compartment model.
+    These are wrapped in the microtool TissueParameter wrapper. Parameter linking and optimization flags are extracted.
 
-    :param diffusion_model: A dmipy multi-compartment model.
-    :return: A list with tissue parameters.
+    :param multi_model: A dmipy multi-compartment model.
+    :return: A dictionary of tissueparameters
     """
+
     # Iterate over all tissue models in the MultiCompartmentModel.
     parameters = {}
-    for model, model_name in zip(diffusion_model.models, diffusion_model.model_names):
+    for model, model_name in zip(multi_model.models, multi_model.model_names):
         # Iterate over all scalar and vector parameters in the tissue model.
         for parameter_name in model.parameter_names:
             value = np.array(getattr(model, parameter_name), dtype=np.float64, copy=True)
             scale = model.parameter_scales[parameter_name]
             cardinality = model.parameter_cardinality[parameter_name]
+
+            # Determine if the parameter is fixed in the multicompartment model before wrapping
+            linked_or_fixed = False
+
+            # dmipy removes any fixed or linked parameters from MultiCompartentModel names.
+            if model_name + parameter_name not in multi_model.parameter_names:
+                linked_or_fixed = True
 
             if value is None:
                 raise ValueError(f'Parameter {parameter_name} of model {model_name} has no value.')
@@ -32,10 +42,13 @@ def get_parameters(diffusion_model: MultiCompartmentModel) -> Dict[str, TissuePa
                 raise ValueError(f'Parameter {parameter_name} of model {model_name} has a nan value.')
             # Iterate over vector parameters and add their elements as scalar tissue parameters.
             for i in range(cardinality):
+                # Determine whether the tissue parameter was fixed before wrapping
                 index_postfix = '' if cardinality == 1 else f'_{i}'
                 parameters[model_name + parameter_name + index_postfix] = TissueParameter(
                     value=value[i] if cardinality > 1 else value,
                     scale=scale[i] if cardinality > 1 else scale,
+                    # non fixed or linked parameters can be included in the optimization.
+                    optimize=not linked_or_fixed
                 )
 
     return parameters
@@ -59,7 +72,6 @@ class DmipyAcquisitionSchemeWrapper(DiffusionAcquisitionScheme):
     """
     Class wrapper for pure dmipy acquisition schemes
     """
-
     def __init__(self, scheme: DmipyAcquisitionScheme):
         self._scheme = scheme
         # convert to s/mm^2 from s/m^2
@@ -88,7 +100,7 @@ class DmipyTissueModel(TissueModel):
         # Extract the scalar tissue parameters from individual models.
         self.update(get_parameters(model))
 
-        # Set up volume fractions if there are multiple models
+        # -------------------- Set up volume fractions if there are multiple models
         if model.N_models > 1:
             if volume_fractions is None:
                 raise ValueError("Provide volume fractions if composite tissuemodels are used.")
@@ -98,16 +110,16 @@ class DmipyTissueModel(TissueModel):
             if len(volume_fractions) != len(vf_keys):
                 raise ValueError("Not enough volume fractions provided for the number of models.")
             if np.sum(volume_fractions) != 1:
-                raise ValueError("Provide volume fractions do not sum to 1.")
+                raise ValueError("Provide volume fractions that sum to 1.")
             # Including the volume fractions as TissueParameters to the DmipyTissueModel
             for i, key in enumerate(vf_keys):
-                self.update({key: TissueParameter(value=volume_fractions[i], scale=1., optimize=False)})
+                self.update({key: TissueParameter(value=volume_fractions[i], scale=1.)})
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
         self.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
         self._model = model
 
-        # JACOBIAN HELPER VARIABLES ----------------------------
+        # ----------------------------JACOBIAN HELPER VARIABLES (finite differences)
 
         # Get the baseline parameter vector, but don't include S0.
         self._parameter_baseline = np.array([parameter.value for parameter in self.values()])[:-1]
@@ -115,8 +127,8 @@ class DmipyTissueModel(TissueModel):
         # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
         step_size = 1e-6
         h = np.array([parameter.scale * step_size for parameter in self.values()])[:-1]
-        self._parameter_vectors_forward = self._parameter_baseline + 0.5*np.diag(h)
-        self._parameter_vectors_backward = self._parameter_baseline - 0.5*np.diag(h)
+        self._parameter_vectors_forward = self._parameter_baseline + 0.5 * np.diag(h)
+        self._parameter_vectors_backward = self._parameter_baseline - 0.5 * np.diag(h)
         self._reciprocal_h = (1 / h).reshape(-1, 1)
 
     def __call__(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
@@ -175,7 +187,7 @@ class DmipyTissueModel(TissueModel):
 
 class AnalyticBall(DmipyTissueModel):
     """
-    Quick and dirty inheritance of dmipytissue model. Purpose is simply to overwrite the jacobian
+    Quick and dirty inheritance of dmipytissue model. Purpose is for testing finite differences
     """
 
     def __init__(self, lambda_iso: float):

@@ -259,11 +259,29 @@ def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) ->
     for i, parameter in enumerate(scheme):
         ax = plt.subplot(n_rows, n_cols, i + 1)
         y = scheme[parameter].values
-        x = np.arange(len(y))
+        x = np.arange(len(y)) + 1
         ax.plot(x, y, '.')
+        plt.xticks(range(scheme.pulse_count), np.array(range(scheme.pulse_count)) + 1)
         ax.set_xlabel("Measurement")
-        ax.set_ylabel(parameter)
+        ax.set_ylabel(parameter + " [{}]".format(scheme[parameter].unit))
     plt.suptitle(title)
     plt.tight_layout()
     return fig
 
+
+def plot_signal(scheme: AcquisitionScheme, model: TissueModel, fig_title: str = None, fig: plt.Figure = None):
+    # Signal plotting
+    if fig is None:
+        if fig_title is None:
+            fig = plt.figure("signal plot")
+        else:
+            fig = plt.figure(fig_title)
+
+    plt.title('Signal plot')
+    plt.plot(model(scheme), '.')
+    plt.xlabel('Measurement')
+    plt.xticks(range(scheme.pulse_count), np.array(range(scheme.pulse_count)) + 1)
+    plt.ylabel(r'$S/S_0$')
+    plt.legend()
+    plt.tight_layout()
+    return fig

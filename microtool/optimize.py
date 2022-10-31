@@ -1,20 +1,24 @@
 from copy import deepcopy
-from typing import Sequence, Callable, Optional, Union, List, Tuple, Any, TypeVar, Type
+from typing import Sequence, Callable, Optional, Union, List, Tuple, TypeVar
 
 import numpy as np
-import scipy.optimize
-from scipy.optimize import OptimizeResult, minimize
+from scipy import linalg
+from scipy.optimize import OptimizeResult, minimize, differential_evolution, dual_annealing
 
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.optimization_methods import Optimizer
 from microtool.tissue_model import TissueModel
-from copy import deepcopy
 
 # A LossFunction takes an N×M Jacobian matrix, a sequence of M parameter scales, a boolean sequence that specifies which
 # parameters should be included in the loss, and the noise variance. It should return a scalar loss.
 LossFunction = Callable[[np.ndarray, Sequence[float], Sequence[bool], float], float]
 
-CONDITION_THRESHOLD = 1e9
+# We use the machine precision of numpy floats to determine if we can invert a matrix without introducing a large
+# numerical error
+CONDITION_THRESHOLD = 1/np.finfo(np.float64).eps
+
+# Arbitrary high cost value for ill conditioned matrices
+ILL_COST = 1e9
 
 
 def fisher_information(jac: np.ndarray, noise_var: float) -> np.ndarray:
@@ -65,7 +69,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
 
     # An ill-conditioned information matrix should result in a high loss.
     if np.linalg.cond(information) > CONDITION_THRESHOLD:
-        return CONDITION_THRESHOLD
+        return ILL_COST
 
     # The loss is the sum of the cramer roa lower bound for every tissue parameter. This is the same as the sum of
     # the reciprocal eigenvalues of the information matrix, which can be calculated at a lower computational cost
@@ -75,6 +79,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
 
 def crlb_loss_inversion(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool], noise_var: float) -> float:
     """
+    A different way to compute the loss where we do matrix inversion and rescale the crlb after computation.
 
     :param jac:
     :param scales:
@@ -94,27 +99,24 @@ def crlb_loss_inversion(jac: np.ndarray, scales: Sequence[float], include: Seque
     # Scaling the jacobian
     jac_rescaled = jac_included * scales[include]
 
-    # Removing variables that are not influencing the signal to generate a better information matrix?
-    # include[np.argwhere(np.all(jac == 0, axis=0))] = False
-    # jac_rescaled = jac_rescaled[:, ~np.all(jac_rescaled == 0, axis=0)]
-
     # Calculate the Fisher information matrix on the rescaled Jacobian.
     # A properly scaled matrix gives an interpretable condition number and a
     # more robust inverse.
-
     information = fisher_information(jac_rescaled, noise_var)
 
     # An ill-conditioned information matrix should result in a high loss.
     if np.linalg.cond(information) > CONDITION_THRESHOLD:
-        return CONDITION_THRESHOLD
+        return ILL_COST
 
     # computing the CRLB for every parameter trough inversion of Fisher matrix and getting the diagonal
-    crlb = np.linalg.inv(information).diagonal()
+
+    crlb = linalg.inv(information).diagonal()
+
 
     # rescaling the CRLB (we square the scales since the information is computed by matrix product of scaled fisher
     # information and so in essence we scaled twice). Also we multiply since the inversion effectively inverted the
     # scaling as well.
-    return float(np.sum(crlb * (scales[include] ** 2)))
+    return float(np.sum(crlb))
 
 
 def compute_loss(scheme: AcquisitionScheme,
@@ -132,6 +134,41 @@ def compute_loss(scheme: AcquisitionScheme,
     """
     jac = model.jacobian(scheme)
     return loss(jac, model.scales, model.include, noise_var)
+
+
+def compute_loss_init(scheme: AcquisitionScheme,
+                      model: TissueModel,
+                      noise_var: float,
+                      loss: LossFunction = crlb_loss) -> float:
+    """
+    Function for computing the loss given the following parameters
+
+    :param model: The tissuemodel for which you wish to know the loss
+    :param scheme: The acquisition scheme for which you wish to know the loss
+    :param noise_var:
+    :param loss:
+    :return:
+    """
+    jac = model.jacobian(scheme)
+
+    include = np.array(model.include)
+
+    # the parameters we included for optimization but to which the signal is insensitive
+    # (jac is signal derivative for all parameters)
+    insensitive_parameters = include & np.all(jac == 0, axis=0)
+
+    if np.any(insensitive_parameters):
+        raise RuntimeError(
+            f"Initial AcquisitionScheme error: the parameters {np.array(model.parameter_names)[insensitive_parameters]} have a zero signal derivative for all measurements. "
+            f"Optimizing will not result in a scheme that better estimates these parameters. "
+            f"Exclude them from optimization if you are okay with that.")
+
+    output = loss(jac, model.scales, include, noise_var)
+    if output >= CONDITION_THRESHOLD:
+        raise RuntimeError(
+            f"Initial AcquisitionScheme error: the initial acquisition scheme results in ill conditioned fisher information matrix, possibly due to model degeneracy. "
+            f"Try a different initial AcquisitionScheme, or alternatively simplify your TissueModel.")
+    return output
 
 
 def calc_loss_scipy(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noise_variance: float,
@@ -185,10 +222,7 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
         schemes = scheme
 
     # Testing if there is at least 1 initial scheme that will have a chance of optimizing
-    initial_losses = np.array([compute_loss(scheme, model, noise_variance, loss=loss) for scheme in schemes])
-    if (initial_losses >= CONDITION_THRESHOLD).all():
-        raise ValueError("The provided initial scheme(s) have ill conditioned loss value(s). Optimization will not "
-                         "succeed, please retry with different initial schemes.")
+    initial_losses = np.array([compute_loss_init(scheme, model, noise_variance, loss=loss) for scheme in schemes])
 
     # Copying the schemes for number repeated optimizations required.
     schemes = [deepcopy(scheme) for scheme in schemes for _ in range(repeat)]
@@ -217,9 +251,11 @@ def optimize_scheme(scheme: Union[AcquisitionType, List[AcquisitionType]], model
         if method == 'differential_evolution':
             # converting dictionary constraints of microtool tissuemodel to scipy NonLinear constraint
             # constraints = scipy.optimize.NonlinearConstraint(constraints['fun'],0,np.inf)
-            result = scipy.optimize.differential_evolution(calc_loss_scipy, bounds=scaled_bounds,
-                                                           args=scipy_loss_args,
-                                                           x0=x0, workers=-1, disp=True)
+            result = differential_evolution(calc_loss_scipy, bounds=scaled_bounds,
+                                            args=scipy_loss_args,
+                                            x0=x0, workers=-1, disp=True, updating='deferred')
+        elif method == 'dual_annealing':
+            result = dual_annealing(calc_loss_scipy, scaled_bounds, scipy_loss_args, x0=x0)
         else:
             result = minimize(calc_loss_scipy, x0, args=scipy_loss_args,
                               method=method, bounds=scaled_bounds, constraints=constraints,
