@@ -3,7 +3,7 @@ from typing import Sequence, Callable, Optional, Union, List, Tuple, Any, TypeVa
 
 import numpy as np
 import scipy
-from scipy.optimize import OptimizeResult, minimize
+from scipy.optimize import OptimizeResult, minimize, dual_annealing, differential_evolution, direct
 
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.optimization_methods import Optimizer
@@ -14,7 +14,12 @@ from copy import deepcopy
 # parameters should be included in the loss, and the noise variance. It should return a scalar loss.
 LossFunction = Callable[[np.ndarray, Sequence[float], Sequence[bool], float], float]
 
-CONDITION_THRESHOLD = 1e9
+# We use the machine precision of numpy floats to determine if we can invert a matrix without introducing a large
+# numerical error
+CONDITION_THRESHOLD = 1/np.finfo(np.float64).eps
+
+# Arbitrary high cost value for ill conditioned matrices
+ILL_COST = 1e9
 
 
 def fisher_information(jac: np.ndarray, noise_var: float) -> np.ndarray:
@@ -65,7 +70,7 @@ def crlb_loss(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool],
 
     # An ill-conditioned information matrix should result in a high loss.
     if np.linalg.cond(information) > CONDITION_THRESHOLD:
-        return CONDITION_THRESHOLD
+        return ILL_COST
 
     # The loss is the sum of the cramer roa lower bound for every tissue parameter. This is the same as the sum of
     # the reciprocal eigenvalues of the information matrix, which can be calculated at a lower computational cost
@@ -102,15 +107,17 @@ def crlb_loss_inversion(jac: np.ndarray, scales: Sequence[float], include: Seque
 
     # An ill-conditioned information matrix should result in a high loss.
     if np.linalg.cond(information) > CONDITION_THRESHOLD:
-        return CONDITION_THRESHOLD
+        return ILL_COST
 
     # computing the CRLB for every parameter trough inversion of Fisher matrix and getting the diagonal
+
     crlb = scipy.linalg.inv(information).diagonal()
+
 
     # rescaling the CRLB (we square the scales since the information is computed by matrix product of scaled fisher
     # information and so in essence we scaled twice). Also we multiply since the inversion effectively inverted the
     # scaling as well.
-    return float(np.sum(crlb * (scales[include] ** 2)))
+    return float(np.sum(crlb))
 
 
 def compute_loss(scheme: AcquisitionScheme,
@@ -158,10 +165,10 @@ def compute_loss_init(scheme: AcquisitionScheme,
             f"Exclude them from optimization if you are okay with that.")
 
     output = loss(jac, model.scales, include, noise_var)
-    if output > CONDITION_THRESHOLD:
+    if output >= CONDITION_THRESHOLD:
         raise RuntimeError(
             f"Initial AcquisitionScheme error: the initial acquisition scheme results in ill conditioned fisher information matrix, possibly due to model degeneracy. "
-            f"Try a different initial AcquisitionScheme, or alternatively simplify you TissueModel.")
+            f"Try a different initial AcquisitionScheme, or alternatively simplify your TissueModel.")
     return output
 
 
