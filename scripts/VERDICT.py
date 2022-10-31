@@ -2,35 +2,35 @@
 Script demonstrating the optimization of VERDICT tissue model. For now we are using an initial scheme from
 DOI:10.1002/nbm.4019
 """
+
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.optimize
 from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import sphere_models, cylinder_models, gaussian_models
 
-import microtool.optimization_methods
-from microtool.utils.gradient_sampling.uniform import sample_uniform
 from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel
 from microtool.optimize import optimize_scheme, crlb_loss_inversion
 from microtool.utils import plotting
+from microtool.utils.gradient_sampling.uniform import sample_uniform
 
 
 def main():
     # ------------------- Tissue model
-    # The three models we will be using to model intra cellular, extra cellular and Vascular signal respectively
+    # The three models we will be using to model intra cellular, extracellular and Vascular signal respectively
     # Initialize diameter of the cell i.e. sphere in the middle of optimization domain
-    sphere = sphere_models.S4SphereGaussianPhaseApproximation(diffusion_constant=0.9e-9, diameter=10e-6)
-    ball = gaussian_models.G1Ball(lambda_iso=0.9e-9)
-    stick = cylinder_models.C1Stick(mu=[np.pi / 2, np.pi / 2], lambda_par=6.5e-9)
+    sphere = sphere_models.S4SphereGaussianPhaseApproximation(diffusion_constant=2.0e-9, diameter=10e-6)
+    ball = gaussian_models.G1Ball(lambda_iso=2.0e-9)
+    stick = cylinder_models.C1Stick(mu=[np.pi / 2, np.pi / 2], lambda_par=8.0e-9)
 
     verdict_model = MultiCompartmentModel(models=[sphere, ball, stick])
 
     print('The multicompartment model has the following parameters', verdict_model.parameter_names)
 
-    # We fix the extra cellular diffusivuty in accordance with panagiotakis black magic number from 2014
-    # verdict_model.set_fixed_parameter('G1Ball_1_lambda_iso', 0.9e-9)
-    # We set the optimization such that the pseudo diffusioin coefficient is larger than 3.05 um^2/ms
+    # We fix the extracellular diffusivity in accordance with panagiotakis black magic number from 2014
+    # verdict_model.set_fixed_parameter('G1Ball_1_lambda_iso', 2.0e-9)
+
+    # We set the optimization such that the pseudo diffusion coefficient is larger than 3.05 um^2/ms
     # verdict_model.set_parameter_optimization_bounds('C1Stick_1_lambda_par', [3.05e-9, 10e-9])
 
     verdict_model = DmipyTissueModel(verdict_model, np.array([.3, .3, .4]))
@@ -75,7 +75,8 @@ def main():
     print(scheme)
 
     # -------------- Optimization
-    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, loss=crlb_loss_inversion, method=microtool.optimization_methods.SOMA())
+    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, loss=crlb_loss_inversion,
+                                              method='dual_annealing')
 
     print(opt_result)
 
