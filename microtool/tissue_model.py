@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, Union, List
-
+from tabulate import tabulate
 import numpy as np
 from scipy.optimize import curve_fit
 
@@ -46,8 +46,14 @@ class TissueModel(Dict[str, TissueParameter]):
         raise NotImplementedError()
 
     def __str__(self) -> str:
-        parameter_str = '\n'.join(f'    - {key}: {value}' for key, value in self.items())
-        return f'Tissue model with {len(self)} scalar parameters:\n{parameter_str}'
+
+        table = []
+        for key, value in self.items():
+            table.append([key, value.value, value.scale, value.optimize])
+
+        table_str = tabulate(table, headers=["Tissueparameter", "Value", "Scale", "Optimize"])
+
+        return f'Tissue model with {len(self)} scalar parameters:\n{table_str}'
 
     def jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
         """
@@ -232,7 +238,7 @@ class ExponentialTissueModel(TissueModel):
         # the base signal
         S = S0 * np.exp(-TE / T2)
         # return np.array([-TE * S, 1]).T
-        return np.array([(TE/T2**2) * S, S / S0]).T
+        return np.array([(TE / T2 ** 2) * S, S / S0]).T
 
     def jacobian_num(self, scheme: EchoScheme) -> np.ndarray:
         """
@@ -260,18 +266,19 @@ class ExponentialTissueModel(TissueModel):
         initial_parameters = list(self.parameters.values())
 
         # the function defining the signal in form compatible with scipy curve fitting
-        def signal_fun(measurement,t2,s0):
+        def signal_fun(measurement, t2, s0):
             if not include[0]:
                 t2 = initial_parameters[0]
             if not include[1]:
                 s0 = initial_parameters[1]
 
-            return s0*np.exp(-te/t2)
+            return s0 * np.exp(-te / t2)
 
         # TODO create default value and add as a fitting option
         # hard coding the fitting bounds for now
-        bounds = (np.array([0,0]),np.array([np.inf,np.inf]))
-        popt, _ = curve_fit(signal_fun, np.arange(len(te)), noisy_signal, initial_parameters,bounds=bounds, maxfev=4**2 * 100)
+        bounds = (np.array([0, 0]), np.array([np.inf, np.inf]))
+        popt, _ = curve_fit(signal_fun, np.arange(len(te)), noisy_signal, initial_parameters, bounds=bounds,
+                            maxfev=4 ** 2 * 100)
 
         return FittedTissueModel(self, popt)
 
