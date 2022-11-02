@@ -1,13 +1,14 @@
-from itertools import product as iterproduct
 from typing import Sequence, Callable
 
 import numpy as np
 import scipy
+from numba import njit
 
-# We use the machine precision of numpy floats to determine if we can invert a matrix without introducing a large
-# numerical error
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.tissue_model import TissueModel
+# We use the machine precision of numpy floats to determine if we can invert a matrix without introducing a large
+# numerical error
+from microtool.utils.fisher_information import cartesian_product
 
 CONDITION_THRESHOLD = 1 / np.finfo(np.float64).eps
 
@@ -17,6 +18,7 @@ ILL_COST = 1e9
 InformationFunction = Callable[[np.ndarray, np.ndarray, float], np.ndarray]
 
 
+@njit
 def fisher_information_gauss(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
     """
     Calculates the Fisher information matrix, assuming Gaussian noise.
@@ -32,6 +34,7 @@ def fisher_information_gauss(jac: np.ndarray, signal: np.ndarray, noise_var: flo
     return (1 / noise_var) * jac.T @ jac
 
 
+@njit
 def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
     """
     The integral term can be approximated up to 4% as reported in https://doi.org/10.1109/TIT.1967.1054037
@@ -39,17 +42,13 @@ def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: floa
     :param noise_var:
     :return:
     """
-    # number of parameters
-    M, N = jac.shape
 
-    # first we compute the integral term trough approximation
-    a_square = signal ** 2 / (2 * noise_var)
-    Z = (2 + 2 * a_square) / (1 + 2 * a_square)
+    # Approximating the integral without closed form
+    sigma = np.sqrt(noise_var)
+    Z = 2 * signal * (sigma + signal) / (sigma + 2 * signal)
 
-    #
-    derivative_term = np.zeros((N, N, M))
-    for i, j in iterproduct(range(N), range(N)):
-        derivative_term[i, j, :] = jac[:, i] * jac[:, j]
+    # Computing the cross term derivatives using itertools product (effectively nested for loop but bit faster)
+    derivative_term = cartesian_product(jac)
 
     return (1 / noise_var ** 2) * np.sum(derivative_term * (Z - signal ** 2), axis=-1)
 
