@@ -10,7 +10,7 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import sphere_models, cylinder_models, gaussian_models
 
 from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel
-from microtool.optimize import optimize_scheme, crlb_loss_inversion
+from microtool.optimize import optimize_scheme
 from microtool.utils import plotting
 from microtool.utils.gradient_sampling.uniform import sample_uniform
 

@@ -1,20 +1,20 @@
 import math
+from copy import copy
 from typing import Dict, List, Tuple
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-from microtool.optimize import LossFunction, crlb_loss
 from microtool.acquisition_scheme import AcquisitionScheme
+from microtool.loss_function import LossFunction, default_loss, scipy_loss
 from microtool.tissue_model import TissueModel
-from copy import copy
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 class LossInspector:
     def __init__(self, scheme: AcquisitionScheme, model: TissueModel, noise_var: float,
-                 loss_function: LossFunction = crlb_loss, N_samples: int = 100):
+                 loss_function: LossFunction = default_loss, N_samples: int = 100):
         """
 
         :param loss_function: The loss function we wish to inspect
@@ -33,13 +33,7 @@ class LossInspector:
         :param x: The scaled parameters for which we wish to know the loss
         :return: the loss value
         """
-        tissue_scales = self.model.scales
-        tissue_include = self.model.include
-        acq_scales = self.scheme.free_parameter_scales
-        # we update the scheme to compute the loss altough this does not change the scheme the user supplied
-        self.scheme.set_free_parameter_vector(x * acq_scales)
-        jac = self.model.jacobian(self.scheme)
-        return self.loss_function(jac, tissue_scales, tissue_include, self.noise_var)
+        return scipy_loss(x, self.scheme, self.model, self.noise_var, self.loss_function)
 
     def plot(self, parameters: List[Dict[str, int]], domains: List[Tuple[float, float]] = None) -> None:
         """
