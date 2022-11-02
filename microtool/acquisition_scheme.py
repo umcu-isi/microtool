@@ -29,6 +29,7 @@ class AcquisitionParameters:
     values: np.ndarray
     unit: str
     scale: float
+    symbol: str
     lower_bound: Optional[float] = 0.0
     upper_bound: Optional[float] = None
     fixed: bool = False
@@ -89,7 +90,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
             table.update(entry)
 
-        table_str = tabulate(table,headers='keys')
+        table_str = tabulate(table, headers='keys')
         return f'Acquisition scheme with {self.pulse_count} measurements and {len(self)} scalar parameters:\n{table_str}'
 
     @property
@@ -308,19 +309,21 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         super().__init__({
             'DiffusionBValue': AcquisitionParameters(
-                values=b_values, unit='s/mm²', scale=1000, lower_bound=0.0, upper_bound=5e3
+                values=b_values, unit='s/mm²', scale=1000, symbol="b", lower_bound=0.0, upper_bound=5e3
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
-                values=phi, unit='rad', scale=1, lower_bound=None, fixed=True
+                values=phi, unit='rad', scale=1, symbol=r"$\phi$", lower_bound=None, fixed=True
             ),
             'DiffusionGradientAngleTheta': AcquisitionParameters(
-                values=theta, unit='rad', scale=1, lower_bound=None, fixed=True
+                values=theta, unit='rad', scale=1, symbol=r"$\theta$", lower_bound=None, fixed=True
             ),
             'DiffusionPulseWidth': AcquisitionParameters(
-                values=pulse_widths, unit='ms', scale=10, fixed=True, lower_bound=0.1, upper_bound=1e2
+                values=pulse_widths, unit='ms', scale=10, symbol=r"$\delta$", fixed=True, lower_bound=0.1,
+                upper_bound=1e2
             ),
             'DiffusionPulseInterval': AcquisitionParameters(
-                values=pulse_intervals, unit='ms', scale=10, fixed=True, lower_bound=0.1, upper_bound=1e3
+                values=pulse_intervals, unit='ms', scale=10, symbol=r"$\Delta$", fixed=True, lower_bound=0.1,
+                upper_bound=1e3
             ),
         })
 
@@ -464,10 +467,10 @@ class ShellScheme(DiffusionAcquisitionScheme):
         # We store the angles in sequence of increasing b-value for every non zero shell but the first one
         self.update({
             'ShellRotationAngleTheta': AcquisitionParameters(
-                values=np.zeros(n_angles), unit='rad', scale=1, lower_bound=None
+                values=np.zeros(n_angles), unit='rad', symbol=r"$\theta_{shell}$", scale=1, lower_bound=None
             ),
             'ShellRotationAnglePhi': AcquisitionParameters(
-                values=np.zeros(n_angles), unit='rad', scale=1, lower_bound=None
+                values=np.zeros(n_angles), unit='rad', symbol=r"$\phi_{shell}$", scale=1, lower_bound=None
             )
         })
 
@@ -563,11 +566,12 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         super().__init__(
             {
                 'RepetitionTimeExcitation': AcquisitionParameters(
-                    values=repetition_times, unit='ms', scale=100, lower_bound=10.0, upper_bound=1e4),
+                    values=repetition_times, unit='ms', scale=100, symbol=r"$T_R$", lower_bound=10.0, upper_bound=1e4),
                 'EchoTime': AcquisitionParameters(
-                    values=echo_times, unit='ms', scale=10, fixed=True, lower_bound=.1, upper_bound=1e3),
+                    values=echo_times, unit='ms', scale=10, symbol=r"$T_E$", fixed=True, lower_bound=.1,
+                    upper_bound=1e3),
                 'InversionTime': AcquisitionParameters(
-                    values=inversion_times, unit='ms', scale=100, lower_bound=10.0, upper_bound=1e4)
+                    values=inversion_times, unit='ms', scale=100, symbol=r"$T_I$", lower_bound=10.0, upper_bound=1e4)
             }, bounds)
 
     @property
@@ -604,7 +608,8 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
 class EchoScheme(AcquisitionScheme):
     def __init__(self, TE: np.ndarray):
         super().__init__({
-            'EchoTime': AcquisitionParameters(values=TE, unit='ms', scale=10, lower_bound=0.0)
+            'EchoTime': AcquisitionParameters(values=TE, unit='ms', scale=1, symbol=r"$T_E$", lower_bound=5,
+                                              upper_bound=200)
         })
 
     @property
@@ -635,28 +640,28 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
 
         super().__init__({
             'DiffusionBvalue': AcquisitionParameters(
-                values=b_values, unit='s/mm^2', scale=1000, lower_bound=0.0, upper_bound=3e4
+                values=b_values, unit='s/mm^2', scale=1000, symbol=r"$b$", lower_bound=0.0, upper_bound=3e4
             ),
             'EchoTime': AcquisitionParameters(
-                values=echo_times, unit='ms', scale=10, lower_bound=0, upper_bound=1e3
+                values=echo_times, unit='ms', scale=10, symbol=r"$T_E$", lower_bound=0, upper_bound=1e3
             ),
             'MaxPulseGradient': AcquisitionParameters(
-                values=max_gradient, unit='mT/mm', scale=1, fixed=True
+                values=max_gradient, unit='mT/mm', scale=1, symbol=r"$G_{max}$", fixed=True
             ),
             'MaxSlewRate': AcquisitionParameters(
-                values=max_slew_rate, unit='mT/mm/ms', scale=1, fixed=True
+                values=max_slew_rate, unit='mT/mm/ms', scale=1, symbol=r"$SR$", fixed=True
             ),
             'RiseTime': AcquisitionParameters(
-                values=max_gradient / max_slew_rate, unit='ms', scale=1, fixed=True
+                values=max_gradient / max_slew_rate, unit='ms', scale=1, symbol=r"$t_{rise}$", fixed=True
             ),
             'HalfReadTime': AcquisitionParameters(
-                values=half_readout_time, unit='ms', scale=10, fixed=True
+                values=half_readout_time, unit='ms', scale=10, symbol=r"$t_{half}$", fixed=True
             ),
             'PulseDurationPi': AcquisitionParameters(
-                values=excitation_time_pi, unit='ms', scale=10, fixed=True
+                values=excitation_time_pi, unit='ms', scale=10, symbol=r"$t_{\pi}$", fixed=True
             ),
             'PulseDurationHalfPi': AcquisitionParameters(
-                values=excitation_time_half_pi, unit='ms', scale=10, fixed=True
+                values=excitation_time_half_pi, unit='ms', scale=10, symbol=r"$t_{\pi / 2}$", fixed=True
             )
         })
 

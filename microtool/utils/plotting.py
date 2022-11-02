@@ -261,9 +261,9 @@ def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) ->
         y = scheme[parameter].values
         x = np.arange(len(y)) + 1
         ax.plot(x, y, '.')
-        plt.xticks(range(scheme.pulse_count), np.array(range(scheme.pulse_count)) + 1)
+        plt.xticks(np.array(range(scheme.pulse_count)) + 1, np.array(range(scheme.pulse_count)) + 1)
         ax.set_xlabel("Measurement")
-        ax.set_ylabel(parameter + " [{}]".format(scheme[parameter].unit))
+        ax.set_ylabel(scheme[parameter].symbol + " [{}]".format(scheme[parameter].unit))
     plt.suptitle(title)
     plt.tight_layout()
     return fig
