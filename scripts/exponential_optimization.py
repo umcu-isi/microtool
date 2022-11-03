@@ -5,8 +5,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from microtool.acquisition_scheme import EchoScheme
-from microtool.loss_function import compute_loss, default_loss
 from microtool.optimize import optimize_scheme
+from microtool.optimize.loss_functions import compute_loss, default_loss
 from microtool.tissue_model import ExponentialTissueModel
 from microtool.utils.plotting import LossInspector
 

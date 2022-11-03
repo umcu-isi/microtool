@@ -7,7 +7,7 @@ from numba import njit
 
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.tissue_model import TissueModel
-from microtool.utils.fisher_information import cartesian_product
+from .utils import cartesian_product
 
 # We use the machine precision of numpy floats to determine if we can invert a matrix without introducing a large
 # numerical error

@@ -4,13 +4,10 @@ from typing import Optional, Union, Tuple, TypeVar
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize, differential_evolution, dual_annealing
 
-from microtool.acquisition_scheme import AcquisitionScheme
-from microtool.loss_function import compute_loss, check_initial_scheme, scipy_loss, LossFunction, default_loss
-from microtool.optimization_methods import Optimizer
-from microtool.tissue_model import TissueModel
-
-# Arbitrary high cost value for ill conditioned matrices
-ILL_COST = 1e9
+from .loss_functions import compute_loss, check_initial_scheme, scipy_loss, LossFunction, default_loss
+from .methods import Optimizer
+from ..acquisition_scheme import AcquisitionScheme
+from ..tissue_model import TissueModel
 
 # A way of type hinting all the derived classes of AcquisitionScheme
 AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)

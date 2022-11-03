@@ -1,6 +1,7 @@
-from microtool.optimization_methods import SOMA
 import numpy as np
 from scipy.optimize import minimize
+
+from microtool.optimize.methods import SOMA
 
 
 def ackley(x):

@@ -8,7 +8,7 @@ import pandas as pd
 from scipy.stats import norm
 
 from microtool.acquisition_scheme import AcquisitionScheme
-from microtool.loss_function import LossFunction, default_loss, scipy_loss
+from microtool.optimize.loss_functions import LossFunction, default_loss, scipy_loss
 from microtool.tissue_model import TissueModel
 
 
