@@ -1,3 +1,4 @@
+from abc import abstractmethod, ABC
 from typing import Sequence, Callable
 
 import numpy as np
@@ -6,10 +7,10 @@ from numba import njit
 
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.tissue_model import TissueModel
-# We use the machine precision of numpy floats to determine if we can invert a matrix without introducing a large
-# numerical error
 from microtool.utils.fisher_information import cartesian_product
 
+# We use the machine precision of numpy floats to determine if we can invert a matrix without introducing a large
+# numerical error
 CONDITION_THRESHOLD = 1 / np.finfo(np.float64).eps
 
 # Arbitrary high cost value for ill conditioned matrices
@@ -37,7 +38,10 @@ def fisher_information_gauss(jac: np.ndarray, signal: np.ndarray, noise_var: flo
 @njit
 def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
     """
+    Calculates the fisher information matrix assuming Rician noise.
+
     The integral term can be approximated up to 4% as reported in https://doi.org/10.1109/TIT.1967.1054037
+    :param signal:
     :param jac:
     :param noise_var:
     :return:
@@ -53,10 +57,21 @@ def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: floa
     return (1 / noise_var ** 2) * np.sum(derivative_term * (Z - signal ** 2), axis=-1)
 
 
-class LossFunction:
+class LossFunction(ABC):
+    @abstractmethod
     def __call__(self, jac: np.ndarray, signal: np.ndarray, scales: Sequence[float], include: Sequence[bool],
                  noise_var: float) -> float:
-        raise NotImplementedError()
+        """
+        Computes a loss value
+
+        :param jac: the jacobian of the signal w.r.t. the tissue parameters
+        :param signal: the actual signal
+        :param scales:
+        :param include:
+        :param noise_var: the variance of the noise distribution
+        :return: loss
+        """
+        pass
 
     @staticmethod
     def preprocess_jacobian(jac: np.ndarray, scales: Sequence[float], include: Sequence[bool]):
@@ -73,78 +88,51 @@ class LossFunction:
         return jac_rescaled
 
 
-class CrlbBase(LossFunction):
+class CrlbBase(LossFunction, ABC):
     def __init__(self, information_func: InformationFunction):
         self.information_func = information_func
 
     def __call__(self, jac: np.ndarray, signal: np.ndarray, scales: Sequence[float], include: Sequence[bool],
                  noise_var: float) -> float:
-        raise NotImplementedError()
+        # preprocessing
+        jac_rescaled = self.preprocess_jacobian(jac, scales, include)
+
+        # Calculate the Fisher information matrix on the rescaled Jacobian.
+        # A properly scaled matrix gives an interpretable condition number and a
+        # more robust inverse.
+        information = self.information_func(jac_rescaled, signal, noise_var)
+
+        # An ill-conditioned information matrix should result in a high loss.
+        if np.linalg.cond(information) > CONDITION_THRESHOLD:
+            return ILL_COST
+
+        return self.compute_crlb(information)
+
+    @staticmethod
+    @abstractmethod
+    def compute_crlb(information: np.ndarray) -> float:
+        """
+        Computes the cramer roa lower bound based loss given the fisher information (assumed well conditioned)
+
+        :param information: A well conditioned fisher information matrix
+        :return: loss
+        """
+        pass
 
 
 class CrlbInversion(CrlbBase):
-    def __call__(self, jac: np.ndarray, signal: np.ndarray, scales: Sequence[float], include: Sequence[bool],
-                 noise_var: float) -> float:
-        """
-        A different way to compute the loss where we do matrix inversion and rescale the crlb after computation.
-
-        :param jac:
-        :param scales:
-        :param include:
-        :param noise_var:
-        :return:
-        """
-        # preprocessing
-        jac_rescaled = self.preprocess_jacobian(jac, scales, include)
-
-        # Calculate the Fisher information matrix on the rescaled Jacobian.
-        # A properly scaled matrix gives an interpretable condition number and a
-        # more robust inverse.
-        information = self.information_func(jac_rescaled, signal, noise_var)
-
-        # An ill-conditioned information matrix should result in a high loss.
-        if np.linalg.cond(information) > CONDITION_THRESHOLD:
-            return ILL_COST
-
+    @staticmethod
+    @njit
+    def compute_crlb(information: np.ndarray) -> float:
         # computing the CRLB for every parameter trough inversion of Fisher matrix and getting the diagonal
-
         crlb = scipy.linalg.inv(information).diagonal()
-
-        # rescaling the CRLB (we square the scales since the information is computed by matrix product of scaled fisher
-        # information and so in essence we scaled twice). Also we multiply since the inversion effectively inverted the
-        # scaling as well.
-        return float(np.sum(crlb * np.array(scales)[np.array(include)] ** 2))
+        return float(np.sum(crlb))
 
 
 class CrlbEigenvalues(CrlbBase):
-    def __call__(self, jac: np.ndarray, signal: np.ndarray, scales: Sequence[float], include: Sequence[bool],
-                 noise_var: float) -> float:
-        """
-        Objective function for minimizing the total parameter variance (Cramer-Rao lower bounds), as defined in Alexander,
-        2008 (DOI https://doi.org/10.1002/mrm.21646)
-
-        :param signal:
-        :param jac: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
-        :param scales: A sequence with M parameter scales.
-        :param include: A boolean sequence specifying which parameters should be included in the loss.
-        :param noise_var: Noise variance.
-        :return: Estimated total weighted parameter variance.
-        """
-        # preprocessing
-        jac_rescaled = self.preprocess_jacobian(jac, scales, include)
-
-        # Calculate the Fisher information matrix on the rescaled Jacobian.
-        # A properly scaled matrix gives an interpretable condition number and a
-        # more robust inverse.
-        information = self.information_func(jac_rescaled, signal, noise_var)
-
-        # An ill-conditioned information matrix should result in a high loss.
-        if np.linalg.cond(information) > CONDITION_THRESHOLD:
-            return ILL_COST
-
-        # The loss is the sum of the cramer roa lower bound for every tissue parameter. This is the same as the sum of
-        # the reciprocal eigenvalues of the information matrix, which can be calculated at a lower computational cost
-        # because of symmetry of the information matrix.
+    @staticmethod
+    @njit
+    def compute_crlb(information: np.ndarray) -> float:
         return (1 / np.linalg.eigvalsh(information)).sum()
 
 
