@@ -46,8 +46,8 @@ scheme_copy = deepcopy(scheme)
 # ----------- Optimization
 optimizer_options = {"maxiter": 1000, 'disp': True}
 
-scheme_optimized, _ = optimize_scheme(scheme, signal_model,
-                                      noise_variance=0.02, repeat=1, method='SLSQP', options=optimizer_options)
+scheme_optimized, _ = optimize_scheme(scheme, signal_model, noise_variance=0.02, method='SLSQP',
+                                      options=optimizer_options)
 
 print('Optimized Scheme: \n', scheme_optimized)
 

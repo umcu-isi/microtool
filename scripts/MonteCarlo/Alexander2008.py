@@ -9,8 +9,9 @@ import pickle
 from scipy import stats
 
 from microtool import monte_carlo
-from microtool.utils import saved_schemes, saved_models
+from microtool.dmipy import DmipyAcquisitionSchemeWrapper
 from microtool.optimize import optimize_scheme
+from microtool.utils import saved_schemes, saved_models
 
 currentdir = pathlib.Path(__file__).parent
 outputdir = currentdir / "results" / "multi_compartment"
@@ -22,19 +23,19 @@ def main():
     noise_var = 0.02
     # -------------ACQUISITION-------------------
     scheme = saved_schemes.alexander2008()
+    scheme_wrapped = DmipyAcquisitionSchemeWrapper(scheme)
 
     # ------MODEL-------------
     mc_model = saved_models.cylinder_zeppelin()
     print("Using the following model:\n", mc_model)
 
     # ----------- Optimizing the scheme ------------------
-    sheme_opt, _ = optimize_scheme(scheme,mc_model, noise_var)
-    mc_model.optimize(scheme, noise_var)
+    sheme_opt, _ = optimize_scheme(scheme_wrapped, mc_model, noise_var)
     print("Using the optimized scheme:\n", scheme)
     scheme.print_acquisition_info
+
     # ------------ Monte Carlo --------------------
     # Setting up the noise distribution
-
     noise_distribution = stats.norm(loc=0, scale=noise_var)
 
     # Running monte carlo simulation

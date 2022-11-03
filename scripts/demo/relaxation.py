@@ -29,8 +29,7 @@ def main():
 
     # ## 3. Optimize the acquisition scheme
     noise_variance = 0.02
-    scheme_optimal, _ = optimize.optimize_scheme(ir_scheme, relaxation_model, noise_variance,
-                                                 method='differential_evolution')
+    scheme_optimal, _ = optimize.optimize_scheme(ir_scheme, relaxation_model, noise_variance, method='dual_annealing')
 
     print(scheme_optimal)
     plt.figure(figsize=(6, 4))

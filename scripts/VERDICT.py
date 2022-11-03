@@ -29,11 +29,16 @@ def main():
 
     # We fix the extracellular diffusivity in accordance with panagiotakis black magic number from 2014
     # verdict_model.set_fixed_parameter('G1Ball_1_lambda_iso', 2.0e-9)
-
+    # verdict_model.set_fixed_parameter('C1Stick_1_lambda_par', 8.0e-9)
     # We set the optimization such that the pseudo diffusion coefficient is larger than 3.05 um^2/ms
     # verdict_model.set_parameter_optimization_bounds('C1Stick_1_lambda_par', [3.05e-9, 10e-9])
 
     verdict_model = DmipyTissueModel(verdict_model, np.array([.3, .3, .4]))
+    # verdict_model['partial_volume_2'].optimize = False
+    # verdict_model['partial_volume_1'].optimize = False
+    # verdict_model['C1Stick_1_mu_0'].optimize = False
+    # verdict_model['C1Stick_1_mu_1'].optimize = False
+
     print("The verdict tissue model:", verdict_model)
 
     # ------------------- Acquisition Scheme
@@ -75,8 +80,7 @@ def main():
     print(scheme)
 
     # -------------- Optimization
-    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, loss=crlb_loss_inversion,
-                                              method='dual_annealing')
+    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, method='dual_annealing')
 
     print(opt_result)
 
