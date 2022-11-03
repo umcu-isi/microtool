@@ -47,7 +47,7 @@ def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: floa
     sigma = np.sqrt(noise_var)
     Z = 2 * signal * (sigma + signal) / (sigma + 2 * signal)
 
-    # Computing the cross term derivatives using itertools product (effectively nested for loop but bit faster)
+    # Computing the cross term derivatives
     derivative_term = cartesian_product(jac)
 
     return (1 / noise_var ** 2) * np.sum(derivative_term * (Z - signal ** 2), axis=-1)
@@ -166,10 +166,10 @@ def compute_loss(scheme: AcquisitionScheme,
     return loss(jac, signal, model.scales, model.include, noise_var)
 
 
-def compute_loss_init(scheme: AcquisitionScheme,
-                      model: TissueModel,
-                      noise_var: float,
-                      loss: LossFunction) -> float:
+def check_initial_scheme(scheme: AcquisitionScheme,
+                         model: TissueModel,
+                         noise_var: float,
+                         loss: LossFunction) -> float:
     """
     Function for computing the loss given the following parameters
 

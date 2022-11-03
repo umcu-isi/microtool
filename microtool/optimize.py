@@ -5,7 +5,7 @@ import numpy as np
 from scipy.optimize import OptimizeResult, minimize, differential_evolution, dual_annealing
 
 from microtool.acquisition_scheme import AcquisitionScheme
-from microtool.loss_function import compute_loss, compute_loss_init, scipy_loss, LossFunction, default_loss
+from microtool.loss_function import compute_loss, check_initial_scheme, scipy_loss, LossFunction, default_loss
 from microtool.optimization_methods import Optimizer
 from microtool.tissue_model import TissueModel
 
@@ -45,7 +45,7 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
         optimizer_options = None
 
     # the loss of the initial scheme
-    initial_loss = np.array([compute_loss_init(scheme, model, noise_variance, loss=loss)])
+    initial_loss = np.array([check_initial_scheme(scheme, model, noise_variance, loss=loss)])
 
     # Copying the scheme for number repeated optimizations required.
     scheme_copy = deepcopy(scheme)
