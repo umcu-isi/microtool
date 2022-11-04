@@ -1,5 +1,5 @@
 from copy import copy
-from typing import Dict, Union
+from typing import Dict, Union, List
 
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
@@ -7,7 +7,7 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.gaussian_models import G1Ball
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
-from microtool.tissue_model import TissueModel, TissueParameter
+from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecoratorBase
 
 
 # TODO: deal with fractional parameter relations!
@@ -54,7 +54,7 @@ def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParame
     return parameters
 
 
-def convert_acquisition_scheme(
+def convert_diffusion_scheme2dmipy_scheme(
         scheme: Union[DiffusionAcquisitionScheme, DmipyAcquisitionScheme]) -> DmipyAcquisitionScheme:
     # Create a dmipy acquisition scheme.
     if isinstance(scheme, DmipyAcquisitionScheme):
@@ -68,10 +68,21 @@ def convert_acquisition_scheme(
         )
 
 
+def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme) -> DiffusionAcquisitionScheme:
+    # convert to s/mm^2 from s/m^2
+    b_values = scheme.bvalues * 1e-6
+    b_vectors = scheme.gradient_directions
+    # convert to ms from s
+    pulse_widths = scheme.delta * 1e3
+    pulse_intervals = scheme.Delta * 1e3
+    return DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
+
+
 class DmipyAcquisitionSchemeWrapper(DiffusionAcquisitionScheme):
     """
     Class wrapper for pure dmipy acquisition schemes
     """
+
     def __init__(self, scheme: DmipyAcquisitionScheme):
         self._scheme = scheme
         # convert to s/mm^2 from s/m^2
@@ -89,7 +100,7 @@ class DmipyTissueModel(TissueModel):
     dmipy model otherwise a value error is raised.
     """
 
-    def __init__(self, model: MultiCompartmentModel, volume_fractions: np.ndarray = None):
+    def __init__(self, model: MultiCompartmentModel, volume_fractions: List[float] = None):
         """
 
         :param model: MultiCompartment model
@@ -97,7 +108,7 @@ class DmipyTissueModel(TissueModel):
                                  multicompartment model)
         """
         super().__init__()
-        # Extract the scalar tissue parameters from individual models.
+        # Extract the tissue parameters from individual models and convert to 'scalars'.
         self.update(get_parameters(model))
 
         # -------------------- Set up volume fractions if there are multiple models
@@ -109,7 +120,7 @@ class DmipyTissueModel(TissueModel):
             # check if the volume_fractions match the length of this dictionary
             if len(volume_fractions) != len(vf_keys):
                 raise ValueError("Not enough volume fractions provided for the number of models.")
-            if np.sum(volume_fractions) != 1:
+            if np.array(volume_fractions).sum() != 1:
                 raise ValueError("Provide volume fractions that sum to 1.")
             # Including the volume fractions as TissueParameters to the DmipyTissueModel
             for i, key in enumerate(vf_keys):
@@ -132,14 +143,14 @@ class DmipyTissueModel(TissueModel):
         self._reciprocal_h = (1 / h).reshape(-1, 1)
 
     def __call__(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
-        dmipy_scheme = convert_acquisition_scheme(scheme)
+        dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
 
         # Evaluate the dmipy model.
         s0 = self['S0'].value
         return s0 * self._model.simulate_signal(dmipy_scheme, self._dmipy_parameters)
 
     def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
-        dmipy_scheme = convert_acquisition_scheme(scheme)
+        dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
 
         # Evaluate the dmipy model on the baseline and on the parameter vectors with finite differences.
         s0 = self['S0'].value
@@ -155,10 +166,10 @@ class DmipyTissueModel(TissueModel):
         jac = np.concatenate((central_diff * self._reciprocal_h, [baseline])).T
         return jac
 
-    def fit(self, scheme: DmipyAcquisitionScheme, noisy_signal: np.ndarray, **fit_options):
-        dmipy_scheme = convert_acquisition_scheme(scheme)
+    def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options):
+        dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
 
-        result = self._model.fit(dmipy_scheme, noisy_signal, **fit_options)
+        result = self._model.fit(dmipy_scheme, signal, **fit_options)
         return result
 
     def set_initial_parameters(self, parameters: Dict[str, np.ndarray]) -> None:

@@ -12,13 +12,17 @@ as simulating signal using the same pure dmipy model and scheme.
 
 3.) When computing the jacobian trough the finite differences method we get a result that agrees with analytical mehtods
 """
+from typing import Dict
+
 import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models
 
-
-from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel, convert_acquisition_scheme, AnalyticBall
+from microtool.dmipy import CascadeDecorator
+from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel, convert_diffusion_scheme2dmipy_scheme, \
+    AnalyticBall
+from microtool.utils import saved_models, saved_schemes
 
 
 def test_scheme_wrapping():
@@ -34,7 +38,7 @@ def test_scheme_wrapping():
     # Micrtool scheme wrapper
     wrapped_scheme = DmipyAcquisitionSchemeWrapper(naked_scheme)
     # Microtool scheme converter
-    converted_wrapped_scheme = convert_acquisition_scheme(wrapped_scheme)
+    converted_wrapped_scheme = convert_diffusion_scheme2dmipy_scheme(wrapped_scheme)
 
     naked_attributes = vars(naked_scheme)
     converted_attributes = vars(converted_wrapped_scheme)
@@ -112,7 +116,7 @@ class TestModelSchemeIntegration:
         wrapped_signal = stick_model_wrapped(self.acq_wrapped)
         naked_signal = stick_model.simulate_signal(self.acq_scheme, parameters)
 
-        np.testing.assert_allclose(wrapped_signal, naked_signal, rtol=1e-6,atol=1e-5)
+        np.testing.assert_allclose(wrapped_signal, naked_signal, rtol=1e-6, atol=1e-5)
 
     def test_finite_differences(self):
         """
