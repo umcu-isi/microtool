@@ -1,3 +1,3 @@
-import loss_functions
-import methods
+from . import loss_functions
+from . import methods
 from .optimize import *
