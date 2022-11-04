@@ -5,7 +5,7 @@ from dmipy.signal_models import cylinder_models, gaussian_models
 from microtool.dmipy import DmipyTissueModel
 
 
-def cylinder_zeppelin() -> DmipyTissueModel:
+def cylinder_zeppelin_naked() -> MultiCompartmentModel:
     """
      A function to build the tissuemodel used in Alexander 2008.
     :return:
@@ -25,11 +25,22 @@ def cylinder_zeppelin() -> DmipyTissueModel:
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
 
     mc_model = MultiCompartmentModel(models=[zeppelin, cylinder])
+
     # Fixing the parralel diffusivity parameter to be equal for intra and extra axonal models
     mc_model.set_equal_parameter('C4CylinderGaussianPhaseApproximation_1_lambda_par', 'G2Zeppelin_1_lambda_par')
     # Setting the initial diameter to the ground truth
     mc_model.set_initial_guess_parameter('C4CylinderGaussianPhaseApproximation_1_diameter', diameter)
+    return mc_model
+
+
+def cylinder_zeppelin() -> DmipyTissueModel:
+    """
+     A function to build the tissuemodel used in Alexander 2008.
+    :return:
+    """
+    mc_model = cylinder_zeppelin_naked()
+
     # Wrapping the model for compatibility
-    mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=np.array([.5, .5]))
+    mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=[.5, .5])
 
     return mc_model_wrapped
