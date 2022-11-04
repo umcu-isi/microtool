@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Union, List, Tuple, Dict, Optional
 
 import numpy as np
+from tabulate import tabulate
 
 from microtool.utils import gradient_sampling
 from microtool.utils.gradient_sampling.utils import angles_to_unitvectors
 from microtool.utils.solve_echo_time import minimal_echo_time
-from tabulate import tabulate
 
 
 @dataclass
@@ -309,7 +309,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         super().__init__({
             'DiffusionBValue': AcquisitionParameters(
-                values=b_values, unit='s/mm²', scale=1000, symbol="b", lower_bound=0.0, upper_bound=5e3
+                values=b_values, unit='s/mm²', scale=1000, symbol="b", lower_bound=0.0, upper_bound=20e3
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1, symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -616,7 +616,7 @@ class EchoScheme(AcquisitionScheme):
     def echo_times(self):
         return self['EchoTime'].values
 
-    def get_constraints(self) -> Union[dict, List[dict]]:
+    def get_constraints(self) -> Optional[Union[dict, List[dict]]]:
         """ For now without constraints. """
         return None
 
