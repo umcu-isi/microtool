@@ -327,3 +327,42 @@ class FlaviusSignalModel(TissueModel):
 
         jac = [te * S0 * b_D * te_t2 / T2 ** 2, - bvalues * S0 * b_D * te_t2, b_D * te_t2]
         return np.array(jac).T
+
+
+class TissueModelDecoratorBase(TissueModel, ABC):
+    """
+    Abstract class for initialization of TissueModel decorators. this just passes all public methods to the original object
+    override these methods to extend or alter functionality while retaining the same interface.
+    """
+
+    def __init__(self, original: TissueModel):
+        self._original = original
+        super().__init__(original)
+
+    def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
+        return self._original.__call__(scheme)
+
+    def __str__(self):
+        return self._original.__str__()
+
+    def jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
+        return self._original.jacobian(scheme)
+
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModel:
+        return self._original.fit(scheme, signal, **fit_options)
+
+    @property
+    def parameters(self):
+        return self._original.parameters
+
+    @property
+    def parameter_names(self):
+        return self._original.parameter_names
+
+    @property
+    def scales(self):
+        return self._original.scales
+
+    @property
+    def include(self):
+        return self._original.include

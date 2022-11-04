@@ -135,3 +135,73 @@ class TestModelSchemeIntegration:
         jac_numeric = analytic_ball.jacobian(mt_scheme)
         # There are some rounding errors but we can reach a relative tolerance 1e-5 which should be enough.
         np.testing.assert_allclose(jac_numeric, jac_analytic, rtol=1e-5)
+
+    def test_fit(self):
+        """
+        Again test fit but now with the wrapper
+        :return:
+        """
+
+        pass
+
+    def test_cascade_decorator(self):
+        """
+        Test fitting using cascaded decorator.
+        :return:
+        """
+        # -------- Acquisition
+        scheme_naked = saved_schemes.alexander2008()
+        scheme_wrapped = DmipyAcquisitionSchemeWrapper(scheme_naked)
+
+        # ---------- initialize expected result by manually sequentially fitting and setting initial values
+        # generating signal
+        cylinder_zeppelin = saved_models.cylinder_zeppelin()
+        signal = cylinder_zeppelin(scheme_wrapped)
+
+        # fitting simple model to signal
+        stick_zeppelin = saved_models.stick_zeppelin()
+        simple_fit = stick_zeppelin.fit(scheme_wrapped, signal)
+        simple_dict = simple_fit.fitted_parameters
+        # mapping fit values to initial guess or complex model
+        cylinder_zeppelin.set_initial_parameters(self._stickzeppelin_to_cylinderzeppelin(simple_dict))
+        expected_result = cylinder_zeppelin.fit(scheme_wrapped, signal)
+
+        # ---------------- Now doing the samething for the decorator
+        # name map maps the simple model names to complex model names
+        name_map = {
+            # The same model so we simply map
+            'G2Zeppelin_1_mu': 'G2Zeppelin_1_mu',
+            'G2Zeppelin_1_lambda_par': 'G2Zeppelin_1_lambda_par',
+            'G2Zeppelin_1_lambda_perp': 'G2Zeppelin_1_lambda_perp',
+
+            # For the cylinder we initialize the orientation and parralel diffusivities
+            # to those found by fitting stick zep
+            "C1Stick_1_mu": 'C4CylinderGaussianPhaseApproximation_1_mu',
+            "C1Stick_1_lambda_par": 'C4CylinderGaussianPhaseApproximation_1_lambda_par',
+
+            'partial_volume_0': 'partial_volume_0',
+            'partial_volume_1': 'partial_volume_1'
+        }
+
+        cylinder_zeppelin_cascade = CascadeDecorator(cylinder_zeppelin, stick_zeppelin, name_map)
+        result = cylinder_zeppelin_cascade.fit(scheme_wrapped, signal)
+        result_dict = result.fitted_parameters
+        expected_dict = expected_result.fitted_parameters
+        for parameter in result_dict.keys():
+            np.testing.assert_allclose(result_dict[parameter], expected_dict[parameter])
+
+    @staticmethod
+    def _stickzeppelin_to_cylinderzeppelin(parameters: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        return {
+            # We set the zeppelin values to the values found by stick zeppelin fitting
+            'G2Zeppelin_1_mu': parameters['G2Zeppelin_1_mu'],
+            'G2Zeppelin_1_lambda_par': parameters['G2Zeppelin_1_lambda_par'],
+            'G2Zeppelin_1_lambda_perp': parameters['G2Zeppelin_1_lambda_perp'],
+
+            # For the cylinder we initialize the orientation and parralel diffusivities to those found by fitting stick zep
+            'C4CylinderGaussianPhaseApproximation_1_mu': parameters["C1Stick_1_mu"],
+            'C4CylinderGaussianPhaseApproximation_1_lambda_par': parameters["C1Stick_1_lambda_par"],
+
+            'partial_volume_0': parameters['partial_volume_0'],
+            'partial_volume_1': parameters['partial_volume_1']
+        }

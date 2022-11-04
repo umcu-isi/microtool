@@ -218,3 +218,51 @@ class AnalyticBall(DmipyTissueModel):
 
         jac = np.array([- bvals * S0 * np.exp(-bvals * Diso), np.exp(-bvals * Diso)]).T
         return jac
+
+
+class CascadeDecorator(TissueModelDecoratorBase):
+    """
+    Use this decorator to add dmipytissuemodels that should be fitted before to initialize parameter values in more
+    complex models
+    """
+
+    # just a reminder of the attribute names we are adding
+    # (this is where we store the complex model)
+    _original: DmipyTissueModel = None
+    # storing the first model that we need to fit
+    _simple_model: DmipyTissueModel = None
+    # a map of the complex model parameter names as values and simple parameter names as keys
+    _parameter_map: Dict[str, str] = None
+
+    def __init__(self, complex_model: DmipyTissueModel, simple_model: DmipyTissueModel, parameter_map: Dict[str, str]):
+        # TODO check that simple model is indeed simpler than complex model
+
+        super().__init__(complex_model)
+        self._simple_model = simple_model
+
+        # TODO check parameter map for correct names etc
+        self._parameter_map = parameter_map
+
+    def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options):
+        # fit simple model
+        simple_fit = self._simple_model.fit(scheme, signal, **fit_options)
+        simple_parameters = simple_fit.fitted_parameters
+
+        # map parameters to initial values for complex model
+        initial_values = self._name_map2value_map(simple_parameters, self._parameter_map)
+        self._original.set_initial_parameters(initial_values)
+        # fit complex model
+        return self._original.fit(scheme, signal, **fit_options)
+
+    @staticmethod
+    def _name_map2value_map(fit_values: Dict[str, np.ndarray], name_map: Dict[str, str]) -> Dict[str, np.ndarray]:
+        """
+        :param fit_values: The fitted simple parameters
+        :param name_map: The simple parameters that serve as
+        :return:
+        """
+        value_map = {}
+        for simple_name in name_map.keys():
+            complex_name = name_map[simple_name]
+            value_map[complex_name] = fit_values[simple_name]
+        return value_map
