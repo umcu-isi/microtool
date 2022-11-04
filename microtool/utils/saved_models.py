@@ -44,3 +44,16 @@ def cylinder_zeppelin() -> DmipyTissueModel:
     mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=[.5, .5])
 
     return mc_model_wrapped
+
+
+def stick_zeppelin() -> DmipyTissueModel:
+    # Cylinder orientation angles theta, phi := mu
+    mu = np.array([np.pi / 2, 0.])
+    # Parralel diffusivity lambda_par in E-9 m^2/s (in the paper d_par)
+    lambda_par = 1.7e-9
+    lambda_perp = 0.2e-9
+
+    zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
+    stick = cylinder_models.C1Stick(mu, lambda_par)
+    stick_zeppelin = MultiCompartmentModel(models=[zeppelin, stick])
+    return DmipyTissueModel(stick_zeppelin, volume_fractions=[0.5, 0.5])
