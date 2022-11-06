@@ -81,14 +81,13 @@ class TestTissueModelWrapping:
 
         np.testing.assert_allclose(wrapped_signal, self.signal)
 
-    def test_fit(self):
-        """
-        Testing if dmipy fits properly. Fails because of orientation degeneracy ???
-        """
-        fitted_model = self.stick_model.fit(self.scheme, self.signal)
-        for parameter, value in fitted_model.fitted_parameters.items():
-            expected = np.array(self.parameters[parameter])
-            np.testing.assert_allclose(np.array(value).flatten(), expected)
+
+# TODO: write scheme tests
+class TestScheme:
+    """
+    Probably should write some tests for the scheme wrappers before testing integration features
+    """
+    pass
 
 
 class TestModelSchemeIntegration:
@@ -99,22 +98,22 @@ class TestModelSchemeIntegration:
     acq_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
     acq_wrapped = DmipyAcquisitionSchemeWrapper(acq_scheme)
 
+    # Models used in both test simulate signal and test fit
+    # simplest tissuemodel available in dmipy
+    mu = (np.pi / 2., np.pi / 2.)  # in radians
+    lambda_par = 1.7e-9  # in m^2/s
+    stick = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
+    stick_model = MultiCompartmentModel(models=[stick])
+    stick_model_wrapped = DmipyTissueModel(stick_model)
+    parameters = {'C1Stick_1_mu': mu, 'C1Stick_1_lambda_par': lambda_par}
+
     def test_simulate_signal(self):
         """
         Testing if simulate signal works if we wrap the dmipy objects in microtool. We use a stick model for the test.
         """
-        # Tissuemodel aspects
-        # simplest tissuemodel available in dmipy
-        mu = (np.pi / 2., np.pi / 2.)  # in radians
-        lambda_par = 1.7e-9  # in m^2/s
-        stick = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
-        stick_model = MultiCompartmentModel(models=[stick])
-        stick_model_wrapped = DmipyTissueModel(stick_model)
-        parameters = {'C1Stick_1_mu': mu, 'C1Stick_1_lambda_par': lambda_par}
-
         # signal computation
-        wrapped_signal = stick_model_wrapped(self.acq_wrapped)
-        naked_signal = stick_model.simulate_signal(self.acq_scheme, parameters)
+        wrapped_signal = self.stick_model_wrapped(self.acq_wrapped)
+        naked_signal = self.stick_model.simulate_signal(self.acq_scheme, self.parameters)
 
         np.testing.assert_allclose(wrapped_signal, naked_signal, rtol=1e-6, atol=1e-5)
 
@@ -138,11 +137,26 @@ class TestModelSchemeIntegration:
 
     def test_fit(self):
         """
-        Again test fit but now with the wrapper
-        :return:
+        We should test if wrapped fit result is same as "naked" fit result.
+        This also implicitly tests the FittedTissueModel classes
         """
+        # fit using pure dmipy objects to generate expected result
+        signal = self.stick_model.simulate_signal(self.acq_scheme, self.parameters)
+        pure_fit_result = self.stick_model.fit(self.acq_scheme, signal)
+        expected = pure_fit_result.fitted_parameters
 
-        pass
+        # fit using wrapped objects to generate result for testing
+        fit_result = self.stick_model_wrapped.fit(self.acq_wrapped, signal)
+        result = fit_result.fitted_parameters
+
+        expected_mt = self.stick_model_wrapped.dmipy_parameters2microtool_parameters(expected)
+
+        # testing to make sure the converter works on the keys
+        assert expected_mt.keys() == result.keys()
+
+        # testing if the values are the same for all parameters
+        for value, expected_value in zip(result.values(), expected_mt.values()):
+            np.testing.assert_allclose(value, expected_value, rtol=1e-6)
 
     def test_cascade_decorator(self):
         """
@@ -161,7 +175,7 @@ class TestModelSchemeIntegration:
         # fitting simple model to signal
         stick_zeppelin = saved_models.stick_zeppelin()
         simple_fit = stick_zeppelin.fit(scheme_wrapped, signal)
-        simple_dict = simple_fit.fitted_parameters
+        simple_dict = simple_fit.dmipyfitresult.fitted_parameters
         # mapping fit values to initial guess or complex model
         cylinder_zeppelin.set_initial_parameters(self._stickzeppelin_to_cylinderzeppelin(simple_dict))
         expected_result = cylinder_zeppelin.fit(scheme_wrapped, signal)

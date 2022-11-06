@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Optional
 
 import numpy as np
 from scipy.optimize import curve_fit
@@ -27,7 +27,8 @@ class TissueParameter:
 
     :param value: Parameter value.
     :param scale: The typical parameter value scale (order of magnitude).
-    :param optimize: Specifies if the parameter should be included in the optimization (default = True).
+    :param optimize: Specifies if the parameter should be included in the optimization of an AcquisitionScheme.
+                    If we dont optimize the scheme we assume the parameter is known and exclude it from fitting as well.
     """
     value: float
     scale: float
@@ -76,8 +77,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
         :param signal: The noisy signal
         :param scheme: The scheme under investigation
-        :return: A tuple containing the optimized tissue parameters as a TissueModel instance and the covariance matrix
-                 of the fit
+        :return: A FittedTissueModel
         """
 
         pass
@@ -102,23 +102,41 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         return [value.optimize for value in self.values()]
 
 
-class FittedTissueModel:
-    def __init__(self, model: TissueModel, fitted_parameters_vector: np.ndarray):
+class FittedModel(ABC):
+    @property
+    @abstractmethod
+    def fit_information(self) -> Optional[dict]:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def fitted_parameters(self) -> Dict[str, np.ndarray]:
+        raise NotImplementedError()
+
+
+class FittedTissueModel(FittedModel):
+    def __init__(self, model: TissueModel, fitted_parameters_vector: np.ndarray, fitting_info: Optional[dict] = None):
         self._model = model
         self.fitted_parameters_vector = fitted_parameters_vector
+        self._fit_information = fitting_info
 
     @property
     def fitted_parameters(self) -> Dict[str, np.ndarray]:
-        raise NotImplementedError("Still need to correct this.")
-        # # getting the parameter names and values
-        # names = self._model.parameter_names
-        # parameter_vector = self.fitted_parameters_vector
-        # out = {}
-        # for i,name in enumerate(names):
-        #     if self._model[name]:
-        #         pass
-        # # TODO: deal with fixed parameters
-        # return {name: parameter_vector[i] for i, name in enumerate(names)}
+
+        vector = self.fitted_parameters_vector
+        parameter_names = self._model.parameter_names
+        include = self._model.include
+
+        out = {}
+        for i in range(len(parameter_names)):
+            if include[i]:
+                out.update({parameter_names[i]: vector[i]})
+
+        return out
+
+    @property
+    def fit_information(self) -> Optional[dict]:
+        return self._fit_information
 
 
 # TODO: Take T2* and relaxation parameter distributions into account. See eq. 5 and 6 in
@@ -205,9 +223,13 @@ class RelaxationTissueModel(TissueModel):
 
         bounds = (np.array([0, 0, 0]), np.array([7000, 3000, np.inf]))
         # The scipy fitting routine
-        popt, _ = curve_fit(signal_fun, np.arange(len(tr)), signal, initial_parameters, bounds=bounds)
 
-        return FittedTissueModel(self, popt)
+        # noinspection PyTupleAssignmentBalance
+        popt, pcov, infodict = curve_fit(signal_fun, np.arange(len(tr)), signal, initial_parameters, bounds=bounds,
+                                         full_output=True)
+        # adding the covariance matrix to infodict for less trailing vars
+        infodict.update({'pcov': pcov})
+        return FittedTissueModel(self, popt, infodict)
 
 
 class ExponentialTissueModel(TissueModel):
@@ -282,13 +304,18 @@ class ExponentialTissueModel(TissueModel):
         # TODO create default value and add as a fitting option
         # hard coding the fitting bounds for now
         bounds = (np.array([0, 0]), np.array([np.inf, np.inf]))
-        popt, _ = curve_fit(signal_fun, np.arange(len(te)), signal, initial_parameters, bounds=bounds,
-                            maxfev=4 ** 2 * 100)
 
-        return FittedTissueModel(self, popt)
+        # noinspection PyTupleAssignmentBalance
+        popt, pcov, infodict = curve_fit(signal_fun, np.arange(len(te)), signal, initial_parameters, bounds=bounds,
+                                         maxfev=4 ** 2 * 100, full_output=True)
+        infodict.update({"pcov": pcov})
+        return FittedTissueModel(self, popt, infodict)
 
 
 class FlaviusSignalModel(TissueModel):
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModel:
+        raise NotImplementedError()
+
     def __init__(self, t2: float, diffusivity: float, s0: float = 1.0):
         """
         :param t2: The tissues T2 in [ms]
