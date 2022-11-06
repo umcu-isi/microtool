@@ -9,7 +9,7 @@ import pickle
 from scipy import stats
 
 from microtool import monte_carlo
-from microtool.dmipy import DmipyAcquisitionSchemeWrapper
+from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme
 from microtool.optimize import optimize_scheme
 from microtool.utils import saved_schemes, saved_models
 
@@ -23,7 +23,7 @@ def main():
     noise_var = 0.02
     # -------------ACQUISITION-------------------
     scheme = saved_schemes.alexander2008()
-    scheme_wrapped = DmipyAcquisitionSchemeWrapper(scheme)
+    scheme_wrapped = convert_dmipy_scheme2diffusion_scheme(scheme)
 
     # ------MODEL-------------
     mc_model = saved_models.cylinder_zeppelin()

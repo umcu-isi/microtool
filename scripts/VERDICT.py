@@ -9,7 +9,7 @@ from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import sphere_models, cylinder_models, gaussian_models
 
-from microtool.dmipy import DmipyAcquisitionSchemeWrapper, DmipyTissueModel
+from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyTissueModel
 from microtool.optimize import optimize_scheme
 from microtool.utils import plotting
 from microtool.utils.gradient_sampling.uniform import sample_uniform
@@ -75,7 +75,7 @@ def main():
     gradient_directions = np.concatenate([zero_directions, gradient_directions], axis=0)
     scheme = acquisition_scheme_from_bvalues(b_values, gradient_directions, delta, Delta, TE=TE)
     scheme.print_acquisition_info
-    scheme = DmipyAcquisitionSchemeWrapper(scheme)
+    scheme = convert_dmipy_scheme2diffusion_scheme(scheme)
 
     print(scheme)
 

@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 from scipy import stats
 
 from microtool import monte_carlo, optimize
-from microtool.dmipy import DmipyTissueModel, DmipyAcquisitionSchemeWrapper
+from microtool.dmipy import DmipyTissueModel, convert_dmipy_scheme2diffusion_scheme
 from microtool.utils import plotting
 
 currentdir = pathlib.Path(__file__).parent
@@ -24,7 +24,7 @@ def main():
     # ------------- Setting up dmipy objects -----------
     # predefined dmipy acquisition scheme
     acq_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
-    scheme = DmipyAcquisitionSchemeWrapper(acq_scheme)
+    scheme = convert_dmipy_scheme2diffusion_scheme(acq_scheme)
     # simplest tissuemodel available in dmipy
     mu = (np.pi/2,np.pi/2)  # in radians
     lambda_par = 1.7e-9  # in m^2/s

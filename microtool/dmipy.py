@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from copy import copy
-from typing import Dict, Union, List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
@@ -55,21 +57,36 @@ def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParame
     return parameters
 
 
-def convert_diffusion_scheme2dmipy_scheme(
-        scheme: Union[DiffusionAcquisitionScheme, DmipyAcquisitionScheme]) -> DmipyAcquisitionScheme:
-    # Create a dmipy acquisition scheme.
-    if isinstance(scheme, DmipyAcquisitionScheme):
-        return scheme
-    else:
-        return acquisition_scheme_from_bvalues(
-            scheme.b_values * 1e6,  # Convert from s/mm² to s/m².
-            scheme.b_vectors,
-            scheme.pulse_widths * 1e-3,  # Convert from ms to s.
-            scheme.pulse_intervals * 1e-3,  # Convert from ms to s.
-        )
+def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) -> DmipyAcquisitionScheme:
+    """
+    Takes in a scheme from the microtool toolbox and returns a scheme for the dmipy toolbox. It should be noted that the
+    dmipy toolbox takes SI unit acquisition parameters only. Therefore we convert the microtool parameters.
+
+    :param scheme: DiffusionAcquisitionScheme
+    :return: DmipyAcquisitionScheme
+    """
+    if not isinstance(scheme, DiffusionAcquisitionScheme):
+        raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DiffusionAcquisitionScheme}")
+
+    return acquisition_scheme_from_bvalues(
+        scheme.b_values * 1e6,  # Convert from s/mm² to s/m².
+        scheme.b_vectors,
+        scheme.pulse_widths * 1e-3,  # Convert from ms to s.
+        scheme.pulse_intervals * 1e-3,  # Convert from ms to s.
+    )
 
 
 def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme) -> DiffusionAcquisitionScheme:
+    """
+    Takes a scheme from the dmipy toolbox and converts to scheme from microtool toolbox. We convert units since
+    microtool has non SI units.
+
+    :param scheme: DmipyAcquisitionScheme
+    :return: DiffusionAcquisitionScheme
+    """
+    if not isinstance(scheme, DmipyAcquisitionScheme):
+        raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DmipyAcquisitionScheme}")
+
     # convert to s/mm^2 from s/m^2
     b_values = scheme.bvalues * 1e-6
     b_vectors = scheme.gradient_directions
@@ -77,22 +94,6 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme) -> Dif
     pulse_widths = scheme.delta * 1e3
     pulse_intervals = scheme.Delta * 1e3
     return DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
-
-
-class DmipyAcquisitionSchemeWrapper(DiffusionAcquisitionScheme):
-    """
-    Class wrapper for pure dmipy acquisition schemes
-    """
-
-    def __init__(self, scheme: DmipyAcquisitionScheme):
-        self._scheme = scheme
-        # convert to s/mm^2 from s/m^2
-        b_values = scheme.bvalues * 1e-6
-        b_vectors = scheme.gradient_directions
-        # convert to ms from s
-        pulse_widths = scheme.delta * 1e3
-        pulse_intervals = scheme.Delta * 1e3
-        super().__init__(b_values, b_vectors, pulse_widths, pulse_intervals)
 
 
 class DmipyTissueModel(TissueModel):

@@ -1,4 +1,5 @@
 import warnings
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from math import prod
 from os import PathLike
@@ -55,7 +56,7 @@ class AcquisitionParameters:
 
 
 # TODO: Add function to check if all required tissue parameters are present.
-class AcquisitionScheme(Dict[str, AcquisitionParameters]):
+class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     """
     Base-class for MR acquisition schemes.
 
@@ -254,6 +255,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters]):
 
         return {'type': 'ineq', 'fun': fun}
 
+    @abstractmethod
     def get_constraints(self) -> Union[dict, List[dict]]:
         """
         Returns optimisation constraints on the scheme parameters. Implementation is child-class specific.
