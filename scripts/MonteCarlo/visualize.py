@@ -4,10 +4,10 @@ import pprint
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from microtool.utils.plotting import plot_parameter_distributions
 from microtool.utils.IO import get_pickle
+from microtool.utils.plotting import plot_parameter_distributions
 
-resultdir = pathlib.Path(__file__).parent / 'results' / "exponential_model_validation"
+resultdir = pathlib.Path(__file__).parent / 'results' / "exponential_model"
 
 # the result with optimized scheme
 filename = "T2_distribution_optimal_scheme_nsim_10000.pkl"
