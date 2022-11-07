@@ -10,9 +10,9 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import sphere_models, cylinder_models, gaussian_models
 
 from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyTissueModel
+from microtool.gradient_sampling.uniform import sample_uniform
 from microtool.optimize import optimize_scheme
 from microtool.utils import plotting
-from microtool.utils.gradient_sampling.uniform import sample_uniform
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
     # We set the optimization such that the pseudo diffusion coefficient is larger than 3.05 um^2/ms
     # verdict_model.set_parameter_optimization_bounds('C1Stick_1_lambda_par', [3.05e-9, 10e-9])
 
-    verdict_model = DmipyTissueModel(verdict_model, np.array([.3, .3, .4]))
+    verdict_model = DmipyTissueModel(verdict_model, [.3, .3, .4])
     # verdict_model['partial_volume_2'].optimize = False
     # verdict_model['partial_volume_1'].optimize = False
     # verdict_model['C1Stick_1_mu_0'].optimize = False

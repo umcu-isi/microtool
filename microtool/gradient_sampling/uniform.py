@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.optimize import minimize
 
-from microtool.utils.gradient_sampling.utils import sample_sphere_vectors, get_constraints, normalize, total_potential, \
+from microtool.gradient_sampling.utils import sample_sphere_vectors, get_constraints, normalize, total_potential, \
     plot_vectors
 
 module_folder = pathlib.Path(__file__).resolve().parent

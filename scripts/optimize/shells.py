@@ -5,8 +5,8 @@ from matplotlib import pyplot as plt
 
 from microtool.acquisition_scheme import ShellScheme
 from microtool.dmipy import DmipyTissueModel
+from microtool.gradient_sampling.shell_rigid_rotation import sample_shells_rotation
 from microtool.optimize import optimize_scheme
-from microtool.utils.gradient_sampling.shell_rigid_rotation import sample_shells_rotation
 
 
 def main():

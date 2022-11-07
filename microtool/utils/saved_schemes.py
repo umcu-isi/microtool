@@ -2,9 +2,10 @@ from typing import List
 
 import numpy as np
 from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues, DmipyAcquisitionScheme
-from .gradient_sampling.uniform import sample_uniform
-from .gradient_sampling.shell_rigid_rotation import sample_shells_rotation
+
 from microtool.acquisition_scheme import InversionRecoveryAcquisitionScheme
+from microtool.gradient_sampling import sample_shells_rotation
+from microtool.gradient_sampling import sample_uniform
 
 
 def alexander2008_optimized_directions(shells: List[int]) -> DmipyAcquisitionScheme:
