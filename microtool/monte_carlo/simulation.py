@@ -24,6 +24,15 @@ class MonteCarloSimulation:
 
     def __init__(self, scheme: AcquisitionScheme, model: TissueModel, noise_distribution: rv_continuous_frozen,
                  n_sim: int):
+        """
+        Handles the running and saving of a monte carlo simulation. Has setters for relevant parameters such that object
+        can be reused for simulation with a different control parameter.
+
+        :param scheme: The AcquisitionScheme with which we generate signal
+        :param model: The TissueModel with which we generate signal AND that is used for fitting
+        :param noise_distribution: The noise distribution from which we sample noise for every measurement
+        :param n_sim: Number of fit repetitions
+        """
         self._scheme = scheme
         self._model = model
         self._n_sim = n_sim
@@ -85,22 +94,30 @@ class MonteCarloSimulation:
         self._result = pd.DataFrame(result)
         return self._result
 
-    def save(self, path: pathlib.Path) -> None:
+    def save(self, datadir: pathlib.Path, model_name: str, scheme_name: str) -> None:
         """
         Saves the montecarlo result and the scheme and model used during the simulation.
-        :param path: A path with folder and name included
+        :param datadir: A path with folder and name included
         """
         if self._result is None:
             raise RuntimeError("You cannot save a simulation that has not been run yet.")
 
+        sim_name = self._save_name
+
         # save ground truth
-        with open(path.parent / (str(path.name) + "_model_gt.pkl"), 'wb') as f:
+        with open(datadir / (model_name + "_gt.pkl"), 'wb') as f:
             pickle.dump(self._model, f)
 
         # save scheme
-        with open(path.parent / (str(path.name) + "_scheme.pkl"), 'wb') as f:
-            pickle.dump(self._model, f)
+        with open(datadir / (scheme_name + "_scheme.pkl"), 'wb') as f:
+            pickle.dump(self._scheme, f)
 
         # save simulation result
-        with open(path.parent / (str(path.name) + ".pkl"), 'wb') as f:
+        with open(datadir / (model_name + scheme_name + sim_name + ".pkl"), 'wb') as f:
             pickle.dump(self._result, f)
+
+    @property
+    def _save_name(self) -> str:
+        scale = self._noise_distribution.kwds["scale"]
+        std = "{:.2f}".format(scale)
+        return f"_nsim={self._n_sim}_{self._noise_distribution.dist.name}_sigma=" + std

@@ -9,8 +9,8 @@ from typing import Union, List, Tuple, Dict, Optional
 import numpy as np
 from tabulate import tabulate
 
-from microtool.utils import gradient_sampling
-from microtool.utils.gradient_sampling.utils import angles_to_unitvectors
+from microtool.gradient_sampling.utils import angles_to_unitvectors
+from microtool.gradient_sampling.utils import plot_shells, plot_shells_projected
 from microtool.utils.solve_echo_time import minimal_echo_time
 
 
@@ -542,11 +542,11 @@ class ShellScheme(DiffusionAcquisitionScheme):
         # convert the angles to unit vectors
         shells = list(map(angles_to_unitvectors, self.shell_angles))
         # using the visualiser from the gradient_sampling module
-        gradient_sampling.utils.plot_shells(shells)
+        plot_shells(shells)
 
     def plot_shells_projected(self):
         shells = list(map(angles_to_unitvectors, self.shell_angles))
-        gradient_sampling.utils.plot_shells_projected(shells)
+        plot_shells_projected(shells)
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):

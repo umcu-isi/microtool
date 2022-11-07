@@ -239,7 +239,9 @@ class RelaxationTissueModel(TissueModel):
 class ExponentialTissueModel(TissueModel):
     def __init__(self, T2: float, S0: float = 1.0):
         """
-        Set the tissue parameters
+
+        :param T2: The T2 relaxation in [ms]
+        :param S0: The initial signal
         """
         super().__init__({
             'T2': TissueParameter(value=T2, scale=T2, optimize=True),
@@ -270,14 +272,6 @@ class ExponentialTissueModel(TissueModel):
         S = S0 * np.exp(-TE / T2)
         # return np.array([-TE * S, 1]).T
         return np.array([(TE / T2 ** 2) * S, S / S0]).T
-
-    def jacobian_num(self, scheme: EchoScheme) -> np.ndarray:
-        """
-        Uses finite differences to compute the
-        :param scheme:
-        :return:
-        """
-        raise NotImplementedError()
 
     def fit(self, scheme: EchoScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
         """

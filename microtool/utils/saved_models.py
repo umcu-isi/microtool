@@ -57,3 +57,14 @@ def stick_zeppelin() -> DmipyTissueModel:
     stick = cylinder_models.C1Stick(mu, lambda_par)
     stick_zeppelin = MultiCompartmentModel(models=[zeppelin, stick])
     return DmipyTissueModel(stick_zeppelin, volume_fractions=[0.5, 0.5])
+
+
+def stick() -> DmipyTissueModel:
+    return DmipyTissueModel(stick_naked())
+
+
+def stick_naked() -> MultiCompartmentModel:
+    # Simplest model with orientation parameters
+    mu = (np.pi / 2, np.pi / 2)  # in radians
+    lambda_par = 1.7e-9  # in m^2/s
+    return MultiCompartmentModel(models=[cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)])
