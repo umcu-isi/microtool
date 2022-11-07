@@ -6,19 +6,16 @@ IMPORTANT: Always execute run inside a if name main clause! otherwise the parral
 """
 import pathlib
 import pickle
-from typing import Union, List, Dict
 
-import numpy as np
+import pandas as pd
 from scipy import stats
 # scipy frozen distribution should be provided
 from scipy.stats._distn_infrastructure import rv_continuous_frozen
 from tqdm import tqdm
 
-from microtool.utils.IO import HiddenPrints
-from .acquisition_scheme import AcquisitionScheme
-from .tissue_model import TissueModel
-
-MonteCarloResult = List[Dict[str, Union[float, np.ndarray]]]
+from ..acquisition_scheme import AcquisitionScheme
+from ..tissue_model import TissueModel
+from ..utils.IO import HiddenPrints
 
 
 class MonteCarloSimulation:
@@ -58,7 +55,7 @@ class MonteCarloSimulation:
     def set_n_sim(self, n_sim: int) -> None:
         self._n_sim = n_sim
 
-    def run(self) -> MonteCarloResult:
+    def run(self) -> pd.DataFrame:
         """
 
         :return:
@@ -85,8 +82,8 @@ class MonteCarloSimulation:
             parameter_dict = model_fitted.fitted_parameters
             # storing only information of interest namely the parameter values
             result.append(parameter_dict)
-        self._result = result
-        return result
+        self._result = pd.DataFrame(result)
+        return self._result
 
     def save(self, path: pathlib.Path) -> None:
         """

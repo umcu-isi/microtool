@@ -5,9 +5,11 @@ import matplotlib.colors as mcolors
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from microtool.utils.IO import get_df_from_pickle, get_pickle
-from microtool.utils.plotting import plot_parameter_distributions, plot_dataframe_index
-from microtool.utils.parameter_distributions import fit_gaussian, scale
+from microtool.monte_carlo.parameter_distributions import fit_gaussian, scale, plot_parameter_distributions, \
+    plot_dataframe_index
+from microtool.utils.IO import get_pickle
+
+# TODO: rerun and adjust interface
 
 resultdir = pathlib.Path(__file__).parent / 'results' / "shell_distribution_experiments"
 
@@ -25,11 +27,11 @@ def main():
     fit_results_std = {}
     for i, filename in enumerate(files):
         # reading the parameter distrubtion from pickle file
-        df = get_df_from_pickle(resultdir/filename)
+        df = pd.DataFrame({})
         # Scaling w.r.t. the ground truth values from the tissuemodel
         df_scaled = scale(df, gt)
         fit_results = fit_gaussian(df_scaled)
-        plot_parameter_distributions(df_scaled, fit_results, color=colors[i])
+        plot_parameter_distributions(df_scaled, gaussian_fit=fit_results, color=colors[i])
         fit_results_mean[filename.split('_')[2]] = fit_results['mean']
         fit_results_std[filename.split('_')[2]] = fit_results['std']
 

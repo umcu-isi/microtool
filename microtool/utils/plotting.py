@@ -4,8 +4,6 @@ from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-from scipy.stats import norm
 
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.optimize.loss_functions import LossFunction, default_loss, scipy_loss
@@ -176,66 +174,6 @@ class LossInspector:
                 raise ValueError(f"Domains for {parameter_name} are out of parameter bounds")
 
 
-def plot_parameter_distributions(parameter_distribution: pd.DataFrame, gaussian_fit: pd.DataFrame = None,
-                                 color: str = None, fig_label: str = "parameter distributions") -> plt.Figure:
-    """
-    Plots the parameter distributions. Also a gaussian fitting if its provided.
-    Calling this function with the same fig_label argument plot the results in the same figure.
-
-    :param parameter_distribution: The pandas dataframe containing the parameter
-    distribution
-    :param guassian_fit: The result of the gaussian fitting
-    :param color: the color
-    used for plotting
-    :param label: The label used for the histograms (of none provided recalling the function will plot into the same figure)
-    :return: The figure object
-    """
-    fig = plt.figure(fig_label)
-
-    # if there are less than 3 plots make that the number of columns
-    n_tissue_parameters = min(parameter_distribution.shape)
-
-    if n_tissue_parameters < 3:
-        ncols = n_tissue_parameters
-    else:
-        ncols = 3
-
-    n_rows = math.ceil(parameter_distribution.shape[1] / ncols)
-
-    for i, parameter in enumerate(parameter_distribution.keys()):
-        ax = plt.subplot(n_rows, ncols, i + 1)
-
-        # Making a histogram
-        ax.hist(parameter_distribution[parameter], bins='scott', alpha=0.5, color=color)
-
-        # Plotting the fitted normal distribution as well if provided
-        if gaussian_fit is not None:
-            xmin, xmax = plt.xlim()
-            x = np.linspace(xmin, xmax, 100)
-            fitted_mean = gaussian_fit['mean'][parameter]
-            fitted_std = gaussian_fit['std'][parameter]
-            ax.plot(x, norm.pdf(x, fitted_mean, fitted_std), color=color)
-
-        ax.set_xlabel(r"$\Delta$")
-        # plotting ground truth as vertical lines
-        ax.vlines(0, 0, 1, transform=ax.get_xaxis_transform(), colors="black")
-        ax.set_title(parameter)
-
-    plt.tight_layout()
-    return fig
-
-
-def plot_dataframe_index(df: pd.DataFrame, index_name: str, ax: plt.Axes) -> None:
-    """
-    Plots an index from a pandas dataframe to the given axes object
-    :param df: The dataframe
-    :param index_name: The index you wish to plot
-    :param ax: The axes you wish to plot to
-    :return:
-    """
-    df.loc[index_name].to_frame(index_name).T.plot.bar(ylabel=r'std_fitted', xticks=[], title=index_name, ax=ax)
-
-
 def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) -> plt.Figure:
     """
     Makes subplots of all the acquisition parameters
@@ -255,7 +193,6 @@ def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) ->
         y = scheme[parameter].values
         x = np.arange(len(y)) + 1
         ax.plot(x, y, '.')
-        plt.xticks(np.array(range(scheme.pulse_count)) + 1, np.array(range(scheme.pulse_count)) + 1)
         ax.set_xlabel("Measurement")
         ax.set_ylabel(scheme[parameter].symbol + " [{}]".format(scheme[parameter].unit))
     plt.suptitle(title)

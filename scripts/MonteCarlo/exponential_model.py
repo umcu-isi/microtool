@@ -2,16 +2,15 @@ import pathlib
 import pickle
 
 import numpy as np
-import pandas as pd
 from matplotlib import pyplot as plt
 from scipy import stats
 
 from microtool.acquisition_scheme import EchoScheme
 from microtool.monte_carlo import MonteCarloSimulation
+from microtool.monte_carlo.parameter_distributions import scale, plot_parameter_distributions
 from microtool.optimize import optimize_scheme
 from microtool.tissue_model import ExponentialTissueModel
-from microtool.utils.parameter_distributions import scale
-from microtool.utils.plotting import plot_acquisition_parameters, plot_parameter_distributions
+from microtool.utils.plotting import plot_acquisition_parameters
 
 currentdir = pathlib.Path(__file__).parent
 outputdir = currentdir / "results" / "exponential_model"
@@ -53,12 +52,12 @@ if __name__ == "__main__":
     # ------------ plotting
 
     # scaling the distributions with respect to the groundtruth values in the tissuemodel
-    optimal_scaled_parameters = scale(pd.DataFrame(result), model)
-    non_optimal_scaled_parameters = scale(pd.DataFrame(non_optimal_result), model)
+    optimal_scaled_parameters = scale(result, model)
+    non_optimal_scaled_parameters = scale(non_optimal_result, model)
 
     # plotting the distributions
-    plot_parameter_distributions(optimal_scaled_parameters, fig_label="optimal")
-    plot_parameter_distributions(non_optimal_scaled_parameters, fig_label="non_optimal")
+    plot_parameter_distributions(result, model, symbols={"T2": r"$T_2$ [ms]"}, fig_label="optimal")
+    plot_parameter_distributions(non_optimal_result, model, fig_label="non_optimal")
 
     # plotting the aquisition parameters
     plot_acquisition_parameters(scheme_opt)
