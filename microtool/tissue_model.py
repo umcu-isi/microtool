@@ -47,7 +47,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         :param scheme: An AcquisitionScheme.
         :return: A array with N signal attenuation values, where N is the number of samples.
         """
-        pass
+        raise NotImplementedError()
 
     def __str__(self) -> str:
 
@@ -69,18 +69,17 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         :param scheme: An AcquisitionScheme.
         :return: An N×M Jacobian matrix, where N is the number of samples and M is the number of tissue parameters.
         """
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
-    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModel:
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
         """
         Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
         :param signal: The noisy signal
         :param scheme: The scheme under investigation
         :return: A FittedTissueModel
         """
-
-        pass
+        raise NotImplementedError()
 
     @property
     def parameters(self) -> Dict[str, Union[float, np.ndarray]]:
@@ -114,11 +113,18 @@ class FittedModel(ABC):
         raise NotImplementedError()
 
 
-class FittedTissueModel(FittedModel):
-    def __init__(self, model: TissueModel, fitted_parameters_vector: np.ndarray, fitting_info: Optional[dict] = None):
+class FittedTissueModelCurveFit(FittedModel):
+    def __init__(self, model: TissueModel, curve_fit_result: tuple):
+        if len(curve_fit_result) != 5:
+            raise ValueError("Expected a full output curve fit result.")
+
+        # last parameter of curve fit result is a useless int flag
+        optimal_pars, covariance_matrix, fit_information, message, _ = curve_fit_result
+        fit_information.update({"covariance_matrix": covariance_matrix, "message": message})
+
         self._model = model
-        self.fitted_parameters_vector = fitted_parameters_vector
-        self._fit_information = fitting_info
+        self.fitted_parameters_vector = optimal_pars
+        self._fit_information = fit_information
 
     @property
     def fitted_parameters(self) -> Dict[str, np.ndarray]:
@@ -193,7 +199,7 @@ class RelaxationTissueModel(TissueModel):
         return jac
 
     def fit(self, scheme: InversionRecoveryAcquisitionScheme, signal: np.ndarray,
-            **fit_options) -> FittedTissueModel:
+            **fit_options) -> FittedTissueModelCurveFit:
         ti = scheme.inversion_times  # ms
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
@@ -222,14 +228,12 @@ class RelaxationTissueModel(TissueModel):
         # TODO: add bounds as a tissueparameter attribute
 
         bounds = (np.array([0, 0, 0]), np.array([7000, 3000, np.inf]))
-        # The scipy fitting routine
 
-        # noinspection PyTupleAssignmentBalance
-        popt, pcov, infodict = curve_fit(signal_fun, np.arange(len(tr)), signal, initial_parameters, bounds=bounds,
-                                         full_output=True)
-        # adding the covariance matrix to infodict for less trailing vars
-        infodict.update({'pcov': pcov})
-        return FittedTissueModel(self, popt, infodict)
+        # The scipy fitting routine
+        result = curve_fit(signal_fun, np.arange(len(tr)), signal, initial_parameters, bounds=bounds,
+                           full_output=True, **fit_options)
+
+        return FittedTissueModelCurveFit(self, result)
 
 
 class ExponentialTissueModel(TissueModel):
@@ -275,7 +279,7 @@ class ExponentialTissueModel(TissueModel):
         """
         raise NotImplementedError()
 
-    def fit(self, scheme: EchoScheme, signal: np.ndarray, **fit_options) -> FittedTissueModel:
+    def fit(self, scheme: EchoScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
         """
 
         :param scheme:
@@ -305,15 +309,15 @@ class ExponentialTissueModel(TissueModel):
         # hard coding the fitting bounds for now
         bounds = (np.array([0, 0]), np.array([np.inf, np.inf]))
 
-        # noinspection PyTupleAssignmentBalance
-        popt, pcov, infodict = curve_fit(signal_fun, np.arange(len(te)), signal, initial_parameters, bounds=bounds,
-                                         maxfev=4 ** 2 * 100, full_output=True)
-        infodict.update({"pcov": pcov})
-        return FittedTissueModel(self, popt, infodict)
+        result = curve_fit(signal_fun, np.arange(len(te)), signal, initial_parameters,
+                           bounds=bounds,
+                           maxfev=4 ** 2 * 100, full_output=True, **fit_options)
+
+        return FittedTissueModelCurveFit(self, result)
 
 
 class FlaviusSignalModel(TissueModel):
-    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModel:
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
         raise NotImplementedError()
 
     def __init__(self, t2: float, diffusivity: float, s0: float = 1.0):
@@ -375,7 +379,7 @@ class TissueModelDecoratorBase(TissueModel, ABC):
     def jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
         return self._original.jacobian(scheme)
 
-    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModel:
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
         return self._original.fit(scheme, signal, **fit_options)
 
     @property
