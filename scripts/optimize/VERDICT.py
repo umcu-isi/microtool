@@ -81,10 +81,10 @@ def main():
 
     # -------------- Optimization
     best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, loss_scaling_factor=1e-10,
-                                              options={"maxiter": 2000})
+                                              optimizer_options={"maxiter": 2000})
+
     IO.save_pickle(best_scheme, "schemes/verdict_optimal.pkl")
     IO.save_pickle(scheme, "schemes/verdict_start.pkl")
-    print(opt_result)
 
     # --------------- Generating figures
     optimized_parameter_fig = plotting.plot_acquisition_parameters(best_scheme, "Acquisition Parameters")

@@ -5,7 +5,7 @@ from typing import Optional, Union, Tuple, TypeVar
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize, differential_evolution
 
-from .loss_functions import compute_loss, check_initial_scheme, scipy_loss, LossFunction, default_loss
+from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
 from ..tissue_model import TissueModel
@@ -17,9 +17,9 @@ AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
 def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
                     noise_variance: float,
                     loss: LossFunction = default_loss,
-                    method: Optional[Union[str, Optimizer]] = "differential_evolution",
                     loss_scaling_factor: float = 1.0,
-                    **kwargs) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
+                    method: Optional[Union[str, Optimizer]] = "differential_evolution",
+                    optimizer_options: dict = None) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -35,24 +35,18 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     :param method: Type of solver. See the documentation for scipy.optimize.minimize
     :return: A scipy.optimize.OptimizeResult object.
     """
-    M = int(np.sum(np.array(model.include)))
+    # setting to empty dict because unpack operation is required later
+    if optimizer_options is None:
+        optimizer_options = {}
 
-    # Checking if optimization options are provided.
-    if 'options' in kwargs.keys():
-        optimizer_options = kwargs['options']
-    else:
-        optimizer_options = None
+    # Checking the initial scheme and model
+    check_degrees_of_freedom(scheme, model)
+    check_insensitive(scheme, model)
+    initial_loss = compute_loss(scheme, model, noise_variance, loss)
+    check_ill_conditioned(initial_loss)
 
-    # the loss of the initial scheme
-    initial_loss = np.array([check_initial_scheme(scheme, model, noise_variance, loss=loss)])
-
-    # Copying the scheme for number repeated optimizations required.
+    # Copying the scheme because acquisition parameters are updated during optimization
     scheme_copy = deepcopy(scheme)
-
-    N = len(scheme.free_parameter_vector)
-    if M > N:
-        raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
-                         f"AcquisitionScheme parameters ({N}) with meaningful result.")
 
     acquisition_parameter_scales = scheme_copy.free_parameter_scales
     x0 = scheme_copy.free_parameter_vector / acquisition_parameter_scales
@@ -63,6 +57,10 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     scipy_loss_args = (scheme_copy, model, noise_variance, loss, loss_scaling_factor)
 
     if method == 'differential_evolution':
+        # constraints are formatted different for this optimization method
+        if constraints is None:
+            constraints = ()
+
         result = differential_evolution(scipy_loss, bounds=scaled_bounds,
                                         args=scipy_loss_args,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
@@ -72,19 +70,22 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
                           method=method, bounds=scaled_bounds, constraints=constraints,
                           options=optimizer_options)
 
+    # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
         scheme_copy.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
-    # check if the optimized scheme is better than the initial scheme and update
-    # also save best optimization result.
-    current_loss = compute_loss(scheme_copy, model, noise_variance, loss=loss)
+    # check if the optimized scheme is better than the initial scheme
+    current_loss = compute_loss(scheme_copy, model, noise_variance, loss)
     if current_loss > initial_loss:
         raise RuntimeError("Loss increased during optimization, try a different optimization method.")
 
-    optimized_scheme = scheme_copy
-    optimize_result = result
+    warn_early_termination(result)
 
-    if not optimize_result["success"]:
+    return scheme_copy, result
+
+
+def warn_early_termination(result: OptimizeResult):
+    if not result["success"]:
         print(result)
         warnings.warn(
             "Optimization procedure was unsuccessful. "
@@ -93,4 +94,31 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
             "If you are using a scipy optimizer its settings can be changed by passing options to this function. "
             "If you are using a microtool optimization method please consult the optimization_methods module for more details.")
 
-    return optimized_scheme, optimize_result
+
+def check_ill_conditioned(loss_value: float):
+    if loss_value == ILL_COST:
+        raise RuntimeError(
+            f"Initial AcquisitionScheme error: the initial acquisition scheme results in ill conditioned fisher "
+            f"information matrix, possibly due to model degeneracy. "
+            f"Try a different initial AcquisitionScheme, or alternatively simplify your TissueModel.")
+
+
+def check_insensitive(scheme: AcquisitionScheme, model: TissueModel):
+    jac = model.jacobian(scheme)
+    include = np.array(model.include)
+    # the parameters we included for optimization but to which the signal is insensitive
+    # (jac is signal derivative for all parameters)
+    insensitive_parameters = include & np.all(jac == 0, axis=0)
+    if np.any(insensitive_parameters):
+        raise ValueError(
+            f"Initial AcquisitionScheme error: the parameters {np.array(model.parameter_names)[insensitive_parameters]} have a zero signal derivative for all measurements. "
+            f"Optimizing will not result in a scheme that better estimates these parameters. "
+            f"Exclude them from optimization if you are okay with that.")
+
+
+def check_degrees_of_freedom(scheme: AcquisitionScheme, model: TissueModel):
+    M = int(np.sum(np.array(model.include)))
+    N = len(scheme.free_parameter_vector)
+    if M > N:
+        raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
+                         f"AcquisitionScheme parameters ({N}) with meaningful result.")

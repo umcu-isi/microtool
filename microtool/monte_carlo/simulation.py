@@ -19,11 +19,10 @@ from ..utils.IO import HiddenPrints
 
 
 class MonteCarloSimulation:
-    _fit_options = {}
     _result = None
 
     def __init__(self, scheme: AcquisitionScheme, model: TissueModel, noise_distribution: rv_continuous_frozen,
-                 n_sim: int):
+                 n_sim: int, fit_options: dict = None):
         """
         Handles the running and saving of a monte carlo simulation. Has setters for relevant parameters such that object
         can be reused for simulation with a different control parameter.
@@ -37,6 +36,10 @@ class MonteCarloSimulation:
         self._model = model
         self._n_sim = n_sim
         self._noise_distribution = noise_distribution
+        if fit_options is None:
+            self._fit_options = {}
+        else:
+            self._fit_options = fit_options
 
     def __str__(self) -> str:
         firstline = "Initialized MonteCarloSimulation with scheme for signal generation:\n"
@@ -53,6 +56,11 @@ class MonteCarloSimulation:
         self._noise_distribution = noise_distribution
 
     def set_fitting_options(self, fit_options: dict) -> None:
+        """
+        See the fit options of the tissuemodel that is in use.
+
+        :param fit_options: Dictionary of fit options compatible with fitting routine of tissuemodel
+        """
         self._fit_options = fit_options
 
     def set_scheme(self, scheme: AcquisitionScheme) -> None:

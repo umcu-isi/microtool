@@ -81,6 +81,21 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         """
         raise NotImplementedError()
 
+    def preprocessed_jacobian(self, scheme: AcquisitionScheme):
+        # Extracting the jacobian w.r.t the included parameters only
+        # casting to numpy array if not done already
+        include = self.include
+        scales = self.scales
+        jac = self.jacobian(scheme)
+
+        N_measurements = jac.shape[0]
+        jacobian_mask = np.tile(include, (N_measurements, 1))
+        jac_included = jac[jacobian_mask].reshape((N_measurements, -1))
+
+        # Scaling the jacobian
+        jac_rescaled = jac_included * scales[include]
+        return jac_rescaled
+
     @property
     def parameters(self) -> Dict[str, Union[float, np.ndarray]]:
         parameters = {}
@@ -94,11 +109,11 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
     @property
     def scales(self):
-        return [value.scale for value in self.values()]
+        return np.array([value.scale for value in self.values()])
 
     @property
     def include(self):
-        return [value.optimize for value in self.values()]
+        return np.array([value.optimize for value in self.values()])
 
 
 class FittedModel(ABC):
@@ -204,13 +219,13 @@ class RelaxationTissueModel(TissueModel):
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
 
-        # whether or not parameters are included in the fit
-        include = np.array([param.optimize for param in self.values()])
+        # whether parameters are included in the fit
+        include = self.include
 
         # Using the current model parameters as initials for the fit (these are the *true* values!)
         initial_parameters = np.array([param.value for param in self.values()])
 
-        # The signal function we fit to extract the tissueparameters
+        # The signal function we fit to extract the tissue parameters
         def signal_fun(measurement, t1, t2, s0):
             if not include[0]:
                 t1 = initial_parameters[0]
