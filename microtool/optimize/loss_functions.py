@@ -2,19 +2,18 @@ from abc import abstractmethod, ABC
 from typing import Sequence, Callable
 
 import numpy as np
-import scipy
 from numba import njit
 
 from microtool.acquisition_scheme import AcquisitionScheme
 from microtool.tissue_model import TissueModel
-from .utils import cartesian_product
+from .utils import cartesian_product, diagonal
 
 # We use the machine precision of numpy floats to determine if we can invert a matrix without introducing a large
 # numerical error
 CONDITION_THRESHOLD = 1 / np.finfo(np.float64).eps
 
 # Arbitrary high cost value for ill conditioned matrices
-ILL_COST = 1e9
+ILL_COST = 1e30
 
 InformationFunction = Callable[[np.ndarray, np.ndarray, float], np.ndarray]
 
@@ -125,7 +124,7 @@ class CrlbInversion(CrlbBase):
     @njit
     def compute_crlb(information: np.ndarray) -> float:
         # computing the CRLB for every parameter trough inversion of Fisher matrix and getting the diagonal
-        crlb = scipy.linalg.inv(information).diagonal()
+        crlb = diagonal(np.linalg.inv(information))
         return float(np.sum(crlb))
 
 
@@ -133,7 +132,8 @@ class CrlbEigenvalues(CrlbBase):
     @staticmethod
     @njit
     def compute_crlb(information: np.ndarray) -> float:
-        return (1 / np.linalg.eigvalsh(information)).sum()
+        crlb = (1 / np.linalg.eigvalsh(information))
+        return crlb.sum()
 
 
 def compute_loss(scheme: AcquisitionScheme,
@@ -182,7 +182,7 @@ def check_initial_scheme(scheme: AcquisitionScheme,
             f"Exclude them from optimization if you are okay with that.")
 
     output = compute_loss(scheme, model, noise_var, loss)
-    if output >= ILL_COST:
+    if output == ILL_COST:
         raise RuntimeError(
             f"Initial AcquisitionScheme error: the initial acquisition scheme results in ill conditioned fisher information matrix, possibly due to model degeneracy. "
             f"Try a different initial AcquisitionScheme, or alternatively simplify your TissueModel.")
@@ -190,7 +190,7 @@ def check_initial_scheme(scheme: AcquisitionScheme,
 
 
 def scipy_loss(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noise_variance: float,
-               loss: LossFunction):
+               loss: LossFunction, scaling_factor: float = 1.0):
     """
 
     :param x:
@@ -203,7 +203,7 @@ def scipy_loss(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noi
     # updating the scheme with the optimizers search values
     acquisition_parameter_scales = scheme.free_parameter_scales
     scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
-    return compute_loss(scheme, model, noise_variance, loss)
+    return scaling_factor * compute_loss(scheme, model, noise_variance, loss)
 
 
 # ---------- Current loss function selection.
@@ -212,4 +212,4 @@ inversion_rice = CrlbInversion(fisher_information_rice)
 eigenvalue_gauss = CrlbEigenvalues(fisher_information_gauss)
 eigenvalue_rice = CrlbEigenvalues(fisher_information_rice)
 
-default_loss = eigenvalue_rice
+default_loss = eigenvalue_gauss

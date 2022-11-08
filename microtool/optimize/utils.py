@@ -11,3 +11,13 @@ def cartesian_product(jac: np.ndarray):
         for j in range(N):
             derivative_term[i, j, :] = jac[:, i] * jac[:, j]
     return derivative_term
+
+
+@njit
+def diagonal(square: np.ndarray) -> np.ndarray:
+    size, _ = square.shape
+    out = np.zeros(size)
+    for i in range(size):
+        out[i] = square[i, i]
+
+    return out

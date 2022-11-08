@@ -196,6 +196,7 @@ def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) ->
         ax.set_xlabel("Measurement")
         y_label = scheme[parameter].symbol if scheme[parameter].symbol is not None else scheme[parameter]
         ax.set_ylabel(y_label + " [{}]".format(scheme[parameter].unit))
+        ax.set_title(f"fixed = {scheme[parameter].fixed} ")
     plt.suptitle(title)
     plt.tight_layout()
     return fig

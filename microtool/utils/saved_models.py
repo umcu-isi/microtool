@@ -1,8 +1,29 @@
 import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
-from dmipy.signal_models import cylinder_models, gaussian_models
+from dmipy.signal_models import cylinder_models, gaussian_models, sphere_models
 
 from microtool.dmipy import DmipyTissueModel
+
+
+def verdict() -> DmipyTissueModel:
+    # The three models we will be using to model intra cellular, extracellular and Vascular signal respectively
+    # Initialize diameter of the cell i.e. sphere in the middle of optimization domain
+    sphere = sphere_models.S4SphereGaussianPhaseApproximation(diffusion_constant=2.0e-9, diameter=10e-6)
+    ball = gaussian_models.G1Ball(lambda_iso=2.0e-9)
+    stick = cylinder_models.C1Stick(mu=[np.pi / 2, np.pi / 2], lambda_par=8.0e-9)
+    verdict_model = MultiCompartmentModel(models=[sphere, ball, stick])
+    # We fix the extracellular diffusivity in accordance with panagiotakis black magic number from 2014
+    # verdict_model.set_fixed_parameter('G1Ball_1_lambda_iso', 2.0e-9)
+    # verdict_model.set_fixed_parameter('C1Stick_1_lambda_par', 8.0e-9)
+    # We set the optimization such that the pseudo diffusion coefficient is larger than 3.05 um^2/ms
+    # verdict_model.set_parameter_optimization_bounds('C1Stick_1_lambda_par', [3.05e-9, 10e-9])
+
+    verdict_model = DmipyTissueModel(verdict_model, [.3, .3, .4])
+    # verdict_model['partial_volume_2'].optimize = False
+    # verdict_model['partial_volume_1'].optimize = False
+    # verdict_model['C1Stick_1_mu_0'].optimize = False
+    # verdict_model['C1Stick_1_mu_1'].optimize = False
+    return verdict_model
 
 
 def cylinder_zeppelin_naked() -> MultiCompartmentModel:

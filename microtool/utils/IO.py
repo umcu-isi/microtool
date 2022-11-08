@@ -4,7 +4,8 @@ Helper functions for handling the input and output for the microtool module.
 import os
 import pickle
 import sys
-from typing import Any
+from pathlib import Path
+from typing import Any, Union
 
 
 class HiddenPrints:
@@ -32,7 +33,7 @@ def get_pickle(path) -> Any:
         return pickle.load(f)
 
 
-def save_pickle(obj: Any, path) -> None:
+def save_pickle(obj: Any, path: Union[Path, str]) -> None:
     # shorthand for pickling
     with open(path, "wb") as f:
         pickle.dump(obj, f)

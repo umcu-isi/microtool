@@ -324,11 +324,11 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 values=theta, unit='rad', scale=1, symbol=r"$\theta$", lower_bound=None, fixed=True
             ),
             'DiffusionPulseWidth': AcquisitionParameters(
-                values=pulse_widths, unit='ms', scale=10, symbol=r"$\delta$", fixed=True, lower_bound=0.1,
+                values=pulse_widths, unit='ms', scale=10, symbol=r"$\delta$", fixed=False, lower_bound=0.1,
                 upper_bound=1e2
             ),
             'DiffusionPulseInterval': AcquisitionParameters(
-                values=pulse_intervals, unit='ms', scale=10, symbol=r"$\Delta$", fixed=True, lower_bound=0.1,
+                values=pulse_intervals, unit='ms', scale=10, symbol=r"$\Delta$", fixed=False, lower_bound=0.1,
                 upper_bound=1e3
             ),
         })

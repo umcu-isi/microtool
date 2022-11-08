@@ -12,7 +12,7 @@ from dmipy.signal_models import sphere_models, cylinder_models, gaussian_models
 from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyTissueModel
 from microtool.gradient_sampling.uniform import sample_uniform
 from microtool.optimize import optimize_scheme
-from microtool.utils import plotting
+from microtool.utils import plotting, IO
 
 
 def main():
@@ -80,19 +80,21 @@ def main():
     print(scheme)
 
     # -------------- Optimization
-    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, method='dual_annealing')
-
+    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, loss_scaling_factor=1e-10,
+                                              options={"maxiter": 2000})
+    IO.save_pickle(best_scheme, "schemes/verdict_optimal.pkl")
+    IO.save_pickle(scheme, "schemes/verdict_start.pkl")
     print(opt_result)
 
     # --------------- Generating figures
     optimized_parameter_fig = plotting.plot_acquisition_parameters(best_scheme, "Acquisition Parameters")
-    plt.savefig("optimized_parameter_fig_soma.png")
+    plt.savefig("optimized_parameter.png")
     init_parameter_fig = plotting.plot_acquisition_parameters(scheme, "Acquisition Parameters")
-    plt.savefig("init_parameter_fig_soma.png")
+    plt.savefig("init_parameter.png")
     fig_init_signal = plotting.plot_signal(scheme, verdict_model)
-    plt.savefig("init_signal_fig_soma.png")
+    plt.savefig("init_signal.png")
     fig_optimized_signal = plotting.plot_signal(best_scheme, verdict_model)
-    plt.savefig("optimized_signal_soma.png")
+    plt.savefig("optimized_signal.png")
     plt.show()
 
 

@@ -1,3 +1,4 @@
+import warnings
 from copy import deepcopy
 from typing import Optional, Union, Tuple, TypeVar
 
@@ -17,6 +18,7 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
                     noise_variance: float,
                     loss: LossFunction = default_loss,
                     method: Optional[Union[str, Optimizer]] = "differential_evolution",
+                    loss_scaling_factor: float = 1.0,
                     **kwargs) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
@@ -58,13 +60,13 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     constraints = scheme_copy.get_constraints()
 
     # The parameters required to fully define the loss function.
-    scipy_loss_args = (scheme_copy, model, noise_variance, loss)
+    scipy_loss_args = (scheme_copy, model, noise_variance, loss, loss_scaling_factor)
 
     if method == 'differential_evolution':
         result = differential_evolution(scipy_loss, bounds=scaled_bounds,
                                         args=scipy_loss_args,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
-                                        polish=False)
+                                        polish=False, **optimizer_options)
     else:
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scaled_bounds, constraints=constraints,
@@ -84,8 +86,8 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
 
     if not optimize_result["success"]:
         print(result)
-        raise RuntimeError(
-            "Optimization procedure was unsuccesfull. "
+        warnings.warn(
+            "Optimization procedure was unsuccessful. "
             "Possible solutions include but are not limited to: Changing the "
             "optimizer setings, changing the optimization method or changing the initial scheme to a more suitable one."
             "If you are using a scipy optimizer its settings can be changed by passing options to this function. "
