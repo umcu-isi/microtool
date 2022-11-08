@@ -2,7 +2,7 @@ from copy import deepcopy
 from typing import Optional, Union, Tuple, TypeVar
 
 import numpy as np
-from scipy.optimize import OptimizeResult, minimize, differential_evolution, dual_annealing
+from scipy.optimize import OptimizeResult, minimize, differential_evolution
 
 from .loss_functions import compute_loss, check_initial_scheme, scipy_loss, LossFunction, default_loss
 from .methods import Optimizer
@@ -16,7 +16,7 @@ AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
 def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
                     noise_variance: float,
                     loss: LossFunction = default_loss,
-                    method: Optional[Union[str, Optimizer]] = None,
+                    method: Optional[Union[str, Optimizer]] = "differential_evolution",
                     **kwargs) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
@@ -61,13 +61,10 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     scipy_loss_args = (scheme_copy, model, noise_variance, loss)
 
     if method == 'differential_evolution':
-        # converting dictionary constraints of microtool tissuemodel to scipy NonLinear constraint
-        # constraints = scipy.optimize.NonlinearConstraint(constraints['fun'],0,np.inf)
         result = differential_evolution(scipy_loss, bounds=scaled_bounds,
                                         args=scipy_loss_args,
-                                        x0=x0, workers=-1, disp=True, updating='deferred')
-    elif method == 'dual_annealing':
-        result = dual_annealing(scipy_loss, scaled_bounds, scipy_loss_args, x0=x0)
+                                        x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
+                                        polish=True)
     else:
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scaled_bounds, constraints=constraints,
