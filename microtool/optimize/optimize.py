@@ -64,7 +64,7 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
         result = differential_evolution(scipy_loss, bounds=scaled_bounds,
                                         args=scipy_loss_args,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
-                                        polish=True)
+                                        polish=False)
     else:
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scaled_bounds, constraints=constraints,

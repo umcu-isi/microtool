@@ -290,17 +290,16 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         # check scale of b_values (in bounds or not)
         if np.any((b_values[b_values != 0] < 1) | (b_values[b_values != 0] > 1e5)):
             warnings.warn("The provided b-values are not clinically relevant, clinical b-values are expected in the "
-                          "order of 1e3 - 1e5 s/mm^2 ")
+                          "order of 1e2 - 1e5 s/mm^2 ")
 
         # check scale of pulses ( in bounds or not)
         if np.any((pulse_widths > 1000) | (pulse_widths < 1)):
-            warnings.warn("The provided pulse-widths are not in the expected order of 1e2")
+            warnings.warn("The provided pulse-widths are not in the expected order of 1e2 ms")
 
         if np.any((pulse_intervals > 1000) | (pulse_intervals < 1)):
-            warnings.warn("The provided pulse-intervals are not in the expected order of 1e2")
+            warnings.warn("The provided pulse-intervals are not in the expected order of 1e2 ms")
 
         # TODO: check pulse constraints
-
         # Check if the b-vectors are unit vectors and set b=0 'vectors' to (0, 0, 0) as per convention.
         b0 = b_values == 0
         if not np.any(b0):
@@ -447,11 +446,12 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         def b0_constraint_fun(x: np.ndarray) -> float:
             # get b-values
             b = self.get_parameter_from_parameter_vector('DiffusionBValue', x)
-            if np.all(b != 0):
+            if np.all(b != 0) or np.any(b < 0):
                 return 1.e9
             else:
                 return 0.0
 
+        # keep feasible true makes the constraint hard --> the optimizer will not traverse the forbidden region
         b_constraint = NonlinearConstraint(b0_constraint_fun, 0.0, 0.0, keep_feasible=True)
         # we make the b0 constraint function an equality constraint equal 0.
         if linear_constraints is None:
