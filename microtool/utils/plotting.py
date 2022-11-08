@@ -194,7 +194,8 @@ def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) ->
         x = np.arange(len(y)) + 1
         ax.plot(x, y, '.')
         ax.set_xlabel("Measurement")
-        ax.set_ylabel(scheme[parameter].symbol + " [{}]".format(scheme[parameter].unit))
+        y_label = scheme[parameter].symbol if scheme[parameter].symbol is not None else scheme[parameter]
+        ax.set_ylabel(y_label + " [{}]".format(scheme[parameter].unit))
     plt.suptitle(title)
     plt.tight_layout()
     return fig

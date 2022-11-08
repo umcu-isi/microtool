@@ -4,14 +4,18 @@ from dataclasses import dataclass
 from math import prod
 from os import PathLike
 from pathlib import Path
-from typing import Union, List, Tuple, Dict, Optional
+from typing import Union, List, Tuple, Dict, Optional, Any
 
 import numpy as np
+from scipy.optimize import NonlinearConstraint, LinearConstraint
 from tabulate import tabulate
 
 from microtool.gradient_sampling.utils import angles_to_unitvectors
 from microtool.gradient_sampling.utils import plot_shells, plot_shells_projected
 from microtool.utils.solve_echo_time import minimal_echo_time
+
+ConstraintTypes = Union[
+    NonlinearConstraint, LinearConstraint, List[Union[LinearConstraint, NonlinearConstraint]], Dict[str, Any]]
 
 
 @dataclass
@@ -23,6 +27,7 @@ class AcquisitionParameters:
     :param values: A numpy array with N parameter values.
     :param unit: The parameter unit as a string, e.g. 's/mm²'.s
     :param scale: The typical parameter value scale (order of magnitude).
+    :param symbol: A string used in type setting
     :param lower_bound: Lower constraint. None is used to specify no bound. Default: 0.
     :param upper_bound: Upper constraint. None is used to specify no bound. Default: None.
     :param fixed: Boolean indicating if the parameter is considered fixed or not (default: false).
@@ -30,7 +35,7 @@ class AcquisitionParameters:
     values: np.ndarray
     unit: str
     scale: float
-    symbol: str
+    symbol: Optional[str] = None
     lower_bound: Optional[float] = 0.0
     upper_bound: Optional[float] = None
     fixed: bool = False
@@ -79,8 +84,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
                 param.upper_bound = bounds[i][1]
 
     def __str__(self) -> str:
-        parameters = '\n'.join(
-            f'    - {key}: {value} in range ({value.lower_bound}, {value.upper_bound})' for key, value in self.items())
 
         table = {}
         for key, value in self.items():
@@ -160,8 +163,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
         :return: The scale of the free parameters
         """
-        n = self.pulse_count
-
         return np.repeat(np.array([p.scale for p in self.values() if not p.fixed]),
                          [len(p.values) for p in self.values() if not p.fixed])
 
@@ -199,13 +200,14 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
         return max_parameter_length
 
-    def get_parameter_from_parameter_vector(self, parameter: str, x: np.ndarray):
+    def get_parameter_from_parameter_vector(self, parameter: str, x: np.ndarray) -> np.ndarray:
         """
+        This function helps to get a free parameter from a scipy array. Usefull for building constraints on specific
+        parameters. Be warned the function does not check if the parameter you require is actually a free parameter!!
 
-        :param parameter: The name of the parameter of which you want to get the values from scipy array :param x:
-        the scipy array (i.e. the flattend free parameter array)
-        :return: The parameter values in the scipy array (
-        rescaled, so no longer in optimization scale but physical values)
+        :param parameter: The name of the free parameter you wish to extract from the scipy array.
+        :param x: The scipy array of free parameters, in scaled units.
+        :return: The rescaled parameter values from the scipy array (so now in physical units).
         """
         i = 0
         for key in self.free_parameter_keys:
@@ -216,9 +218,9 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
                 return x[i:(i + stride)].reshape(shape) * scale
             i += stride
 
-    def make_linear_constraint(self, parameter_coefficients: Dict[str, float]) -> Optional[dict]:
+    def make_linear_constraint(self, parameter_coefficients: Dict[str, float]) -> Optional[NonlinearConstraint]:
         """ This method constructs the scipy constraints for the inequality based on a dictionary of coefficients
-        Assumes inequality of the form 0 <= c_1 * x_1 + c_2 * x_2 .... <= infty.
+        Assumes inequality of the form lowerbound <= c_1 * x_1 + c_2 * x_2 .... <= infty.
 
         Provide the coefficients c_i as values for the parameters as they are named in the child class.
 
@@ -251,12 +253,13 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
         # The scipy compatible function defining the constraint as explained in docstring above.
         def fun(x: np.ndarray):
-            return A @ x - lb
+            return A @ x
 
-        return {'type': 'ineq', 'fun': fun}
+        constraint = NonlinearConstraint(fun, lb, np.inf)
+        return constraint
 
     @abstractmethod
-    def get_constraints(self) -> Union[dict, List[dict]]:
+    def get_constraints(self) -> ConstraintTypes:
         """
         Returns optimisation constraints on the scheme parameters. Implementation is child-class specific.
 
@@ -300,6 +303,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         # Check if the b-vectors are unit vectors and set b=0 'vectors' to (0, 0, 0) as per convention.
         b0 = b_values == 0
+        if not np.any(b0):
+            raise ValueError("No b0 measurements detected. The b0 measurements are required to estimate S0.")
         b_vectors = np.asarray(b_vectors, dtype=np.float64)
         if not np.allclose(np.linalg.norm(b_vectors[~b0], axis=1), 1):
             raise ValueError('b-vectors are not unit vectors.')
@@ -427,7 +432,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             for bvec in self.b_vectors:
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
-    def get_constraints(self) -> Union[dict, List[dict]]:
+    def get_constraints(self) -> Union[List[NonlinearConstraint], NonlinearConstraint]:
         # Matrix defining Δ > δ or equivalently 0 < Δ - δ < \infty
         parameter_coefficients = {
             'DiffusionBValue': 0,
@@ -436,8 +441,22 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             'DiffusionPulseWidth': -1,
             'DiffusionPulseInterval': 1
         }
+        linear_constraints = self.make_linear_constraint(parameter_coefficients)
 
-        return self.make_linear_constraint(parameter_coefficients)
+        # now the constraint that at least 1 b0 measurement is made?
+        def b0_constraint_fun(x: np.ndarray) -> float:
+            # get b-values
+            b = self.get_parameter_from_parameter_vector('DiffusionBValue', x)
+            if np.all(b != 0):
+                return 1.e9
+            else:
+                return 0.0
+
+        b_constraint = NonlinearConstraint(b0_constraint_fun, 0.0, 0.0, keep_feasible=True)
+        # we make the b0 constraint function an equality constraint equal 0.
+        if linear_constraints is None:
+            return b_constraint
+        return [linear_constraints, b_constraint]
 
 
 class ShellScheme(DiffusionAcquisitionScheme):
@@ -503,7 +522,7 @@ class ShellScheme(DiffusionAcquisitionScheme):
         # We update the gradient angles based on the shell rotation angles
         self._rotate_shells()
 
-    def get_constraints(self) -> Union[dict, List[dict]]:
+    def get_constraints(self) -> Optional[NonlinearConstraint]:
         # Matrix defining Δ > δ or equivalently 0 < Δ - δ < \infty
         parameter_coefficients = {
             'DiffusionBValue': 0,
@@ -597,7 +616,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         """
         return self['InversionTime'].values
 
-    def get_constraints(self) -> dict:
+    def get_constraints(self) -> Optional[NonlinearConstraint]:
         parameter_signs = {
             'RepetitionTimeExcitation': 1,
             'EchoTime': -1,
