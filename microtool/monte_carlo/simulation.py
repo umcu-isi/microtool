@@ -99,7 +99,7 @@ class MonteCarloSimulation:
             parameter_dict = model_fitted.fitted_parameters
             # storing only information of interest namely the parameter values
             result.append(parameter_dict)
-        self._result = pd.DataFrame(result)
+        self._result = pd.DataFrame(result).astype('float64')
         return self._result
 
     def save(self, datadir: pathlib.Path, model_name: str, scheme_name: str) -> None:
