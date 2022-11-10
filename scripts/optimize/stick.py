@@ -19,10 +19,14 @@ if __name__ == "__main__":
     Mb = M - Mb0
     b_values = np.concatenate([np.repeat(0, Mb0), np.linspace(1000, 5000, num=Mb)])
     b_vectors = sample_uniform(M)
-    pulse_widths = np.repeat(20, M)
-    pulse_intervals = np.repeat(40, M)
+    pulse_widths = np.repeat(20.0, M)
+    pulse_intervals = np.repeat(40.0, M)
 
     scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
+    # fixing b values for b0 measurements
+
+    scheme["DiffusionBValue"].set_fixed_mask(b_values == 0)
+
     IO.save_pickle(scheme, "schemes/stick_scheme_start.pkl")
     # ---- optimizing the scheme
     noise_var = 0.02

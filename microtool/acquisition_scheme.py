@@ -1,26 +1,22 @@
 import warnings
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from copy import copy
 from math import prod
 from os import PathLike
 from pathlib import Path
-from typing import Union, List, Tuple, Dict, Optional, Any
+from typing import Union, List, Tuple, Dict, Optional
 
 import numpy as np
 from scipy.optimize import NonlinearConstraint, LinearConstraint
 from tabulate import tabulate
 
-from microtool.gradient_sampling.utils import angles_to_unitvectors
-from microtool.gradient_sampling.utils import plot_shells, plot_shells_projected
 from microtool.utils.solve_echo_time import minimal_echo_time
 
 ConstraintTypes = Union[
-    NonlinearConstraint, LinearConstraint, List[Union[LinearConstraint, NonlinearConstraint]], Dict[str, Any]]
+    NonlinearConstraint, LinearConstraint, List[Union[LinearConstraint, NonlinearConstraint]]]
 
 
-@dataclass
 class AcquisitionParameters:
-    # noinspection PyUnresolvedReferences
     """
     Defines a series of N MR acquisition parameter values, such as a series of b-values.
 
@@ -32,25 +28,24 @@ class AcquisitionParameters:
     :param upper_bound: Upper constraint. None is used to specify no bound. Default: None.
     :param fixed: Boolean indicating if the parameter is considered fixed or not (default: false).
     """
-    values: np.ndarray
-    unit: str
-    scale: float
-    symbol: Optional[str] = None
-    lower_bound: Optional[float] = 0.0
-    upper_bound: Optional[float] = None
-    fixed: bool = False
 
-    def __post_init__(self):
-        flag = False
-        if self.lower_bound:
-            if np.any((self.values < self.lower_bound)):
-                flag = True
-        if self.upper_bound:
-            if np.any(self.values > self.upper_bound):
-                flag = True
+    def __init__(self, values: np.ndarray,
+                 unit: str,
+                 scale: float,
+                 symbol: Optional[str] = None,
+                 lower_bound: Optional[float] = 0.0,
+                 upper_bound: Optional[float] = None,
+                 fixed: bool = False):
 
-        if flag:
-            raise ValueError("One or more parameter values are out of bounds.")
+        self._check_bounded(values, lower_bound, upper_bound)
+        self.values = values
+        self.unit = unit
+        self.scale = scale
+        self.symbol = symbol
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+        self.fixed = fixed
+        self._optimize_mask = np.tile(not self.fixed, self.values.shape)
 
     def __str__(self):
         fixed = ' (fixed parameter)' if self.fixed else ''
@@ -59,8 +54,53 @@ class AcquisitionParameters:
     def __len__(self):
         return len(self.values)
 
+    def set_fixed_mask(self, fixed_mask: np.ndarray) -> None:
+        """
+        Set the measurements you wish to stay fixed during optimization of this parameter.
 
-# TODO: Add function to check if all required tissue parameters are present.
+        :param fixed_mask: The boolean np.array that evaluates True for values that need to stay fixed
+        """
+        # check the shapes
+        if fixed_mask.shape != self.values.shape:
+            raise ValueError(f"Value_mask shape {fixed_mask.shape} does not match value shape {self.values.shape}")
+
+        # update parameter fixed if all measurements are fixed
+        self.fixed = np.all(fixed_mask)
+        # the optimization mask is the negation of the fixed mask
+        self._optimize_mask = np.logical_not(fixed_mask)
+
+    def set_free_values(self, new_values: np.ndarray) -> None:
+        """
+        Change the value of only the parameter values that should be optimised
+
+        :param new_values: The values to be assigned
+        """
+        self.values[self._optimize_mask] = new_values
+
+    @property
+    def free_values(self) -> np.ndarray:
+        return self.values[self._optimize_mask]
+
+    @property
+    def optimize_mask(self):
+        return self._optimize_mask
+
+    @staticmethod
+    def _check_bounded(values, lower_bound, upper_bound):
+        """
+        :raises ValueError: If the parameter values are out of bounds
+        """
+        flag = False
+        if lower_bound:
+            if np.any((values < lower_bound)):
+                flag = True
+        if upper_bound:
+            if np.any(values > upper_bound):
+                flag = True
+        if flag:
+            raise ValueError("One or more parameter values are out of bounds.")
+
+
 class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     """
     Base-class for MR acquisition schemes.
@@ -70,18 +110,10 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     :raise ValueError: Lists have unequal length.
     """
 
-    def __init__(self, parameters: Dict[str, AcquisitionParameters], bounds: Optional[List[Tuple[float]]] = None):
+    def __init__(self, parameters: Dict[str, AcquisitionParameters]):
+        # Check that all parameters have the same length
+        self._check_parameter_lengths(parameters)
         super().__init__(parameters)
-
-        # Allows user to provide bounds on parameters when constructing the scheme
-        # bounds need to be provided in same order as acquisition parameters
-        if bounds:
-            if len(bounds) != len(self):
-                raise ValueError(" Number of bounds does not match number of acquisition parameters. ")
-
-            for i, param in enumerate(self.values()):
-                param.lower_bound = bounds[i][0]
-                param.upper_bound = bounds[i][1]
 
     def __str__(self) -> str:
 
@@ -97,6 +129,20 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         table_str = tabulate(table, headers='keys')
         return f'Acquisition scheme with {self.pulse_count} measurements and {len(self)} scalar parameters:\n{table_str}'
 
+    @staticmethod
+    def _check_parameter_lengths(parameters: Dict[str, AcquisitionParameters]):
+        # making a dict with parameter lengths for more informative error message
+        parameter_lengths = {}
+        for key, parameter in parameters.items():
+            parameter_lengths[key] = len(parameter)
+
+        # Checking against the first parameters length
+        all_lenghts = list(parameter_lengths.values())
+        first = all_lenghts[0]
+        for length in all_lenghts:
+            if length != first:
+                raise ValueError(f"One or more parameters have unequal length: {parameter_lengths}")
+
     @property
     def free_parameters(self) -> Dict[str, np.ndarray]:
         """
@@ -104,7 +150,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
         :return: A dictionary containing key : TissueParameter.values pairs.
         """
-        return {key: self[key].values for key in self.free_parameter_keys}
+        return {key: self[key].free_values for key in self.free_parameter_keys}
 
     @property
     def free_parameter_vector(self) -> np.ndarray:
@@ -112,7 +158,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         Returns all the free parameters as a flattened vector.
         :return:
         """
-        return np.concatenate([val.values.flatten() for val in self.values() if not val.fixed])
+        return np.concatenate([val.free_values.flatten() for val in self.values() if not val.fixed])
 
     def set_free_parameter_vector(self, vector: np.ndarray) -> None:
         """
@@ -123,10 +169,12 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         # Reshape the flattened vector based on parameter value shapes
         i = 0
         for key in self.free_parameter_keys:
-            shape = self[key].values.shape
+            # shape of the current parameter free values determines the number of values we can assign.
+            shape = self[key].free_values.shape
+            # computing how many values of the vector belong to the current parameter
             stride = int(prod(shape))
-            thesevals = vector[i:(i + stride)]
-            self[key].values = thesevals.reshape(shape)
+            new_values = vector[i:(i + stride)]
+            self[key].set_free_values(new_values.reshape(shape))
             i += stride
 
     def get_free_parameter_idx(self, parameter: str, pulse_id: int) -> int:
@@ -140,7 +188,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         for key in self.free_parameter_keys:
             if key == parameter:
                 return i + pulse_id
-            shape = self[key].values.shape
+            shape = self[key].free_values.shape
             stride = int(prod(shape))
             i += stride
 
@@ -164,7 +212,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         :return: The scale of the free parameters
         """
         return np.repeat(np.array([p.scale for p in self.values() if not p.fixed]),
-                         [len(p.values) for p in self.values() if not p.fixed])
+                         [len(p.free_values) for p in self.values() if not p.fixed])
 
     @property
     def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], ...]]:
@@ -176,7 +224,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         for key in self.free_parameter_keys:
             p = self[key]
             p_bounds = (p.lower_bound, p.upper_bound)
-            for _ in range(len(p.values)):
+            for _ in range(len(p.free_values)):
                 bounds.append(tuple([None if bound is None else bound / p.scale for bound in p_bounds]))
 
         return bounds
@@ -212,51 +260,11 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         i = 0
         for key in self.free_parameter_keys:
             scale = self[key].scale
-            shape = self[key].values.shape
+            shape = self[key].free_values.shape
             stride = int(prod(shape))
             if parameter == key:
                 return x[i:(i + stride)].reshape(shape) * scale
             i += stride
-
-    def make_linear_constraint(self, parameter_coefficients: Dict[str, float]) -> Optional[NonlinearConstraint]:
-        """ This method constructs the scipy constraints for the inequality based on a dictionary of coefficients
-        Assumes inequality of the form lowerbound <= c_1 * x_1 + c_2 * x_2 .... <= infty.
-
-        Provide the coefficients c_i as values for the parameters as they are named in the child class.
-
-        :param parameter_coefficients: A dictionary defining the constraint inequalities coefficients
-        :return: A scipy linear constraint defining the constraint
-        """
-        pulse_num = self.pulse_count
-
-        # we make the linear constraint only on parameters that actually change
-        free_param_keys = self.free_parameter_keys
-
-        # if all free param keys have zero coefficient we can do without constraint
-        free_param_coefficients = np.array([parameter_coefficients[key] for key in free_param_keys])
-        if np.all(free_param_coefficients == 0):
-            return None
-        # blocks defining the linear inequality
-        blocks = [parameter_coefficients[key] * np.identity(pulse_num) * self[key].scale for key in free_param_keys]
-
-        A = np.concatenate(blocks, axis=1)
-
-        # in the case that the free parameters are not involved in the constraint we need not check the constraint
-        # during optimization
-        if np.sum(A != 0) == 0:
-            return None
-
-        # Adjusting bounds if a fixed parameter is involved in the inequality
-        lb = np.zeros(pulse_num)
-        for key in list(set(self.keys()) - set(self.free_parameter_keys)):
-            lb = lb - parameter_coefficients[key] * self[key].values
-
-        # The scipy compatible function defining the constraint as explained in docstring above.
-        def fun(x: np.ndarray):
-            return A @ x
-
-        constraint = NonlinearConstraint(fun, lb, np.inf)
-        return constraint
 
     @abstractmethod
     def get_constraints(self) -> ConstraintTypes:
@@ -268,6 +276,23 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         A is the matrix defining the constraint relation between parameters.
         """
         raise NotImplementedError()
+
+    def _copy_and_update_parameter(self, parameter: str, x: np.ndarray):
+        """
+        Makes a copy from Acquisition parameter values and inserts the values suggested by the optimizer in
+        x.
+        :param parameter: The name of the parameter for which you want the update full value array
+        :param x: The optimizer suggestion for ALL free parameters
+        :return: The copy of all values and the updated free parameter values
+        """
+        update_values = self.get_parameter_from_parameter_vector(parameter, x)
+        value_array = copy(self[parameter].values)
+        value_array[self[parameter].optimize_mask] = update_values
+        return value_array
+
+    def _are_fixed(self, parameter_list: List[str]) -> bool:
+        are_fixed = [self[name].fixed for name in parameter_list]
+        return all(are_fixed)
 
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
@@ -287,23 +312,16 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray]):
 
-        # check scale of b_values (in bounds or not)
-        if np.any((b_values[b_values != 0] < 1) | (b_values[b_values != 0] > 1e5)):
-            warnings.warn("The provided b-values are not clinically relevant, clinical b-values are expected in the "
-                          "order of 1e2 - 1e5 s/mm^2 ")
+        # Checking the constraint on delta and Delta
+        if np.any(pulse_widths > pulse_intervals):
+            raise ValueError(
+                "Invalid DiffusionAcquisitionScheme: atleast one measurement with pulse_width > pulse_interval")
 
-        # check scale of pulses ( in bounds or not)
-        if np.any((pulse_widths > 1000) | (pulse_widths < 1)):
-            warnings.warn("The provided pulse-widths are not in the expected order of 1e2 ms")
-
-        if np.any((pulse_intervals > 1000) | (pulse_intervals < 1)):
-            warnings.warn("The provided pulse-intervals are not in the expected order of 1e2 ms")
-
-        # TODO: check pulse constraints
         # Check if the b-vectors are unit vectors and set b=0 'vectors' to (0, 0, 0) as per convention.
         b0 = b_values == 0
         if not np.any(b0):
             raise ValueError("No b0 measurements detected. The b0 measurements are required to estimate S0.")
+
         b_vectors = np.asarray(b_vectors, dtype=np.float64)
         if not np.allclose(np.linalg.norm(b_vectors[~b0], axis=1), 1):
             raise ValueError('b-vectors are not unit vectors.')
@@ -315,20 +333,20 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         super().__init__({
             'DiffusionBValue': AcquisitionParameters(
-                values=b_values, unit='s/mm²', scale=1000, symbol="b", lower_bound=0.0, upper_bound=20e3
+                values=b_values, unit='s/mm²', scale=1e3, symbol="b", lower_bound=0.0, upper_bound=20e3
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
-                values=phi, unit='rad', scale=1, symbol=r"$\phi$", lower_bound=None, fixed=True
+                values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
             ),
             'DiffusionGradientAngleTheta': AcquisitionParameters(
-                values=theta, unit='rad', scale=1, symbol=r"$\theta$", lower_bound=None, fixed=True
+                values=theta, unit='rad', scale=1., symbol=r"$\theta$", lower_bound=None, fixed=True
             ),
             'DiffusionPulseWidth': AcquisitionParameters(
-                values=pulse_widths, unit='ms', scale=10, symbol=r"$\delta$", fixed=False, lower_bound=0.1,
+                values=pulse_widths, unit='ms', scale=10., symbol=r"$\delta$", fixed=False, lower_bound=1.,
                 upper_bound=1e2
             ),
             'DiffusionPulseInterval': AcquisitionParameters(
-                values=pulse_intervals, unit='ms', scale=10, symbol=r"$\Delta$", fixed=False, lower_bound=0.1,
+                values=pulse_intervals, unit='ms', scale=10., symbol=r"$\Delta$", fixed=False, lower_bound=1.,
                 upper_bound=1e3
             ),
         })
@@ -431,141 +449,21 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             for bvec in self.b_vectors:
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
-    def get_constraints(self) -> Union[List[NonlinearConstraint], NonlinearConstraint]:
-        # Matrix defining Δ > δ or equivalently 0 < Δ - δ < \infty
-        parameter_coefficients = {
-            'DiffusionBValue': 0,
-            'DiffusionGradientAnglePhi': 0,
-            'DiffusionGradientAngleTheta': 0,
-            'DiffusionPulseWidth': -1,
-            'DiffusionPulseInterval': 1
-        }
-        linear_constraints = self.make_linear_constraint(parameter_coefficients)
-
-        # now the constraint that at least 1 b0 measurement is made?
-        def b0_constraint_fun(x: np.ndarray) -> float:
-            # get b-values
-            b = self.get_parameter_from_parameter_vector('DiffusionBValue', x)
-            if np.all(b != 0) or np.any(b < 0):
-                return 1.e9
-            else:
-                return 0.0
-
-        # keep feasible true makes the constraint hard --> the optimizer will not traverse the forbidden region
-        b_constraint = NonlinearConstraint(b0_constraint_fun, 0.0, 0.0, keep_feasible=True)
-        # we make the b0 constraint function an equality constraint equal 0.
-        if linear_constraints is None:
-            return b_constraint
-        return [linear_constraints, b_constraint]
-
-
-class ShellScheme(DiffusionAcquisitionScheme):
-    def __init__(self,
-                 b_values: Union[List[float], np.ndarray],
-                 b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
-                 pulse_widths: Union[List[float], np.ndarray],
-                 pulse_intervals: Union[List[float], np.ndarray]):
-
-        super().__init__(b_values, b_vectors, pulse_widths, pulse_intervals)
-
-        # For now we fix the b-value
-        self['DiffusionBValue'].fixed = True
-
-        # store the initial gradient directions to define the rotation angles with
-        self.initial_theta = np.copy(self.theta)
-        self.initial_phi = np.copy(self.phi)
-
-        # check how many distinct shells there are by b-value and initialize zero rotation angle for all shells
-        self.unique_bvals = np.unique(b_values)
-        # get the indices of the unique b-values using a dict
-        self.bval_indices = {}
-        for bval in self.unique_bvals:
-            self.bval_indices[bval] = np.where(b_values == bval)[0]
-
-        # initialise angles for all nonzero b-shells but the first one
-        n_angles = np.sum(self.unique_bvals > 0) - 1
-
-        # We store the angles in sequence of increasing b-value for every non zero shell but the first one
-        self.update({
-            'ShellRotationAngleTheta': AcquisitionParameters(
-                values=np.zeros(n_angles), unit='rad', symbol=r"$\theta_{shell}$", scale=1, lower_bound=None
-            ),
-            'ShellRotationAnglePhi': AcquisitionParameters(
-                values=np.zeros(n_angles), unit='rad', symbol=r"$\phi_{shell}$", scale=1, lower_bound=None
-            )
-        })
-
-    def _rotate_shells(self) -> None:
-        """
-        Rotates the shells in other words updates the gradient directions based on the shell angles
-        :return:
-        """
-        d_theta = self['ShellRotationAngleTheta'].values
-        d_phi = self['ShellRotationAnglePhi'].values
-
-        # prepend two zeros if there are b0 values
-        if np.sum(self.unique_bvals == 0) != 0:
-            d_theta = np.pad(d_theta, 2, 'constant', constant_values=0)
-            d_phi = np.pad(d_phi, 2, 'constant', constant_values=0)
-        # prepend one zero if there is not a b0 value
-        else:
-            d_theta = np.pad(d_theta, 1, 'constant', constant_values=0)
-            d_phi = np.pad(d_phi, 1, 'constant', constant_values=0)
-
-        for i, indices in enumerate(self.bval_indices.values()):
-            self['DiffusionGradientAngleTheta'].values[indices] = self.initial_theta[indices] + d_theta[i]
-            self['DiffusionGradientAnglePhi'].values[indices] = self.initial_phi[indices] + d_phi[i]
-
-    def set_free_parameter_vector(self, vector: np.ndarray) -> None:
-        # Same function as on base class
-        super().set_free_parameter_vector(vector)
-        # We update the gradient angles based on the shell rotation angles
-        self._rotate_shells()
-
     def get_constraints(self) -> Optional[NonlinearConstraint]:
-        # Matrix defining Δ > δ or equivalently 0 < Δ - δ < \infty
-        parameter_coefficients = {
-            'DiffusionBValue': 0,
-            'DiffusionGradientAnglePhi': 0,
-            'DiffusionGradientAngleTheta': 0,
-            'DiffusionPulseWidth': -1,
-            'DiffusionPulseInterval': 1,
-            "ShellRotationAngleTheta": 0,
-            "ShellRotationAnglePhi": 0
-        }
-        return self.make_linear_constraint(parameter_coefficients)
+        # Defining Δ > δ or equivalently 0 < Δ - δ < \infty
 
-    @property
-    def shell_angles(self) -> List[np.ndarray]:
-        """
-        :return: The angles with which the shell is rotated w.r.t. the first non-zero shell
-        """
-        # The indices for the non zero b-values in property arrays. (b-value, angles, etc etc)
-        indices = []
-        for b_val in self.unique_bvals[self.unique_bvals > 0]:
-            indices.append(self.bval_indices[b_val])
+        # We check in case both parameters are fixed we need not apply a constraint
+        if self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval']):
+            return None
 
-        angles = []
-        for shell in indices:
-            theta = self['DiffusionGradientAngleTheta'].values[shell]
-            phi = self['DiffusionGradientAnglePhi'].values[shell]
+        # get non free parameter values and mask with the free parameter mask
+        def delta_constraint_fun(x: np.ndarray):
+            """ Should be larger than zero """
+            delta = self._copy_and_update_parameter('DiffusionPulseWidth', x)
+            Delta = self._copy_and_update_parameter('DiffusionPulseInterval', x)
+            return Delta - delta
 
-            angles.append(np.array([theta, phi]).T)
-
-        return angles
-
-    def plot_shells(self):
-        """
-        Function to visualize the shells.
-        """
-        # convert the angles to unit vectors
-        shells = list(map(angles_to_unitvectors, self.shell_angles))
-        # using the visualiser from the gradient_sampling module
-        plot_shells(shells)
-
-    def plot_shells_projected(self):
-        shells = list(map(angles_to_unitvectors, self.shell_angles))
-        plot_shells_projected(shells)
+        return NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
@@ -575,7 +473,6 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     :param repetition_times: A list or numpy array of repetition times TR in milliseconds.
     :param echo_times: A list or numpy array of echo times TE in milliseconds.
     :param inversion_times: A list or numpy array of inversion times TI in milliseconds.
-    :param bounds: A list of tuples containing boundaries for the tr,te and ti respectively
     :raise ValueError: Lists have unequal length.
     """
 
@@ -583,7 +480,12 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
                  repetition_times: Union[List[float], np.ndarray],
                  echo_times: Union[List[float], np.ndarray],
                  inversion_times: Union[List[float], np.ndarray],
-                 bounds: List[tuple] = None):
+                 ):
+        # check constraint TR > TE + TI
+        if np.any(repetition_times < echo_times + inversion_times):
+            raise ValueError("Invalid inversion recovery scheme: atleast one measurement breaks constrain TR>TE+TI")
+
+        # delegate to baseclass
         super().__init__(
             {
                 'RepetitionTimeExcitation': AcquisitionParameters(
@@ -593,7 +495,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
                     upper_bound=1e3),
                 'InversionTime': AcquisitionParameters(
                     values=inversion_times, unit='ms', scale=100, symbol=r"$T_I$", lower_bound=10.0, upper_bound=1e4)
-            }, bounds)
+            })
 
     @property
     def repetition_times(self) -> np.ndarray:
@@ -617,13 +519,18 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         return self['InversionTime'].values
 
     def get_constraints(self) -> Optional[NonlinearConstraint]:
-        parameter_signs = {
-            'RepetitionTimeExcitation': 1,
-            'EchoTime': -1,
-            'InversionTime': -1,
-        }
+        involved_parameters = ['InversionTime', 'EchoTime', 'RepetitionTimeExcitation']
+        if self._are_fixed(involved_parameters):
+            return None
 
-        return self.make_linear_constraint(parameter_signs)
+        def time_constraint_fun(x: np.ndarray):
+            # require return value larger than zero to enforce constraint TR > TE + TI
+            ti = self._copy_and_update_parameter('InversionTime', x)
+            te = self._copy_and_update_parameter('EchoTime', x)
+            tr = self._copy_and_update_parameter('RepetitionTimeExcitation', x)
+            return tr - te - ti
+
+        return NonlinearConstraint(time_constraint_fun, 0.0, np.inf)
 
 
 class EchoScheme(AcquisitionScheme):
@@ -694,7 +601,7 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
     def b_values(self):
         return self['DiffusionBvalue'].values
 
-    def get_constraints(self) -> Union[dict, List[dict]]:
+    def get_constraints(self) -> NonlinearConstraint:
         t180 = self['PulseDurationPi'].values
         t90 = self['PulseDurationHalfPi'].values
         G_max = self['MaxPulseGradient'].values
@@ -715,4 +622,4 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
             # The constraint is satisfied if actual TE is higher than minimal TE
             return TE - TE_min
 
-        return {'type': 'ineq', 'fun': fun}
+        return NonlinearConstraint(fun, 0.0, np.inf)
