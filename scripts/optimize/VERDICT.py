@@ -74,14 +74,15 @@ def main():
     # Prepending b0 measurements
     gradient_directions = np.concatenate([zero_directions, gradient_directions], axis=0)
     scheme = acquisition_scheme_from_bvalues(b_values, gradient_directions, delta, Delta, TE=TE)
-    scheme.print_acquisition_info
     scheme = convert_dmipy_scheme2diffusion_scheme(scheme)
-
+    # For dmipy based optimization fixed b0 measurements are required.
+    scheme["DiffusionBValue"].set_fixed_mask(scheme.b_values == 0)
     print(scheme)
 
     # -------------- Optimization
-    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, loss_scaling_factor=1e-10,
-                                              optimizer_options={"maxiter": 2000})
+    trust_options = {'disp': True}
+    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, method='SLSQP', loss_scaling_factor=1.0e-10,
+                                              solver_options=trust_options)
 
     IO.save_pickle(best_scheme, "schemes/verdict_optimal.pkl")
     IO.save_pickle(scheme, "schemes/verdict_start.pkl")

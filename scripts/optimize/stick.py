@@ -13,6 +13,10 @@ if __name__ == "__main__":
     # ---- loading the basic stick model
     stick = saved_models.stick()
 
+    # investigating effect of not optimizing w.r.t orientation parameters
+    stick['C1Stick_1_mu_0'].optimize = False
+    stick['C1Stick_1_mu_1'].optimize = False
+
     # ---- setting up the initial acquisition scheme
     M = 10  # number of measurements
     Mb0 = int(M / 10)
@@ -23,15 +27,19 @@ if __name__ == "__main__":
     pulse_intervals = np.repeat(40.0, M)
 
     scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
-    # fixing b values for b0 measurements
 
+    # fixing b values for b0 measurements
     scheme["DiffusionBValue"].set_fixed_mask(b_values == 0)
+
+    # fixing pulse width and interval for now
+    # scheme['DiffusionPulseWidth'].fixed = True
+    # scheme['DiffusionPulseInterval'].fixed = True
 
     IO.save_pickle(scheme, "schemes/stick_scheme_start.pkl")
     # ---- optimizing the scheme
     noise_var = 0.02
 
-    scheme_opt, _ = optimize_scheme(scheme, stick, noise_variance=noise_var)
+    scheme_opt, _ = optimize_scheme(scheme, stick, noise_variance=noise_var, method='trust-constr')
 
     IO.save_pickle(scheme_opt, "schemes/stick_scheme_optimal.pkl")
     print(scheme)

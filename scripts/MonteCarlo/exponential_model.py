@@ -4,11 +4,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import stats
 
-from microtool.acquisition_scheme import EchoScheme
 from microtool.monte_carlo import MonteCarloSimulation, make_result_dirs
 from microtool.monte_carlo.parameter_distributions import scale, plot_parameter_distributions
-from microtool.optimize import optimize_scheme
 from microtool.tissue_model import ExponentialTissueModel
+from microtool.utils import IO
 from microtool.utils.plotting import plot_acquisition_parameters
 
 currentdir = pathlib.Path(__file__).parent
@@ -20,26 +19,20 @@ if __name__ == "__main__":
     noise_variance = 0.02
     noise_distribution = stats.norm(loc=0, scale=np.sqrt(noise_variance))
 
-    # Aquisition scheme
-    TE = np.linspace(5, 100, num=30)
-    scheme = EchoScheme(TE)
-
-    # Tissuemodel
     model = ExponentialTissueModel(T2=10)
-
-    # optimization
-    scheme_opt, _ = optimize_scheme(scheme, model, noise_variance)
+    scheme_start = IO.get_pickle("../optimize/schemes/exponential_start.pkl")
+    scheme_optimal = IO.get_pickle("../optimize/schemes/exponential_optimal.pkl")
 
     # Monte Carlo simulations
     n_sim = 1000
 
     # running simulation with optimal scheme
-    simulation = MonteCarloSimulation(scheme_opt, model, noise_distribution, n_sim)
+    simulation = MonteCarloSimulation(scheme_optimal, model, noise_distribution, n_sim)
     result = simulation.run()
     simulation.save(datadir, "T2=10", "optimized")
 
     # doing same for non optimal scheme
-    simulation.set_scheme(scheme)
+    simulation.set_scheme(scheme_start)
     non_optimal_result = simulation.run()
     simulation.save(datadir, "T2=10", "non-optimized")
 
@@ -57,9 +50,9 @@ if __name__ == "__main__":
     plt.savefig(plotdir / ("non_optimal_PD" + simulation._save_name + ".png"))
 
     # plotting the aquisition parameters
-    plot_acquisition_parameters(scheme_opt)
+    plot_acquisition_parameters(scheme_optimal)
     plt.savefig((plotdir / ("optimal_AP.png")))
-    plot_acquisition_parameters(scheme)
+    plot_acquisition_parameters(scheme_start)
     plt.savefig((plotdir / ("non_optimal_AP.png")))
 
     # plotting the signal

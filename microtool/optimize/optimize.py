@@ -75,7 +75,7 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
 
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
-        scheme_copy.free_parameter_vector = result['x'] * acquisition_parameter_scales
+        scheme_copy.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
 
     # check if the optimized scheme is better than the initial scheme
     current_loss = compute_loss(scheme_copy, model, noise_variance, loss)

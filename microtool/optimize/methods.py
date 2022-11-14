@@ -1,7 +1,7 @@
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 import numpy as np
-from scipy.optimize import OptimizeResult
+from scipy.optimize import OptimizeResult, Bounds
 from tqdm.contrib.itertools import product
 
 
@@ -45,9 +45,6 @@ class BruteForce(Optimizer):
         if isinstance(constraints, list):
             raise NotImplementedError("Bruteforce optimizer cant handle multiple constraints")
 
-        # this checks if boundaries actually contains values for lower bound and upperbound
-        check_bounded(bounds)
-
         nx = len(x0)
         if nx > 8:
             raise ValueError("The dimensionality of the problem is too large for brute force optimization. Only up to "
@@ -62,11 +59,11 @@ class BruteForce(Optimizer):
             else:
                 domains.append(np.linspace(bound[0], bound[1], num=self.Ns))
 
-        x_optimal, y_optimal = self._find_minimum(fun, domains, constraints)
+        x_optimal, y_optimal = self._find_minimum(fun, args, domains, constraints)
         return OptimizeResult(fun=y_optimal, x=x_optimal, succes=True)
 
     @staticmethod
-    def _find_minimum(fun: callable, args: tuple,domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
+    def _find_minimum(fun: callable, args: tuple, domains: List[np.ndarray], constraints) -> Tuple[np.ndarray, float]:
         if constraints is None or constraints == ():
             # iterate over the grid
             y_optimal = np.inf
@@ -160,7 +157,7 @@ class SOMA(Optimizer):
 
         # TODO: guarantee bounds in higherlevel functions in tissuemodel
         bounds = options["bounds"]
-        check_bounded(bounds)
+
         constraints = options['constraints']
         if isinstance(constraints, list):
             raise NotImplementedError("SOMA currently does not support multiple constraints.")
@@ -180,7 +177,7 @@ class Population:
     """This class defines the population in the SOMA algorithm
     """
 
-    def __init__(self, sz: int, bounds: np.ndarray, constraint, fun: callable, args:tuple, max_evals: int,
+    def __init__(self, sz: int, bounds: Bounds, constraint, fun: callable, args: tuple, max_evals: int,
                  values: np.ndarray = None):
         """
         :param sz: The population size
@@ -190,11 +187,11 @@ class Population:
         :param values: Starting parameter values of the population, defaults to None
         """
         self.sz = sz
-        bounds = np.array(bounds)
+
         self.constraint = constraint
-        self.lower_bound = bounds[:, 0]
-        self.upper_bound = bounds[:, 1]
-        self.Nx = len(bounds)
+        self.lower_bound = bounds.lb
+        self.upper_bound = bounds.ub
+        self.Nx = len(bounds.lb)
         self.fun = fun
         self.args = args
         self.max_fevals = max_evals
@@ -203,9 +200,9 @@ class Population:
         self.best_cost = np.inf
         self.best_individual = None
 
-        if values == None:
+        if values is None:
             # initializing a randomly distributed population over the provided domains
-            self._values = bounds[:, 0] + np.random.rand(sz, len(bounds)) * (bounds[:, 1] - bounds[:, 0])
+            self._values = self.lower_bound + np.random.rand(sz, self.Nx) * (self.upper_bound - self.upper_bound)
 
         # computing the starting fitness values
         self._set_fitness()
@@ -313,21 +310,3 @@ def is_constrained(x: np.ndarray, constraint: dict) -> bool:
         return True
     else:
         return False
-
-
-def check_bounded(allbounds: List[Tuple[Optional[float], Optional[float]]]) -> None:
-    """This function checks the boundedness of a set of given bounds such that brute force optimizers
-    can assume boundedness after calling this function.
-
-    :param allbounds: A list of bounds
-    :raises ValueError: Raises a value error in case the there are no bounds or if bounds are to large
-    """
-    # Check for finite boundaries
-    if allbounds is None:
-        raise ValueError(
-            " No bounds provided in optimize: this optimization can only be executed on a finite domain")
-    for bounds in allbounds:
-        for bound in bounds:
-            if bound is None:
-                raise ValueError("One or more acquisition parameters are not bounded. "
-                                 "Infinite boundaries not supported for this optimizer")

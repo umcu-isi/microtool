@@ -8,6 +8,7 @@ from microtool.acquisition_scheme import EchoScheme
 from microtool.optimize import optimize_scheme
 from microtool.optimize.loss_functions import compute_loss, default_loss
 from microtool.tissue_model import ExponentialTissueModel
+from microtool.utils import IO
 from microtool.utils.plotting import LossInspector
 
 
@@ -17,13 +18,13 @@ def main():
     # Aquisition scheme
     TE = np.linspace(5, 40, num=50)
     scheme = EchoScheme(TE)
-
+    IO.save_pickle(scheme, 'schemes/exponential_start.pkl')
     # Tissuemodel
-    model = ExponentialTissueModel(T2=10)
+    model = ExponentialTissueModel(T2=10.0)
 
     # optimization
-    scheme_opt, _ = optimize_scheme(scheme, model, noise)
-
+    scheme_opt, _ = optimize_scheme(scheme, model, noise, method="trust-constr")
+    IO.save_pickle(scheme_opt, 'schemes/exponential_optimal.pkl')
     print(compute_loss(scheme, model, noise, default_loss))
 
     print(compute_loss(scheme_opt, model, noise, default_loss))
