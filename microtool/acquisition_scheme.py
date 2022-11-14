@@ -266,8 +266,9 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
                 return x[i:(i + stride)].reshape(shape) * scale
             i += stride
 
+    @property
     @abstractmethod
-    def get_constraints(self) -> ConstraintTypes:
+    def constraints(self) -> ConstraintTypes:
         """
         Returns optimisation constraints on the scheme parameters. Implementation is child-class specific.
 
@@ -449,7 +450,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             for bvec in self.b_vectors:
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
-    def get_constraints(self) -> Optional[NonlinearConstraint]:
+    @property
+    def constraints(self) -> Optional[NonlinearConstraint]:
         # Defining Δ > δ or equivalently 0 < Δ - δ < \infty
 
         # We check in case both parameters are fixed we need not apply a constraint
@@ -485,16 +487,15 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         if np.any(repetition_times < echo_times + inversion_times):
             raise ValueError("Invalid inversion recovery scheme: atleast one measurement breaks constrain TR>TE+TI")
 
-        # delegate to baseclass
         super().__init__(
             {
                 'RepetitionTimeExcitation': AcquisitionParameters(
-                    values=repetition_times, unit='ms', scale=100, symbol=r"$T_R$", lower_bound=10.0, upper_bound=1e4),
+                    values=repetition_times, unit='ms', scale=100., symbol=r"$T_R$", lower_bound=10.0, upper_bound=1e4),
                 'EchoTime': AcquisitionParameters(
-                    values=echo_times, unit='ms', scale=10, symbol=r"$T_E$", fixed=True, lower_bound=.1,
+                    values=echo_times, unit='ms', scale=10., symbol=r"$T_E$", fixed=True, lower_bound=.1,
                     upper_bound=1e3),
                 'InversionTime': AcquisitionParameters(
-                    values=inversion_times, unit='ms', scale=100, symbol=r"$T_I$", lower_bound=10.0, upper_bound=1e4)
+                    values=inversion_times, unit='ms', scale=100., symbol=r"$T_I$", lower_bound=10.0, upper_bound=1e4)
             })
 
     @property
@@ -518,7 +519,8 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         """
         return self['InversionTime'].values
 
-    def get_constraints(self) -> Optional[NonlinearConstraint]:
+    @property
+    def constraints(self) -> Optional[NonlinearConstraint]:
         involved_parameters = ['InversionTime', 'EchoTime', 'RepetitionTimeExcitation']
         if self._are_fixed(involved_parameters):
             return None
@@ -536,15 +538,16 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
 class EchoScheme(AcquisitionScheme):
     def __init__(self, TE: np.ndarray):
         super().__init__({
-            'EchoTime': AcquisitionParameters(values=TE, unit='ms', scale=1, symbol=r"$T_E$", lower_bound=5,
-                                              upper_bound=200)
+            'EchoTime': AcquisitionParameters(values=TE, unit='ms', scale=1.0, symbol=r"$T_E$", lower_bound=1.0,
+                                              upper_bound=200.0)
         })
 
     @property
     def echo_times(self):
         return self['EchoTime'].values
 
-    def get_constraints(self) -> Optional[Union[dict, List[dict]]]:
+    @property
+    def constraints(self) -> Optional[Union[dict, List[dict]]]:
         """ For now without constraints. """
         return None
 
@@ -568,28 +571,28 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
 
         super().__init__({
             'DiffusionBvalue': AcquisitionParameters(
-                values=b_values, unit='s/mm^2', scale=1000, symbol=r"$b$", lower_bound=0.0, upper_bound=3e4
+                values=b_values, unit='s/mm^2', scale=1000., symbol=r"$b$", lower_bound=0.0, upper_bound=3e4
             ),
             'EchoTime': AcquisitionParameters(
-                values=echo_times, unit='ms', scale=10, symbol=r"$T_E$", lower_bound=0, upper_bound=1e3
+                values=echo_times, unit='ms', scale=10., symbol=r"$T_E$", lower_bound=0., upper_bound=1e3
             ),
             'MaxPulseGradient': AcquisitionParameters(
-                values=max_gradient, unit='mT/mm', scale=1, symbol=r"$G_{max}$", fixed=True
+                values=max_gradient, unit='mT/mm', scale=1., symbol=r"$G_{max}$", fixed=True
             ),
             'MaxSlewRate': AcquisitionParameters(
-                values=max_slew_rate, unit='mT/mm/ms', scale=1, symbol=r"$SR$", fixed=True
+                values=max_slew_rate, unit='mT/mm/ms', scale=1., symbol=r"$SR$", fixed=True
             ),
             'RiseTime': AcquisitionParameters(
-                values=max_gradient / max_slew_rate, unit='ms', scale=1, symbol=r"$t_{rise}$", fixed=True
+                values=max_gradient / max_slew_rate, unit='ms', scale=1., symbol=r"$t_{rise}$", fixed=True
             ),
             'HalfReadTime': AcquisitionParameters(
-                values=half_readout_time, unit='ms', scale=10, symbol=r"$t_{half}$", fixed=True
+                values=half_readout_time, unit='ms', scale=10., symbol=r"$t_{half}$", fixed=True
             ),
             'PulseDurationPi': AcquisitionParameters(
-                values=excitation_time_pi, unit='ms', scale=10, symbol=r"$t_{\pi}$", fixed=True
+                values=excitation_time_pi, unit='ms', scale=10., symbol=r"$t_{\pi}$", fixed=True
             ),
             'PulseDurationHalfPi': AcquisitionParameters(
-                values=excitation_time_half_pi, unit='ms', scale=10, symbol=r"$t_{\pi / 2}$", fixed=True
+                values=excitation_time_half_pi, unit='ms', scale=10., symbol=r"$t_{\pi / 2}$", fixed=True
             )
         })
 
@@ -601,7 +604,8 @@ class FlaviusAcquisitionScheme(AcquisitionScheme):
     def b_values(self):
         return self['DiffusionBvalue'].values
 
-    def get_constraints(self) -> NonlinearConstraint:
+    @property
+    def constraints(self) -> NonlinearConstraint:
         t180 = self['PulseDurationPi'].values
         t90 = self['PulseDurationHalfPi'].values
         G_max = self['MaxPulseGradient'].values

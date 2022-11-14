@@ -1,9 +1,9 @@
 import warnings
 from copy import deepcopy
-from typing import Optional, Union, Tuple, TypeVar
+from typing import Optional, Union, Tuple, TypeVar, List
 
 import numpy as np
-from scipy.optimize import OptimizeResult, minimize, differential_evolution
+from scipy.optimize import OptimizeResult, minimize, differential_evolution, Bounds
 
 from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST
 from .methods import Optimizer
@@ -19,25 +19,26 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
                     loss: LossFunction = default_loss,
                     loss_scaling_factor: float = 1.0,
                     method: Optional[Union[str, Optimizer]] = "differential_evolution",
-                    optimizer_options: dict = None) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
+                    solver_options: dict = None) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
     scales, and the noise variance. The loss function should return a scalar loss. N is the number of measurements
     in the acquisition and M is the number of tissue parameters.
 
-
     :param scheme: The MR acquisition scheme to be optimized. (NOTE: a reference of the scheme is passed,
                     so it will be changed.
     :param model: The tissuemodel for which we want the optimal acquisition scheme.
     :param noise_variance: Noise variance on the MR signal attenuation.
     :param loss: a function of type LossFunction.
+    :param loss_scaling_factor: Can be used to scale the loss function to order 1.0 if you notice extreme values.
     :param method: Type of solver. See the documentation for scipy.optimize.minimize
+    :param solver_options: Options specific to the solver check the documentation of the solver to see what can be done.
     :return: A scipy.optimize.OptimizeResult object.
     """
     # setting to empty dict because unpack operation is required later
-    if optimizer_options is None:
-        optimizer_options = {}
+    if solver_options is None:
+        solver_options = {}
 
     # Checking the initial scheme and model
     check_degrees_of_freedom(scheme, model)
@@ -48,10 +49,12 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     # Copying the scheme because acquisition parameters are updated during optimization
     scheme_copy = deepcopy(scheme)
 
+    # getting all the parameters needed for scipy optimization
     acquisition_parameter_scales = scheme_copy.free_parameter_scales
     x0 = scheme_copy.free_parameter_vector / acquisition_parameter_scales
     scaled_bounds = scheme_copy.free_parameter_bounds_scaled
-    constraints = scheme_copy.get_constraints()
+    scipy_bounds = bounds_tuple2scipy(scaled_bounds)
+    constraints = scheme_copy.constraints
 
     # The parameters required to fully define the loss function.
     scipy_loss_args = (scheme_copy, model, noise_variance, loss, loss_scaling_factor)
@@ -61,18 +64,18 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
         if constraints is None:
             constraints = ()
 
-        result = differential_evolution(scipy_loss, bounds=scaled_bounds,
+        result = differential_evolution(scipy_loss, bounds=scipy_bounds,
                                         args=scipy_loss_args,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
-                                        polish=False, **optimizer_options)
+                                        polish=True, **solver_options)
     else:
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
-                          method=method, bounds=scaled_bounds, constraints=constraints,
-                          options=optimizer_options)
+                          method=method, bounds=scipy_bounds, constraints=constraints,
+                          options=solver_options)
 
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
-        scheme_copy.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
+        scheme_copy.free_parameter_vector = result['x'] * acquisition_parameter_scales
 
     # check if the optimized scheme is better than the initial scheme
     current_loss = compute_loss(scheme_copy, model, noise_variance, loss)
@@ -82,6 +85,13 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     warn_early_termination(result)
 
     return scheme_copy, result
+
+
+def bounds_tuple2scipy(microtool_bounds: List[Tuple[float, float]]) -> Bounds:
+    lb_array = np.array([bound[0] for bound in microtool_bounds])
+    ub_array = np.array([bound[1] for bound in microtool_bounds])
+    # keep feasible is required to ensure that the optimizer doesn't step out of the search space
+    return Bounds(lb_array, ub_array, keep_feasible=True)
 
 
 def warn_early_termination(result: OptimizeResult):
