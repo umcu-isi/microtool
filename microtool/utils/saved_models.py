@@ -81,7 +81,10 @@ def stick_zeppelin() -> DmipyTissueModel:
 
 
 def stick() -> DmipyTissueModel:
-    return DmipyTissueModel(stick_naked())
+    stick = stick_naked()
+    mu = (np.pi / 2, np.pi / 2)  # in radians
+    stick.set_fixed_parameter('C1Stick_1_mu', mu)
+    return DmipyTissueModel(stick)
 
 
 def stick_naked() -> MultiCompartmentModel:

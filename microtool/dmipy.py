@@ -157,10 +157,11 @@ class DmipyTissueModel(TissueModel):
         # Evaluate the dmipy model on the baseline and on the parameter vectors with finite differences.
         s0 = self['S0'].value
         # baseline signal for UNvaried tissueparameters
-        baseline = s0 * self._model.simulate_signal(dmipy_scheme, self._parameter_baseline)
+        baseline = s0 * self._model.simulate_signal(dmipy_scheme, self._parameter_baseline[self.include[:-1]])
         # d S for all the different tissue parameters
-        forward_diff = self._model.simulate_signal(dmipy_scheme, self._parameter_vectors_forward)
-        backward_diff = self._model.simulate_signal(dmipy_scheme, self._parameter_vectors_backward)
+        forward_diff = self._model.simulate_signal(dmipy_scheme, self._parameter_vectors_forward[:, self.include[:-1]])
+        backward_diff = self._model.simulate_signal(dmipy_scheme,
+                                                    self._parameter_vectors_backward[:, self.include[:-1]])
         central_diff = s0 * (forward_diff - backward_diff)
 
         # Divide by the finite differences to obtain the derivatives (central difference method),

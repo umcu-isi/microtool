@@ -13,10 +13,6 @@ if __name__ == "__main__":
     # ---- loading the basic stick model
     stick = saved_models.stick()
 
-    # investigating effect of not optimizing w.r.t orientation parameters
-    stick['C1Stick_1_mu_0'].optimize = False
-    stick['C1Stick_1_mu_1'].optimize = False
-
     # ---- setting up the initial acquisition scheme
     M = 10  # number of measurements
     Mb0 = int(M / 10)
