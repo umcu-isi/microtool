@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from copy import copy
-from typing import Dict, List, Optional
+from copy import copy, deepcopy
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
@@ -291,7 +291,7 @@ class CascadeDecorator(TissueModelDecoratorBase):
         # TODO check that simple model is indeed simpler than complex model
 
         super().__init__(complex_model)
-        self._simple_model = simple_model
+        self._simple_model = deepcopy(simple_model)
 
         # TODO check parameter map for correct names etc
         self._parameter_map = parameter_map
@@ -322,3 +322,48 @@ class CascadeDecorator(TissueModelDecoratorBase):
             complex_name = name_map[simple_name]
             value_map[complex_name] = fit_values[simple_name]
         return value_map
+
+
+class RelaxationDecorator(TissueModelDecoratorBase):
+    # this is the variable we used for the original model in the decorator base (reminder)
+    _original = None
+
+    def __init__(self, model: DmipyTissueModel, T2: Union[List, np.ndarray, float]):
+        super().__init__(model)
+
+        # converting T2 to array
+        if not isinstance(T2, np.ndarray):
+            T2 = np.array(T2, dtype=float)
+
+        # check the number of relaxivities with the number of models
+
+        # store
+
+        self._T2 = T2
+
+        # update in model as well?
+        pass
+
+    def __call__(self, scheme: DiffusionAcquisitionScheme):
+        # set fractional volume to "reduced" fractional volume by relaxation process
+
+        # simulate signal with adjusted fractional volume
+        raise NotImplementedError()
+
+    def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
+        # fit the original model
+        naive_fit = super().fit(scheme, signal, **fit_options)
+
+        # fit relaxation equation to the partial volume result
+
+        raise NotImplementedError()
+
+    def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        # get the echo times from the scheme
+
+        # co
+
+        # convert the now extended parameter vector to the original partial volume only vector
+
+        # update
+        raise NotImplementedError()

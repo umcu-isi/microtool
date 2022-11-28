@@ -7,12 +7,14 @@ In order to simulate the MR signal in response to a MICROtool acquisition scheme
 """
 from __future__ import annotations
 
-import numpy as np
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass
+from typing import Dict, Union, List, Optional
+
+import numpy as np
 from scipy.optimize import curve_fit
 from tabulate import tabulate
-from typing import Dict, Union, List, Optional
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
     ReducedDiffusionScheme
@@ -375,8 +377,8 @@ class TissueModelDecoratorBase(TissueModel, ABC):
     """
 
     def __init__(self, original: TissueModel):
-        self._original = original
-        super().__init__(original)
+        self._original = deepcopy(original)
+        super().__init__(self._original)
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
         return self._original.__call__(scheme)
@@ -387,7 +389,7 @@ class TissueModelDecoratorBase(TissueModel, ABC):
     def jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
         return self._original.jacobian(scheme)
 
-    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
         return self._original.fit(scheme, signal, **fit_options)
 
     @property

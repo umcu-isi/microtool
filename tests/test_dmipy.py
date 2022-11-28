@@ -19,7 +19,7 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models
 
-from microtool.dmipy import CascadeDecorator
+from microtool.dmipy import CascadeDecorator, RelaxationDecorator
 from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyTissueModel, \
     convert_diffusion_scheme2dmipy_scheme, \
     AnalyticBall
@@ -123,7 +123,6 @@ class TestModelSchemeIntegration:
     def test_cascade_decorator(self):
         """
         Test fitting using cascaded decorator.
-        :return:
         """
         # -------- Acquisition
         scheme_naked = saved_schemes.alexander2008()
@@ -136,7 +135,7 @@ class TestModelSchemeIntegration:
 
         # fitting simple model to signal
         stick_zeppelin = saved_models.stick_zeppelin()
-        simple_fit = stick_zeppelin.fit(scheme_wrapped, signal)
+        simple_fit = stick_zeppelin.fit(scheme_wrapped, signal, use_parallel_processing=False)
         simple_dict = simple_fit.dmipyfitresult.fitted_parameters
         # mapping fit values to initial guess or complex model
         cylinder_zeppelin.set_initial_parameters(self._stickzeppelin_to_cylinderzeppelin(simple_dict))
@@ -182,3 +181,34 @@ class TestModelSchemeIntegration:
             'partial_volume_0': parameters['partial_volume_0'],
             'partial_volume_1': parameters['partial_volume_1']
         }
+
+
+class TestT2Decorator:
+    # "original"
+    analytic_ball = AnalyticBall(1.7e-9)
+
+    T2 = np.array(10.0)
+    relaxed_ball = RelaxationDecorator(analytic_ball, T2)
+
+    # Scheme --------------
+    dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
+    mt_scheme = convert_dmipy_scheme2diffusion_scheme(dmipy_scheme)
+
+    def test_simulate_signal(self):
+        # simulating signal using the decorator
+        result = self.relaxed_ball(self.mt_scheme)
+
+        # simulate signal
+        signal = self.analytic_ball(self.mt_scheme)
+        
+        # attenuation_factor = np.exp(-self.mt_scheme.TE / self.T2)
+
+        # attenuating the signal based on T2 values and echotimes
+        expected = attenuation_factor * signal
+        np.testing.assert_allclose(result, expected)
+
+    def test_fit(self):
+        pass
+
+    def test_jacobian(self):
+        pass
