@@ -1,14 +1,16 @@
-import numpy as np
 import warnings
 from abc import ABC, abstractmethod
 from copy import copy
 from math import prod
 from os import PathLike
 from pathlib import Path
-from scipy.optimize import NonlinearConstraint, LinearConstraint
-from tabulate import tabulate
 from typing import Union, List, Tuple, Dict, Optional
 
+import numpy as np
+from scipy.optimize import NonlinearConstraint, LinearConstraint
+from tabulate import tabulate
+
+from microtool.ScannerParameters import ScannerParameters, default_scanner
 from microtool.utils.solve_echo_time import minimal_echo_time
 
 ConstraintTypes = Union[
@@ -310,7 +312,10 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  b_values: Union[List[float], np.ndarray],
                  b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
-                 pulse_intervals: Union[List[float], np.ndarray]):
+                 pulse_intervals: Union[List[float], np.ndarray],
+                 scan_parameters: ScannerParameters = default_scanner):
+
+        self.scan_parameters = scan_parameters
 
         # Checking the constraint on delta and Delta
         if np.any(pulse_widths > pulse_intervals):
@@ -552,20 +557,15 @@ class EchoScheme(AcquisitionScheme):
 
 
 class ReducedDiffusionScheme(AcquisitionScheme):
-    """
-
-    :param b_values:
-    :param echo_times:
-    :param max_gradient:
-    """
-
     def __init__(self, b_values: Union[List[float], np.ndarray], echo_times: Union[List[float], np.ndarray],
-                 max_gradient: np.ndarray,
-                 max_slew_rate: np.ndarray,
-                 half_readout_time: np.ndarray,
-                 excitation_time_pi: np.ndarray,
-                 excitation_time_half_pi: np.ndarray
+                 scanner_parameters: ScannerParameters = default_scanner
                  ):
+        """
+        :param b_values: the b values in s/mm^2
+        :param echo_times: The echo times in ms
+        :param scanner_parameters: the parameters defined by the scanners settings and or hardware capabilities
+        """
+        self.scanner_parameters = scanner_parameters
         # Check for b0 values? make sure initial scheme satisfies constraints.
 
         super().__init__({
@@ -574,24 +574,6 @@ class ReducedDiffusionScheme(AcquisitionScheme):
             ),
             'EchoTime': AcquisitionParameters(
                 values=echo_times, unit='ms', scale=10., symbol=r"$T_E$", lower_bound=0., upper_bound=1e3
-            ),
-            'MaxPulseGradient': AcquisitionParameters(
-                values=max_gradient, unit='mT/mm', scale=1., symbol=r"$G_{max}$", fixed=True
-            ),
-            'MaxSlewRate': AcquisitionParameters(
-                values=max_slew_rate, unit='mT/mm/ms', scale=1., symbol=r"$SR$", fixed=True
-            ),
-            'RiseTime': AcquisitionParameters(
-                values=max_gradient / max_slew_rate, unit='ms', scale=1., symbol=r"$t_{rise}$", fixed=True
-            ),
-            'HalfReadTime': AcquisitionParameters(
-                values=half_readout_time, unit='ms', scale=10., symbol=r"$t_{half}$", fixed=True
-            ),
-            'PulseDurationPi': AcquisitionParameters(
-                values=excitation_time_pi, unit='ms', scale=10., symbol=r"$t_{\pi}$", fixed=True
-            ),
-            'PulseDurationHalfPi': AcquisitionParameters(
-                values=excitation_time_half_pi, unit='ms', scale=10., symbol=r"$t_{\pi / 2}$", fixed=True
             )
         })
 
@@ -605,12 +587,6 @@ class ReducedDiffusionScheme(AcquisitionScheme):
 
     @property
     def constraints(self) -> NonlinearConstraint:
-        t180 = self['PulseDurationPi'].values
-        t90 = self['PulseDurationHalfPi'].values
-        G_max = self['MaxPulseGradient'].values
-        t_rise = self['RiseTime'].values
-        t_half = self['HalfReadTime'].values
-
         def fun(x: np.ndarray) -> np.ndarray:
             # get b-values from x
             b = self.get_parameter_from_parameter_vector('DiffusionBvalue', x)
@@ -620,7 +596,7 @@ class ReducedDiffusionScheme(AcquisitionScheme):
             # get echotimes from x, (units are # ms)
             TE = self.get_parameter_from_parameter_vector('EchoTime', x)
             # compute the minimal echotimes associated with b-values and other parameters
-            TE_min = minimal_echo_time(b, t90, t180, t_half, G_max, t_rise)
+            TE_min = minimal_echo_time(b, self.scanner_parameters)
 
             # The constraint is satisfied if actual TE is higher than minimal TE
             return TE - TE_min
