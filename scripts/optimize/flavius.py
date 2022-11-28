@@ -1,14 +1,13 @@
 """
 Here we optimize the scheme according to flavius' specifications:
 """
-from copy import deepcopy
-
 import matplotlib.pyplot as plt
 import numpy as np
+from copy import deepcopy
 
-from microtool.acquisition_scheme import FlaviusAcquisitionScheme
+from microtool.acquisition_scheme import ReducedDiffusionScheme
 from microtool.optimize import optimize_scheme
-from microtool.tissue_model import FlaviusSignalModel
+from microtool.tissue_model import RelaxedIsotropicModel
 from microtool.utils.solve_echo_time import minimal_echo_time
 
 # dont print so many digits
@@ -19,7 +18,7 @@ np.set_printoptions(formatter={'float': '{: .2e}'.format})
 D = 0.8 * 1e-3
 # White matter T2 relaxation time [ms]
 T2 = 80
-signal_model = FlaviusSignalModel(T2, D)
+signal_model = RelaxedIsotropicModel(T2, D)
 # -------- Defining Acquisition scheme
 
 scan_parameters = {
@@ -40,7 +39,7 @@ TE = np.array(
     [30, 55, 57, 59, 68, 74, 90, 110, 125, 150, 30, 55, 57, 59, 68, 74, 90, 110, 125, 150, 55, 57, 59, 68, 74, 90, 110,
      125, 150, 57, 59, 68, 74, 90, 110, 125, 150, 59, 68, 74, 90, 110, 125, 150])
 
-scheme = FlaviusAcquisitionScheme(b, TE, **scan_parameters)
+scheme = ReducedDiffusionScheme(b, TE, **scan_parameters)
 scheme_copy = deepcopy(scheme)
 
 # ----------- Optimization

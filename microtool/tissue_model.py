@@ -7,16 +7,15 @@ In order to simulate the MR signal in response to a MICROtool acquisition scheme
 """
 from __future__ import annotations
 
+import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Union, List, Optional
-
-import numpy as np
 from scipy.optimize import curve_fit
 from tabulate import tabulate
+from typing import Dict, Union, List, Optional
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
-    FlaviusAcquisitionScheme
+    ReducedDiffusionScheme
 
 
 @dataclass
@@ -325,7 +324,7 @@ class ExponentialTissueModel(TissueModel):
         return FittedTissueModelCurveFit(self, result)
 
 
-class FlaviusSignalModel(TissueModel):
+class RelaxedIsotropicModel(TissueModel):
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
         raise NotImplementedError()
 
@@ -341,7 +340,7 @@ class FlaviusSignalModel(TissueModel):
             'S0': TissueParameter(value=s0, scale=s0, optimize=False),
         })
 
-    def __call__(self, scheme: FlaviusAcquisitionScheme) -> np.ndarray:
+    def __call__(self, scheme: ReducedDiffusionScheme) -> np.ndarray:
         # The signal equation for this model S = S0*exp(-b.*D).*exp(-TE/T2)
 
         bvalues = scheme.b_values
@@ -351,7 +350,7 @@ class FlaviusSignalModel(TissueModel):
         te_t2 = np.exp(- te / self['T2'].value)
         return self['S0'].value * b_D * te_t2
 
-    def jacobian(self, scheme: FlaviusAcquisitionScheme) -> np.ndarray:
+    def jacobian(self, scheme: ReducedDiffusionScheme) -> np.ndarray:
         # Acquisition parameters
         bvalues = scheme.b_values
         te = scheme.echo_times

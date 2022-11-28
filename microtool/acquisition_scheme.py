@@ -1,14 +1,13 @@
+import numpy as np
 import warnings
 from abc import ABC, abstractmethod
 from copy import copy
 from math import prod
 from os import PathLike
 from pathlib import Path
-from typing import Union, List, Tuple, Dict, Optional
-
-import numpy as np
 from scipy.optimize import NonlinearConstraint, LinearConstraint
 from tabulate import tabulate
+from typing import Union, List, Tuple, Dict, Optional
 
 from microtool.utils.solve_echo_time import minimal_echo_time
 
@@ -552,7 +551,7 @@ class EchoScheme(AcquisitionScheme):
         return None
 
 
-class FlaviusAcquisitionScheme(AcquisitionScheme):
+class ReducedDiffusionScheme(AcquisitionScheme):
     """
 
     :param b_values:
