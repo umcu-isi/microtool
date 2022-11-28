@@ -2,7 +2,7 @@
 Module for helper functions in gradient_sampling.
 """
 
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -69,13 +69,13 @@ def make_sphere(r):
     return x, y, z
 
 
-def plot_shells(shells: List[np.ndarray]) -> None:
+def plot_shells(shells: List[np.ndarray]) -> Tuple[plt.Figure, plt.Axes]:
     """
     Helper function for plotting q-shell configurations
     :param shells: List of vector collections for each shell
     :return: None, makes matplotlib figure. Display using plt.show()
     """
-    plt.figure()
+    fig = plt.figure()
     ax = plt.axes(projection='3d')
 
     color = iter(plt.cm.rainbow(np.linspace(0, 1, len(shells))))
@@ -83,9 +83,11 @@ def plot_shells(shells: List[np.ndarray]) -> None:
         c = next(color)
         scale_factor = float(i + 1)
         ax.scatter3D(scale_factor * vecs[:, 0], scale_factor * vecs[:, 1], scale_factor * vecs[:, 2], color=c)
-        ax.plot_surface(*make_sphere(i + 1), alpha=0.2 / (i+1), color='gray')
+        ax.plot_surface(*make_sphere(i + 1), alpha=0.2 / (i + 1), color='gray')
 
     plt.tight_layout()
+    return fig, ax
+
 
 def plot_shells_projected(shells: List[np.ndarray]) -> None:
     plt.figure()
@@ -95,10 +97,10 @@ def plot_shells_projected(shells: List[np.ndarray]) -> None:
     for i, vecs in enumerate(shells):
         c = next(color)
         scale_factor = float(i + 1)
-        ax.scatter3D(vecs[:, 0], vecs[:, 1], vecs[:, 2], color=c, label=f'shell {i+1}')
+        ax.scatter3D(vecs[:, 0], vecs[:, 1], vecs[:, 2], color=c, label=f'shell {i + 1}')
 
     ax.legend()
-    ax.plot_surface(*make_sphere(1), alpha=0.2 , color='gray')
+    ax.plot_surface(*make_sphere(1), alpha=0.2, color='gray')
     plt.tight_layout()
 
 

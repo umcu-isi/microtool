@@ -51,9 +51,9 @@ class LossInspector:
                     raise ValueError("The provided acquisition parameter key(s) do not match the provided schemes free "
                                      f"parameters choices are {self.scheme.free_parameter_keys}")
 
-                    # check if provided pulse id is the correct value
-                    if pulse_id >= self.scheme.pulse_count or pulse_id < 0:
-                        raise ValueError(f"Invalid pulse id provided for {key}.")
+                # check if provided pulse id is the correct value
+                if pulse_id >= self.scheme.pulse_count or pulse_id < 0:
+                    raise ValueError(f"Invalid pulse id provided for {key}.")
 
         x_optimal = self.scheme.free_parameter_vector / self.scheme.free_parameter_scales
 
@@ -174,7 +174,8 @@ class LossInspector:
                 raise ValueError(f"Domains for {parameter_name} are out of parameter bounds")
 
 
-def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) -> plt.Figure:
+def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = "Acquisition parameters",
+                                label=None) -> plt.Figure:
     """
     Makes subplots of all the acquisition parameters
     :param scheme:
@@ -192,12 +193,13 @@ def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = None) ->
         ax = plt.subplot(n_rows, n_cols, i + 1)
         y = scheme[parameter].values
         x = np.arange(len(y)) + 1
-        ax.plot(x, y, '.')
+        ax.plot(x, y, '.', label=label)
         ax.set_xlabel("Measurement")
         y_label = scheme[parameter].symbol if scheme[parameter].symbol is not None else scheme[parameter]
         ax.set_ylabel(y_label + " [{}]".format(scheme[parameter].unit))
-        ax.set_title(f"fixed = {scheme[parameter].fixed} ")
-    plt.suptitle(title)
+        plt.legend()
+        # ax.set_title(f"fixed = {scheme[parameter].fixed} ")
+
     plt.tight_layout()
     return fig
 

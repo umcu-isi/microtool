@@ -13,7 +13,18 @@ from microtool.gradient_sampling.uniform import sample_uniform
 from microtool.gradient_sampling.utils import plot_shells, total_potential
 
 
-def test_rotation():
+def main():
+    samples = sample_shells_rotation([4, 16, 32])
+    for i, angle in enumerate(range(2, 358, 2)):
+        fig, ax = plot_shells(samples)
+        ax.view_init(30, angle)
+        frame_num = str(i)
+        magick_label = '0' * (3 - len(frame_num)) + frame_num
+        fig.savefig('animation_shells/shell_step' + magick_label + '.png', dpi=200)
+        plt.close(fig)
+
+
+def verify_rotation():
     """ Quick test to see if it works """
     samples = sample_shells_rotation([4, 16, 32])
     plot_shells(samples)
@@ -82,3 +93,7 @@ def rotate_vectors(vectors: np.ndarray, angles: np.ndarray) -> np.ndarray:
     # Rotating by theta along the y-axis composed with rotating by phi along the z-axis
     rotation = Rotation.from_euler('yz', angles)
     return rotation.apply(vectors)
+
+
+if __name__ == "__main__":
+    main()

@@ -16,3 +16,13 @@
 
 # Testing overviews
 /Test Results -*.html
+
+# images
+*.png
+
+# animations
+*.gif
+
+# Dot files for hierarchy graphs
+*.dot
+

@@ -44,15 +44,15 @@ if __name__ == "__main__":
 
     # plotting the distributions
     symbols = {"T2": r"$T_2$ [ms]"}
-    plot_parameter_distributions(result, model, symbols=symbols, fig_label="optimal")
+    plot_parameter_distributions(result, model, symbols=symbols, hist_label="Optimal", draw_gt=False)
+    plot_parameter_distributions(non_optimal_result, model, symbols=symbols, hist_label="Non-optimal")
+
     plt.savefig(plotdir / ("optimal_PD" + simulation._save_name + ".png"))
-    plot_parameter_distributions(non_optimal_result, model, symbols=symbols, fig_label="non_optimal")
-    plt.savefig(plotdir / ("non_optimal_PD" + simulation._save_name + ".png"))
 
     # plotting the aquisition parameters
-    plot_acquisition_parameters(scheme_optimal)
-    plt.savefig((plotdir / ("optimal_AP.png")))
-    plot_acquisition_parameters(scheme_start)
+    plot_acquisition_parameters(scheme_optimal, title="Acquisition parameters", label="optimal")
+    plot_acquisition_parameters(scheme_start, title="Acquisition parameters", label='non-optimal')
+    plt.legend()
     plt.savefig((plotdir / ("non_optimal_AP.png")))
 
     # plotting the signal

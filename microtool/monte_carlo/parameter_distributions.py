@@ -1,4 +1,5 @@
 import math
+from copy import copy
 from typing import Dict
 
 import numpy as np
@@ -47,7 +48,9 @@ def scale(mc_result: pd.DataFrame, ground_truth: TissueModel) -> pd.DataFrame:
 def plot_parameter_distributions(mc_result: pd.DataFrame, gt_model: TissueModel,
                                  symbols: Dict[str, str] = None,
                                  gaussian_fit: pd.DataFrame = None,
-                                 color: str = None, fig_label: str = "parameter distributions") -> plt.Figure:
+                                 color: str = None, fig_label: str = "parameter distributions",
+                                 hist_label='parameter_dst',
+                                 draw_gt=True) -> plt.Figure:
     """
 
     :param mc_result: The result from a montecarlo simulation
@@ -71,10 +74,24 @@ def plot_parameter_distributions(mc_result: pd.DataFrame, gt_model: TissueModel,
     n_rows = math.ceil(mc_result.shape[1] / ncols)
 
     for i, parameter in enumerate(mc_result.keys()):
+
         ax = plt.subplot(n_rows, ncols, i + 1)
+        par_dist = mc_result[parameter]
+        gt_value = copy(gt_model[parameter].value)
+        # checking if parameter needs scaling and setting the labels
+        parameter_scale = copy(gt_model[parameter].scale)
+        scale_str = ''
+        scale_order = int(np.log10(parameter_scale))
+        if abs(scale_order) >= 3:
+            # scaling stuff
+            par_dist /= parameter_scale
+            gt_value /= parameter_scale
+            # string for formatting later
+
+            scale_str = r'$10^{' + str(scale_order) + "}$"
 
         # Making a histogram
-        ax.hist(mc_result[parameter], bins='scott', alpha=0.5, color=color)
+        ax.hist(par_dist, bins='scott', alpha=0.5, color=color, label=hist_label, histtype='step')
 
         # Plotting the fitted normal distribution if provided
         if gaussian_fit is not None:
@@ -86,14 +103,20 @@ def plot_parameter_distributions(mc_result: pd.DataFrame, gt_model: TissueModel,
 
         # formatting the x-axis if symbols are provided
         if symbols is not None and (parameter in symbols.keys()):
-            ax.set_xlabel(symbols[parameter])
-        else:
-            ax.set_xlabel(parameter)
+            symbol = symbols[parameter]
+            quant, unit = symbol.split(sep=' ')
+            label = quant + " " + scale_str + " " + unit
+            ax.set_xlabel(label)
 
+        else:
+            ax.set_xlabel(parameter + " " + scale_str)
+
+        # the ylabel is always count
+        ax.set_ylabel("Count")
         # plotting ground truth as vertical lines
-        ax.vlines(gt_model[parameter].value, 0, 1, transform=ax.get_xaxis_transform(), colors="black",
-                  label="Ground Truth")
-        ax.set_title(parameter)
+        if draw_gt:
+            ax.vlines(gt_value, 0, 1, transform=ax.get_xaxis_transform(), colors="black",
+                      label="Ground Truth")
         plt.legend()
 
     plt.tight_layout()
