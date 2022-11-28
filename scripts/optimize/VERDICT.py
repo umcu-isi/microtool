@@ -25,20 +25,16 @@ def main():
 
     verdict_model = MultiCompartmentModel(models=[sphere, ball, stick])
 
-    print('The multicompartment model has the following parameters', verdict_model.parameter_names)
+    # In Bonet-Carne et. al. the diameter of the intracellular sphere (d_IC) and the vascular diffusivity (P)
+    # can be fixed such that we can estimate d_{EES}
+    verdict_model.set_fixed_parameter('S4SphereGaussianPhaseApproximation_1_diameter', 2.0e-9)
+    verdict_model.set_fixed_parameter('C1Stick_1_lambda_par', 8.0e-9)
 
-    # We fix the extracellular diffusivity in accordance with panagiotakis black magic number from 2014
-    # verdict_model.set_fixed_parameter('G1Ball_1_lambda_iso', 2.0e-9)
-    # verdict_model.set_fixed_parameter('C1Stick_1_lambda_par', 8.0e-9)
-    # We set the optimization such that the pseudo diffusion coefficient is larger than 3.05 um^2/ms
-    # verdict_model.set_parameter_optimization_bounds('C1Stick_1_lambda_par', [3.05e-9, 10e-9])
-
+    # Really the orientations should also be fixed?
+    verdict_model.set_fixed_parameter('C1Stick_1_mu', [np.pi / 2, np.pi / 2])
     verdict_model = DmipyTissueModel(verdict_model, [.3, .3, .4])
-    # verdict_model['partial_volume_2'].optimize = False
-    # verdict_model['partial_volume_1'].optimize = False
-    # verdict_model['C1Stick_1_mu_0'].optimize = False
-    # verdict_model['C1Stick_1_mu_1'].optimize = False
 
+    IO.save_pickle(verdict_model, 'schemes/verdict_gt.pkl')
     print("The verdict tissue model:", verdict_model)
 
     # ------------------- Acquisition Scheme
@@ -77,11 +73,13 @@ def main():
     scheme = convert_dmipy_scheme2diffusion_scheme(scheme)
     # For dmipy based optimization fixed b0 measurements are required.
     scheme["DiffusionBValue"].set_fixed_mask(scheme.b_values == 0)
+    scheme['DiffusionPulseWidth'].fixed = True
+    scheme['DiffusionPulseInterval'].fixed = True
     print(scheme)
 
     # -------------- Optimization
-    trust_options = {'disp': True}
-    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, method='SLSQP', loss_scaling_factor=1.0e-10,
+    trust_options = {'verbose': 2}
+    best_scheme, opt_result = optimize_scheme(scheme, verdict_model, 0.02, method='trust-constr',
                                               solver_options=trust_options)
 
     IO.save_pickle(best_scheme, "schemes/verdict_optimal.pkl")

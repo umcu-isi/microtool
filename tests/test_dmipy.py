@@ -140,7 +140,7 @@ class TestModelSchemeIntegration:
         simple_dict = simple_fit.dmipyfitresult.fitted_parameters
         # mapping fit values to initial guess or complex model
         cylinder_zeppelin.set_initial_parameters(self._stickzeppelin_to_cylinderzeppelin(simple_dict))
-        expected_result = cylinder_zeppelin.fit(scheme_wrapped, signal)
+        expected_result = cylinder_zeppelin.fit(scheme_wrapped, signal, use_parallel_processing=False)
 
         # ---------------- Now doing the samething for the decorator
         # name map maps the simple model names to complex model names
@@ -160,7 +160,7 @@ class TestModelSchemeIntegration:
         }
 
         cylinder_zeppelin_cascade = CascadeDecorator(cylinder_zeppelin, stick_zeppelin, name_map)
-        result = cylinder_zeppelin_cascade.fit(scheme_wrapped, signal)
+        result = cylinder_zeppelin_cascade.fit(scheme_wrapped, signal, use_parallel_processing=False)
         result_dict = result.fitted_parameters
         expected_dict = expected_result.fitted_parameters
         for parameter in result_dict.keys():
