@@ -118,7 +118,7 @@ def plot_vectors(vectors: np.ndarray, title: str) -> None:
     plt.tight_layout()
 
 
-def eigenvector_to_angles(vector: np.ndarray) -> np.ndarray:
+def unitvector_to_angles(vector: np.ndarray) -> np.ndarray:
     """ Gives the polar and azimuthal angle of a unit vector in domains [0,pi] and [-pi,+pi] respectively
 
     :param vector: A unit vector in R^3 or array of shape (n_vectors,3)
@@ -137,7 +137,7 @@ def eigenvector_to_angles(vector: np.ndarray) -> np.ndarray:
     theta = np.arccos(z)
 
     # Tha azimuthal angle phi (note that arctan2 maps into [-pi, + pi] as dmipy expects)
-    phi = np.arctan2(y / x)
+    phi = np.arctan2(y, x)
     return np.stack([theta, phi], axis=-1)
 
 
