@@ -21,11 +21,12 @@ if __name__ == "__main__":
     b_vectors = sample_uniform(M)
     pulse_widths = np.repeat(20.0, M)
     pulse_intervals = np.repeat(40.0, M)
-
-    scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
+    echo_times = np.repeat(100.0, M)
+    scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals, echo_times)
 
     # fixing b values for b0 measurements
     scheme["DiffusionBValue"].set_fixed_mask(b_values == 0)
+    print(scheme.b_vectors)
 
     # fixing pulse width and interval for now
     # scheme['DiffusionPulseWidth'].fixed = True

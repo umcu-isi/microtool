@@ -9,42 +9,47 @@ from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 
+from microtool.ScannerParameters import ScannerParameters, default_scanner
 
 GAMMA = 42.57747892 * 2 * np.pi  # MHz / T == 1/ms . 1/mT
 
 
 def main():
     b = np.linspace(0.05, 3, num=500) * 1e6  # s/mm^2
-    scan_parameters = {
-        't90': 4,  # ms
-        't180': 6,  # ms
-        't_half': 14,  # ms
-        'G_max': 200e-3,  # mT/mm
-        'S_max': 1300e-3 # mT/mm/ms
-    }
 
-    scan_parameters['t_rise'] = scan_parameters['G_max'] / scan_parameters['S_max']
-    print(minimal_echo_time(b, **scan_parameters))
-    plt.plot(minimal_echo_time(b, **scan_parameters), b*1e-3)
+    print(minimal_echo_time(b, default_scanner))
+    plt.plot(minimal_echo_time(b, default_scanner), b * 1e-3)
     plt.xlabel("TE_min")
     plt.ylabel("b")
     plt.tight_layout()
     plt.show()
 
 
-def minimal_echo_time(b, t90, t180, t_half, G_max, t_rise, **ignored_arguments):
-    delta_max = compute_delta_max(b, t90, t180, t_half, G_max, t_rise)
+def minimal_echo_time(b, scanner_parameters: ScannerParameters):
+    delta_max = compute_delta_max(b, scanner_parameters)
     domain = np.linspace(1e-6, delta_max, num=1000)
-    return np.min(echo_time(domain, b, t90, t_half, G_max, t_rise), axis=0)
+    return np.min(echo_time(domain, b, scanner_parameters), axis=0)
 
 
-def echo_time(delta, b, t90, t_half, G_max, t_rise):
+def echo_time(delta, b, scanner_parameters: ScannerParameters):
+    # extracting the scan parameters
+    G_max = scanner_parameters.G_max
+    t_rise = scanner_parameters.t_rise
+    t90 = scanner_parameters.t_90
+    t_half = scanner_parameters.t_half
+    # surrogate parameter for readability
     B = b / (GAMMA ** 2 * G_max ** 2)
     Delta = (B - t_rise / 30) * delta ** (-2) + (t_rise / 6) * delta ** (-1) + delta / 3
     return 0.5 * t90 + Delta + delta + t_rise + t_half
 
 
-def compute_delta_max(b, t90, t180, t_half, G_max, t_rise):
+def compute_delta_max(b, scanner_parameters: ScannerParameters):
+    t180 = scanner_parameters.t_180
+    t90 = scanner_parameters.t_90
+    t_rise = scanner_parameters.t_rise
+    t_half = scanner_parameters.t_half
+    G_max = scanner_parameters.G_max
+
     def compute_delta_max_1():
         """
         For computing delta max 1 we are considering the following equality
@@ -63,10 +68,9 @@ def compute_delta_max(b, t90, t180, t_half, G_max, t_rise):
 
     def compute_delta_max_2():
         """
-        WRITE SOLVED EQUATION
+        0.5 TE == 0.5 t90 + 0.5 t180 + delta + trise
 
-        :param vars:
-        :return:
+        :return: delta_max 2
         """
         T1 = 0.5 * t90 + 0.5 * t180 + t_rise
         T2 = 0.5 * t90 + t_rise + t_half
