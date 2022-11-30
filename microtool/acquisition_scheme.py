@@ -11,6 +11,7 @@ from scipy.optimize import NonlinearConstraint, LinearConstraint
 from tabulate import tabulate
 
 from microtool.ScannerParameters import ScannerParameters, default_scanner
+from microtool.gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
 from microtool.utils.solve_echo_time import minimal_echo_time
 
 ConstraintTypes = Union[
@@ -313,28 +314,21 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray],
+                 echo_times: Union[List[float], np.ndarray],
                  scan_parameters: ScannerParameters = default_scanner):
 
         self.scan_parameters = scan_parameters
 
-        # Checking the constraint on delta and Delta
-        if np.any(pulse_widths > pulse_intervals):
-            raise ValueError(
-                "Invalid DiffusionAcquisitionScheme: atleast one measurement with pulse_width > pulse_interval")
+        self._check_constraints(pulse_widths, pulse_intervals, b_values, echo_times, scan_parameters)
 
-        # Check if the b-vectors are unit vectors and set b=0 'vectors' to (0, 0, 0) as per convention.
-        b0 = b_values == 0
-        if not np.any(b0):
-            raise ValueError("No b0 measurements detected. The b0 measurements are required to estimate S0.")
-
+        # converting to np array of correct type
         b_vectors = np.asarray(b_vectors, dtype=np.float64)
-        if not np.allclose(np.linalg.norm(b_vectors[~b0], axis=1), 1):
-            raise ValueError('b-vectors are not unit vectors.')
-        b_vectors[b0] = 0
 
         # Calculate the spherical angles φ and θ.
-        phi = np.arctan2(b_vectors[:, 1], b_vectors[:, 0])
-        theta = np.arccos(b_vectors[:, 2])
+        theta, phi = unitvector_to_angles(b_vectors).T
+
+        # checking for b0 values and setting vector to zero for these values
+        self._check_b_vectors(b_values, b_vectors)
 
         super().__init__({
             'DiffusionBValue': AcquisitionParameters(
@@ -354,7 +348,37 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 values=pulse_intervals, unit='ms', scale=10., symbol=r"$\Delta$", fixed=False, lower_bound=1.,
                 upper_bound=1e3
             ),
+            'EchoTime': AcquisitionParameters(
+                values=echo_times, unit='ms', scale=1.0, symbol=r"$T_E$", fixed=False, lower_bound=.1, upper_bound=1e3
+            )
         })
+
+    @staticmethod
+    def _check_b_vectors(b_values, b_vectors) -> None:
+
+        # Checking for b0 measurements
+        b0 = b_values == 0
+        if not np.any(b0):
+            raise ValueError("No b0 measurements detected. The b0 measurements are required to estimate S0.")
+
+        # Checking for unit vectors
+        if not np.allclose(np.linalg.norm(b_vectors[np.logical_not(b0)], axis=1), 1):
+            raise ValueError('b-vectors are not unit vectors.')
+
+        # setting the vectors to (0,0,0) for the b0 measurements
+        b_vectors[b0] = 0
+
+    @staticmethod
+    def _check_constraints(pulse_widths, pulse_intervals, b_values, echo_times, scanner_parameters):
+        # Check the delta constraint
+        if np.any(pulse_widths > pulse_intervals):
+            raise ValueError(
+                "Invalid DiffusionAcquisitionScheme: atleast one measurement with pulse_width > pulse_interval")
+
+        # check the echo time constraint
+        Tmin = minimal_echo_time(b_values, scanner_parameters)
+        if np.any(echo_times < Tmin):
+            raise ValueError("Invalid DiffusionAcquisitionScheme: atleast one measurement with TE<TE_min")
 
     @property
     def b_values(self) -> np.ndarray:
@@ -412,8 +436,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         An N×3 array of direction cosines.
         """
-        sin_theta = np.sin(self.theta)
-        b_vectors = np.array([sin_theta * np.cos(self.phi), sin_theta * np.sin(self.phi), np.cos(self.theta)]).T
+        b_vectors = angles_to_unitvectors(np.array([self.theta, self.phi]).T)
 
         # Set b=0 'vectors' to (0, 0, 0) as per convention.
         b_vectors[self.b_values == 0] = 0
@@ -455,21 +478,37 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
     @property
-    def constraints(self) -> Optional[NonlinearConstraint]:
+    def constraints(self) -> Optional[Union[NonlinearConstraint, List[NonlinearConstraint]]]:
+
+        constraints = []
+
         # Defining Δ > δ or equivalently 0 < Δ - δ < \infty
-
         # We check in case both parameters are fixed we need not apply a constraint
-        if self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval']):
-            return None
+        if not self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval']):
+            # get non free parameter values and mask with the free parameter mask
+            def delta_constraint_fun(x: np.ndarray):
+                """ Should be larger than zero """
+                delta = self._copy_and_update_parameter('DiffusionPulseWidth', x)
+                # noinspection PyPep8Naming
+                Delta = self._copy_and_update_parameter('DiffusionPulseInterval', x)
+                return Delta - delta
 
-        # get non free parameter values and mask with the free parameter mask
-        def delta_constraint_fun(x: np.ndarray):
-            """ Should be larger than zero """
-            delta = self._copy_and_update_parameter('DiffusionPulseWidth', x)
-            Delta = self._copy_and_update_parameter('DiffusionPulseInterval', x)
-            return Delta - delta
+            delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
+            constraints.append(delta_constraint)
 
-        return NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
+        if not self._are_fixed(['EchoTime', 'DiffusionBValue']):
+            # Make constraint function enforcing TE > TE_min
+
+            def echo_constraint_fun(x: np.ndarray):
+                b = self._copy_and_update_parameter('DiffusionBValue', x)
+                TE = self._copy_and_update_parameter('EchoTime', x)
+                TEmin = minimal_echo_time(b, self.scan_parameters)
+                return TE - TEmin
+
+            TE_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
+            constraints.append(TE_constraint)
+
+        return constraints
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
