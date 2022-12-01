@@ -114,6 +114,7 @@ class DmipyTissueModel(TissueModel):
     Wrapper for the MultiCompartment models used by dmipy. Note that the parameters need to be initialized in the
     dmipy model otherwise a value error is raised.
     """
+    _model: MultiCompartmentModel  # Reminder that we store the dmipy multicompartment model in this attribute
 
     def __init__(self, model: MultiCompartmentModel, volume_fractions: List[float] = None):
         """
@@ -172,7 +173,8 @@ class DmipyTissueModel(TissueModel):
         # baseline signal for UNvaried tissueparameters
         baseline = s0 * self._model.simulate_signal(dmipy_scheme, self._parameter_baseline[self.include[:-1]])
         # d S for all the different tissue parameters
-        forward_diff = self._model.simulate_signal(dmipy_scheme, self._parameter_vectors_forward[:, self.include[:-1]])
+        forward_diff = self._model.simulate_signal(dmipy_scheme,
+                                                   self._parameter_vectors_forward[:, self.include[:-1]])
         backward_diff = self._model.simulate_signal(dmipy_scheme,
                                                     self._parameter_vectors_backward[:, self.include[:-1]])
         central_diff = s0 * (forward_diff - backward_diff)
@@ -241,6 +243,10 @@ class DmipyTissueModel(TissueModel):
 
         return mt_dict
 
+    @property
+    def dmipy_model(self):
+        return self._model
+
 
 class FittedDmipyModel(FittedModel):
     def __init__(self, dmipymodel: DmipyTissueModel, dmipyfitresult: FittedMultiCompartmentModel):
@@ -294,13 +300,14 @@ class CascadeDecorator(TissueModelDecoratorBase):
 
     # just a reminder of the attribute names we are adding
     # (this is where we store the complex model)
-    _original: DmipyTissueModel = None
+    _original: DmipyTissueModel
     # storing the first model that we need to fit
-    _simple_model: DmipyTissueModel = None
+    _simple_model: DmipyTissueModel
     # a map of the complex model parameter names as values and simple parameter names as keys
-    _parameter_map: Dict[str, str] = None
+    _parameter_map: Dict[str, str]
 
-    def __init__(self, complex_model: DmipyTissueModel, simple_model: DmipyTissueModel, parameter_map: Dict[str, str]):
+    def __init__(self, complex_model: DmipyTissueModel, simple_model: DmipyTissueModel,
+                 parameter_map: Dict[str, str]):
         # TODO check that simple model is indeed simpler than complex model
 
         super().__init__(complex_model)
@@ -339,7 +346,7 @@ class CascadeDecorator(TissueModelDecoratorBase):
 
 class RelaxationDecorator(TissueModelDecoratorBase):
     # this is the variable we used for the original model in the decorator base (reminder)
-    _original = None
+    _original: DmipyTissueModel
 
     def __init__(self, model: DmipyTissueModel, T2: Union[List, np.ndarray, float]):
         super().__init__(model)
@@ -349,19 +356,41 @@ class RelaxationDecorator(TissueModelDecoratorBase):
             T2 = np.array(T2, dtype=float)
 
         # check the number of relaxivities with the number of models
+        if T2.size != self._original.dmipy_model.N_models:
+            raise ValueError("Specifiy relaxation for all compartments")
 
-        # store
+        # store as tissue_parameters
+        if T2.size > 1:
+            for i, value in enumerate(T2):
+                self._original.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0)})
+        else:
+            self._original.update({"T2_relaxation": TissueParameter(float(T2), 1.0)})
 
         self._T2 = T2
 
-        # update in model as well?
-        pass
-
     def __call__(self, scheme: DiffusionAcquisitionScheme):
-        # set fractional volume to "reduced" fractional volume by relaxation process
+        # making dmipy compatible scheme
+        dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
 
-        # simulate signal with adjusted fractional volume
-        raise NotImplementedError()
+        # Getting the original dmipy model
+        dmipy_model = self._original.dmipy_model
+
+        # Computing the signal that the individual comparments would generate given the acquisitionscheme
+        S_compartment = compute_compartment_signals(dmipy_model, dmipy_scheme)
+
+        # compute the decay caused by T2 relaxation for every compartment, shape (N_measure, N_comp)
+        t2decay_factors = np.exp(- scheme.echo_times[:, np.newaxis] / self._T2)
+
+        if dmipy_model.N_models == 1:
+            # a single compartment does not have partial volumes so we just multiply by 1
+            partial_volumes = 1.0
+        else:
+            # getting partial volumes as array
+            partial_volumes = np.array([self._original[pv_name] for pv_name in dmipy_model.partial_volume_names])
+
+        # multiply the computed signals of individual compartments by the T2-decay AND partial volumes!
+        S_total = np.sum(partial_volumes * t2decay_factors * S_compartment, axis=-1)
+        return S_total
 
     def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
         # fit the original model
@@ -380,3 +409,33 @@ class RelaxationDecorator(TissueModelDecoratorBase):
 
         # update
         raise NotImplementedError()
+
+
+def compute_compartment_signals(dmipy_model: MultiCompartmentModel,
+                                dmipy_scheme: DmipyAcquisitionScheme) -> np.ndarray:
+    """
+
+    :param dmipy_model:
+    :param dmipy_scheme:
+    :return: signal array of shape (N_measure, N_model)
+    """
+    # array for storing signal from individual compartments
+    S_compartment = np.zeros((dmipy_scheme.number_of_measurements, dmipy_model.N_models), dtype=float)
+
+    # iterate over the individual models in the multi-compartment model
+    for i, (model, model_name) in enumerate(zip(dmipy_model.models, dmipy_model.model_names)):
+
+        # making a single compartment multi compartment (I know its stupid)
+        # This is so we can generate signal from this
+        single_compartment = MultiCompartmentModel([model])
+        single_model_name = single_compartment.model_names[0]
+
+        # Extracting the parameter dictionary
+        parameters = {}
+        for parameter_name in model.parameter_names:
+            value = np.array(getattr(model, parameter_name), dtype=np.float64, copy=True)
+            parameters[single_model_name + parameter_name] = value
+
+        S_compartment[:, i] = single_compartment.simulate_signal(dmipy_scheme, parameters)
+
+    return S_compartment

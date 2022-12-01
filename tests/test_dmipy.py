@@ -201,7 +201,7 @@ class TestT2Decorator:
         # simulate signal
         signal = self.analytic_ball(self.mt_scheme)
         
-        # attenuation_factor = np.exp(-self.mt_scheme.TE / self.T2)
+        attenuation_factor = np.exp(-self.mt_scheme.echo_times / self.T2)
 
         # attenuating the signal based on T2 values and echotimes
         expected = attenuation_factor * signal
