@@ -3,22 +3,22 @@ The following expressions were found analytically
 
 
 """
-
+from copy import copy
 from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from microtool.ScannerParameters import ScannerParameters, default_scanner
+from microtool.scanner_parameters import ScannerParameters, default_scanner
 
 GAMMA = 42.57747892 * 2 * np.pi  # MHz / T == 1/ms . 1/mT
 
 
 def main():
-    b = np.linspace(0.05, 3, num=500) * 1e6  # s/mm^2
+    b = np.linspace(0.05, 3, num=500) * 1e3  # s/mm^2
 
     print(minimal_echo_time(b, default_scanner))
-    plt.plot(minimal_echo_time(b, default_scanner), b * 1e-3)
+    plt.plot(minimal_echo_time(b, default_scanner), b)
     plt.xlabel("TE_min")
     plt.ylabel("b")
     plt.tight_layout()
@@ -26,9 +26,17 @@ def main():
 
 
 def minimal_echo_time(b, scanner_parameters: ScannerParameters):
+    # copying so we dont actually change bvalues that this function takes
+    b = copy(b)
+    # for the zero b-values we just take the b = 50 s/mm^2 since it will be a suitable constraint
+    b[b == 0] = 50
+    # converting units
+    b *= 1e3  # s/m^2 ?
+
     delta_max = compute_delta_max(b, scanner_parameters)
     domain = np.linspace(1e-6, delta_max, num=1000)
-    return np.min(echo_time(domain, b, scanner_parameters), axis=0)
+    TE_min = np.min(echo_time(domain, b, scanner_parameters), axis=0)
+    return TE_min
 
 
 def echo_time(delta, b, scanner_parameters: ScannerParameters):

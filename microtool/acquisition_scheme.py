@@ -10,8 +10,8 @@ import numpy as np
 from scipy.optimize import NonlinearConstraint, LinearConstraint
 from tabulate import tabulate
 
-from microtool.ScannerParameters import ScannerParameters, default_scanner
 from microtool.gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
+from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.utils.solve_echo_time import minimal_echo_time
 
 ConstraintTypes = Union[
@@ -314,10 +314,14 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray],
-                 echo_times: Union[List[float], np.ndarray],
+                 echo_times: Optional[Union[List[float], np.ndarray]] = None,
                  scan_parameters: ScannerParameters = default_scanner):
 
         self.scan_parameters = scan_parameters
+
+        # set default echo times to minimal echo time based on scan parameters and b values
+        if echo_times is None:
+            echo_times = minimal_echo_time(b_values, scan_parameters)
 
         self._check_constraints(pulse_widths, pulse_intervals, b_values, echo_times, scan_parameters)
 
@@ -442,6 +446,10 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         b_vectors[self.b_values == 0] = 0
 
         return b_vectors
+
+    @property
+    def echo_times(self) -> np.ndarray:
+        return self["EchoTime"].values
 
     def write_bval(self, file: Union[str, bytes, PathLike]) -> None:
         """

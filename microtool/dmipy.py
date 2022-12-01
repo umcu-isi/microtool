@@ -10,6 +10,7 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.gaussian_models import G1Ball
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecoratorBase, FittedModel
 
 
@@ -61,13 +62,16 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     """
     Takes in a scheme from the microtool toolbox and returns a scheme for the dmipy toolbox. It should be noted that the
     dmipy toolbox takes SI unit acquisition parameters only. Therefore we convert the microtool parameters.
+    Additionally, this conversion loses the echo time information!
+    This is due to the fact that dmipy has the notion that echo times are constrained to the same shell.
+    We use a more relaxed approach.
 
     :param scheme: DiffusionAcquisitionScheme
     :return: DmipyAcquisitionScheme
     """
     if not isinstance(scheme, DiffusionAcquisitionScheme):
         raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DiffusionAcquisitionScheme}")
-
+    # note that dmipy has a different notion of echo times so they are not included in the conversion
     return acquisition_scheme_from_bvalues(
         scheme.b_values * 1e6,  # Convert from s/mm² to s/m².
         scheme.b_vectors,
@@ -76,12 +80,15 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     )
 
 
-def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme) -> DiffusionAcquisitionScheme:
+def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme,
+                                          scanner_parameters: ScannerParameters = default_scanner) \
+        -> DiffusionAcquisitionScheme:
     """
     Takes a scheme from the dmipy toolbox and converts to scheme from microtool toolbox. We convert units since
     microtool has non SI units.
 
     :param scheme: DmipyAcquisitionScheme
+    :param scanner_parameters: Scanner specific parameters
     :return: DiffusionAcquisitionScheme
     """
     if not isinstance(scheme, DmipyAcquisitionScheme):
@@ -93,7 +100,13 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme) -> Dif
     # convert to ms from s
     pulse_widths = scheme.delta * 1e3
     pulse_intervals = scheme.Delta * 1e3
-    return DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
+    echo_times_SI = scheme.TE
+    if echo_times_SI is None:
+        return DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals,
+                                          scan_parameters=scanner_parameters)
+    else:
+        return DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals, echo_times_SI * 1e3,
+                                          scan_parameters=scanner_parameters)
 
 
 class DmipyTissueModel(TissueModel):
