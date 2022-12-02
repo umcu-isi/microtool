@@ -82,19 +82,17 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         """
         raise NotImplementedError()
 
-    def preprocessed_jacobian(self, scheme: AcquisitionScheme):
+    def scaled_jacobian(self, scheme: AcquisitionScheme):
         # Extracting the jacobian w.r.t the included parameters only
         # casting to numpy array if not done already
         include = self.include
         scales = self.scales
         jac = self.jacobian(scheme)
 
-        N_measurements = jac.shape[0]
-        jacobian_mask = np.tile(include, (N_measurements, 1))
-        jac_included = jac[jacobian_mask].reshape((N_measurements, -1))
+        N_measurements = scheme.pulse_count
 
         # Scaling the jacobian
-        jac_rescaled = jac_included * scales[include]
+        jac_rescaled = jac * scales[include]
         return jac_rescaled
 
     @property
@@ -107,6 +105,16 @@ class TissueModel(Dict[str, TissueParameter], ABC):
     @property
     def parameter_names(self) -> List[str]:
         return [key for key in self.keys()]
+
+    def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
+        for parameter, new_value in zip(self.values(), new_parameter_values):
+            parameter.value = new_value
+
+    @property
+    def parameter_vector(self) -> np.ndarray:
+        # put all parameter values in a single array
+        vector = np.array([parameter.value for parameter in self.values()])
+        return vector
 
     @property
     def scales(self):
@@ -212,7 +220,7 @@ class RelaxationTissueModel(TissueModel):
             self['S0'].value * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (self['T2'].value ** 2),  # δS(S0, T1, T2) / δT2
             (1 - 2 * ti_t1 + tr_t1) * te_t2,  # δS(S0, T1, T2) / δS0
         ]).T
-        return jac
+        return jac[:, self.include]
 
     def fit(self, scheme: InversionRecoveryAcquisitionScheme, signal: np.ndarray,
             **fit_options) -> FittedTissueModelCurveFit:
@@ -287,7 +295,8 @@ class ExponentialTissueModel(TissueModel):
         # the base signal
         S = S0 * np.exp(-TE / T2)
         # return np.array([-TE * S, 1]).T
-        return np.array([(TE / T2 ** 2) * S, S / S0]).T
+        jac = np.array([(TE / T2 ** 2) * S, S / S0]).T
+        return jac[:, self.include]
 
     def fit(self, scheme: EchoScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
         """
@@ -366,8 +375,8 @@ class RelaxedIsotropicModel(TissueModel):
         b_D = np.exp(-bvalues * D)
         te_t2 = np.exp(- te / T2)
 
-        jac = [te * S0 * b_D * te_t2 / T2 ** 2, - bvalues * S0 * b_D * te_t2, b_D * te_t2]
-        return np.array(jac).T
+        jac = np.array([te * S0 * b_D * te_t2 / T2 ** 2, - bvalues * S0 * b_D * te_t2, b_D * te_t2]).T
+        return jac[:, self.include]
 
 
 class TissueModelDecoratorBase(TissueModel, ABC):

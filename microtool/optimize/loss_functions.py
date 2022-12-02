@@ -165,7 +165,7 @@ def compute_loss(scheme: AcquisitionScheme,
     :param loss: The loss function
     :return: The loss value associated with this model and scheme
     """
-    jac = model.preprocessed_jacobian(scheme)
+    jac = model.scaled_jacobian(scheme)
     signal = model(scheme)
     return loss(jac, signal, noise_var)
 

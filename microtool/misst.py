@@ -14,11 +14,10 @@ try:
     import matlab.engine
     from matlab import double  # Prevents reference errors
 except ImportError:
-    raise(ImportError(
+    raise (ImportError(
         'MISST models require the MATLAB engine API for Python, which was not found. Install it as described in: '
         f'{matlab_engine_help}')
     ) from None
-
 
 _matlab_engine: Optional[matlab.engine.MatlabEngine] = None
 
@@ -118,6 +117,6 @@ class MisstTissueModel(TissueModel):
         signal, jac = engine.SynthMeas(self._model, protocol, nargout=2)
 
         # Add the derivative to S0 (the signal itself).
-        return np.concatenate([s0 * np.array(jac), signal], axis=1)
+        return np.concatenate([s0 * np.array(jac), signal], axis=1)[:, self.include]
 
-    #TODO: Implement fit method
+    # TODO: Implement fit method

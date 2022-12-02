@@ -163,26 +163,46 @@ class DmipyTissueModel(TissueModel):
 
         # Evaluate the dmipy model.
         s0 = self['S0'].value
-        return s0 * self._model.simulate_signal(dmipy_scheme, self._dmipy_parameters)
+
+        # dont include s0 for dmipy simulate signal
+        parameters = self.parameter_vector[:-1]
+
+        # use only non-fixed parameters in simulate signal (we use the include property to do this)
+        return s0 * self.dmipy_model.simulate_signal(dmipy_scheme, parameters[self.include[:-1]])
 
     def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
-        dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
 
-        # Evaluate the dmipy model on the baseline and on the parameter vectors with finite differences.
-        s0 = self['S0'].value
-        # baseline signal for UNvaried tissueparameters
-        baseline = s0 * self._model.simulate_signal(dmipy_scheme, self._parameter_baseline[self.include[:-1]])
-        # d S for all the different tissue parameters
-        forward_diff = self._model.simulate_signal(dmipy_scheme,
-                                                   self._parameter_vectors_forward[:, self.include[:-1]])
-        backward_diff = self._model.simulate_signal(dmipy_scheme,
-                                                    self._parameter_vectors_backward[:, self.include[:-1]])
-        central_diff = s0 * (forward_diff - backward_diff)
+        # compute the baseline signal
+        baseline = self.__call__(scheme)
 
-        # Divide by the finite differences to obtain the derivatives (central difference method),
-        # and concatenate the derivatives for S0 (i.e. the baseline signal).
+        forward_diff = self._simulate_signals(self._parameter_vectors_forward, scheme)
+        backward_diff = self._simulate_signals(self._parameter_vectors_backward, scheme)
+
+        central_diff = forward_diff - backward_diff
+
+        # reset parameters to original
+        self.set_parameters_from_vector(self._parameter_baseline)
+
+        # return jacobian
         jac = np.concatenate((central_diff * self._reciprocal_h, [baseline])).T
-        return jac
+        return jac[:, self.include]
+
+    def _simulate_signals(self, parameter_vectors: np.ndarray, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        """
+
+        :param parameter_vectors:
+        :param scheme:
+        :return:
+        """
+        # number of parameter vectors
+        npv = parameter_vectors.shape[0]
+        signals = np.zeros((npv, scheme.pulse_count))
+        for i in range(npv):
+            self.set_parameters_from_vector(parameter_vectors[i, :])
+            signals[i, :] = self.__call__(scheme)
+
+        # self.set_parameters_from_vector(self._parameter_baseline)
+        return signals
 
     def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedDmipyModel:
         dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
@@ -202,6 +222,7 @@ class DmipyTissueModel(TissueModel):
             if name in self._model.parameter_names:
                 self._model.set_initial_guess_parameter(name, value)
 
+    # TODO: refactor such that current parameter values are used
     @property
     def _dmipy_parameters(self) -> dict:
         """
@@ -210,7 +231,7 @@ class DmipyTissueModel(TissueModel):
         """
         parameters = {}
         # Extracting the parameters from the tissue model
-        for model, model_name in zip(self._model.models, self._model.model_names):
+        for model, model_name in zip(self.dmipy_model.models, self.dmipy_model.model_names):
             for parameter_name in model.parameter_names:
                 value = np.array(getattr(model, parameter_name), dtype=np.float64, copy=True)
                 parameters[model_name + parameter_name] = value
@@ -289,7 +310,7 @@ class AnalyticBall(DmipyTissueModel):
         # d S / d D_iso , d S / d S_0
 
         jac = np.array([- bvals * S0 * np.exp(-bvals * Diso), np.exp(-bvals * Diso)]).T
-        return jac
+        return jac[:, self.include]
 
 
 class CascadeDecorator(TissueModelDecoratorBase):
