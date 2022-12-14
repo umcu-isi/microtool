@@ -116,16 +116,17 @@ class DmipyTissueModel(TissueModel):
     """
     _model: MultiCompartmentModel  # Reminder that we store the dmipy multicompartment model in this attribute
 
-    def __init__(self, model: MultiCompartmentModel, volume_fractions: List[float] = None):
+    def __init__(self, model: MultiCompartmentModel, volume_fractions: Union[List[float], float] = None,
+                 relaxation_times: List[float] = None):
         """
 
         :param model: MultiCompartment model
         :param volume_fractions: The relative volume fractions of the models (order in the same way you initialized the
                                  multicompartment model)
         """
-        super().__init__()
-        # Extract the tissue parameters from individual models and convert to 'scalars'.
-        self.update(get_parameters(model))
+
+        # Extract the tissue parameters from individual models and convert to 'scalars'. (makes parameter dict)
+        parameters = get_parameters(model)
 
         # -------------------- Set up volume fractions if there are multiple models
         if model.N_models > 1:
@@ -140,69 +141,68 @@ class DmipyTissueModel(TissueModel):
                 raise ValueError("Provide volume fractions that sum to 1.")
             # Including the volume fractions as TissueParameters to the DmipyTissueModel
             for i, key in enumerate(vf_keys):
-                self.update({key: TissueParameter(value=volume_fractions[i], scale=1.)})
+                parameters.update({key: TissueParameter(value=volume_fractions[i], scale=1.)})
+
+        # Add relaxation times (if none are provided we set them to inifinity and exclude from optimization
+        relax_opt_flag = True
+        if relaxation_times is None:
+            relax_opt_flag = False
+            relaxation_times = [np.inf for _ in range(model.N_models)]
+
+        # converting T2 to array
+        if not isinstance(relaxation_times, np.ndarray):
+            relaxation_times = np.array(relaxation_times, dtype=float)
+
+        # check the number of relaxivities with the number of models
+        if relaxation_times.size != model.N_models:
+            raise ValueError("Specifiy relaxation for all compartments")
+
+        # store relaxations as tissue_parameters
+        if relaxation_times.size > 1:
+            for i, value in enumerate(relaxation_times):
+                parameters.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0, optimize=relax_opt_flag)})
+        else:
+            parameters.update({"T2_relaxation": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag)})
+
+        self._relaxation_times = relaxation_times
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
-        self.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
+        parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
         self._model = model
-
-        # ----------------------------JACOBIAN HELPER VARIABLES (finite differences)
-
-        # Get the baseline parameter vector, but don't include S0.
-        self._parameter_baseline = np.array([parameter.value for parameter in self.values()])[:-1]
-
-        # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
-        step_size = 1e-6
-        h = np.array([parameter.scale * step_size for parameter in self.values()])[:-1]
-        self._parameter_vectors_forward = self._parameter_baseline + 0.5 * np.diag(h)
-        self._parameter_vectors_backward = self._parameter_baseline - 0.5 * np.diag(h)
-        self._reciprocal_h = (1 / h).reshape(-1, 1)
+        super().__init__(parameters)
 
     def __call__(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        # converting the microtool scheme to a dmipy compatible scheme
         dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
 
-        # Evaluate the dmipy model.
-        s0 = self['S0'].value
+        # Getting the original dmipy model
+        dmipy_model = self.dmipy_model
 
-        # dont include s0 for dmipy simulate signal
-        parameters = self.parameter_vector[:-1]
+        # Computing the signal that the individual comparments would generate given the acquisitionscheme
+        S_compartment = compute_compartment_signals(dmipy_model, dmipy_scheme)
 
-        # use only non-fixed parameters in simulate signal (we use the include property to do this)
-        return s0 * self.dmipy_model.simulate_signal(dmipy_scheme, parameters[self.include[:-1]])
+        # compute the decay caused by T2 relaxation for every compartment, shape (N_measure, N_comp)
+        t2decay_factors = np.exp(- scheme.echo_times[:, np.newaxis] / self.relaxation_times)
 
-    def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        if dmipy_model.N_models == 1:
+            # a single compartment does not have partial volumes so we just multiply by 1
+            partial_volumes = 1.0
+        else:
+            # getting partial volumes as array
+            partial_volumes = np.array([self[pv_name].value for pv_name in dmipy_model.partial_volume_names])
 
-        # compute the baseline signal
-        baseline = self.__call__(scheme)
+        # multiply the computed signals of individual compartments by the T2-decay AND partial volumes!
+        S_total = self['S0'].value * np.sum(partial_volumes * t2decay_factors * S_compartment, axis=-1)
+        return S_total
 
-        forward_diff = self._simulate_signals(self._parameter_vectors_forward, scheme)
-        backward_diff = self._simulate_signals(self._parameter_vectors_backward, scheme)
+    def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
+        # doing the microtool update
+        super().set_parameters_from_vector(new_parameter_values)
 
-        central_diff = forward_diff - backward_diff
+        # the parameters in dmipy are the parameters excluding the T2's and S0 stored last in the model instance
+        dmipy_parameter_vector = new_parameter_values[:-(self._model.N_models)]
 
-        # reset parameters to original
-        self.set_parameters_from_vector(self._parameter_baseline)
-
-        # return jacobian
-        jac = np.concatenate((central_diff * self._reciprocal_h, [baseline])).T
-        return jac[:, self.include]
-
-    def _simulate_signals(self, parameter_vectors: np.ndarray, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
-        """
-
-        :param parameter_vectors:
-        :param scheme:
-        :return:
-        """
-        # number of parameter vectors
-        npv = parameter_vectors.shape[0]
-        signals = np.zeros((npv, scheme.pulse_count))
-        for i in range(npv):
-            self.set_parameters_from_vector(parameter_vectors[i, :])
-            signals[i, :] = self.__call__(scheme)
-
-        # self.set_parameters_from_vector(self._parameter_baseline)
-        return signals
+        self._dmipy_set_parameters(dmipy_parameter_vector)
 
     def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedDmipyModel:
         dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
@@ -222,7 +222,36 @@ class DmipyTissueModel(TissueModel):
             if name in self._model.parameter_names:
                 self._model.set_initial_guess_parameter(name, value)
 
-    # TODO: refactor such that current parameter values are used
+    @property
+    def relaxation_times(self):
+        return self._relaxation_times
+
+    # def _vector2dmipy_parameters(self, vector: np.ndarray) -> Dict[str, float]:
+    #     # going over every parameter in every model
+    #     # running index for the input array
+    #     k=0
+    #     for model, model_name in zip(self._model.models, self._model.model_names):
+    #         for parameter_name in model.parameter_names:
+    #             par_size = model.parameter_cardinality[parameter_name]
+    #             setattr(model, parameter_name, vector[k:(k+par_size)])
+    #             k+=par_size
+    #
+    #     raise NotImplementedError
+
+    def _dmipy_set_parameters(self, vector: np.ndarray) -> None:
+        """
+        Sets the correct value for the dmipy parameters on the underlying dmipy model
+
+        :param vector: the vector of the dmipy parameters only!
+        :return: nothing
+        """
+        k = 0
+        for model, model_name in zip(self._model.models, self._model.model_names):
+            for parameter_name in model.parameter_names:
+                par_size = model.parameter_cardinality[parameter_name]
+                setattr(model, parameter_name, vector[k:(k + par_size)])
+                k += par_size
+
     @property
     def _dmipy_parameters(self) -> dict:
         """
@@ -294,22 +323,27 @@ class AnalyticBall(DmipyTissueModel):
     Quick and dirty inheritance of dmipytissue model. Purpose is for testing finite differences
     """
 
-    def __init__(self, lambda_iso: float):
+    def __init__(self, lambda_iso: float, relaxation_time: Optional[float] = None):
         model = G1Ball(lambda_iso)
-        super().__init__(MultiCompartmentModel([model]))
+        super().__init__(MultiCompartmentModel([model]), relaxation_times=relaxation_time)
 
     def jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         bvals = copy(scheme.b_values)
-
+        TE = scheme.echo_times
         # convert to SI units
         bvals *= 1e6
 
         S0 = self['S0'].value
         Diso = self['G1Ball_1_lambda_iso'].value
+        TR = self.relaxation_times
 
-        # d S / d D_iso , d S / d S_0
+        # the signal S = S_0 * e^{-T_E / T_2} * e^{-b * D}
+        S = S0 * np.exp(-bvals * Diso) * np.exp(- TE / TR)
+        s_diso = - bvals * S
+        s_t2 = (1 / TR ** 2) * S
 
-        jac = np.array([- bvals * S0 * np.exp(-bvals * Diso), np.exp(-bvals * Diso)]).T
+        # d S / d D_iso, d S / d T_2 , d S / d S_0
+        jac = np.array([s_diso, s_t2, S]).T
         return jac[:, self.include]
 
 

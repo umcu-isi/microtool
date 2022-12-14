@@ -19,7 +19,7 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models
 
-from microtool.dmipy import CascadeDecorator, RelaxationDecorator
+from microtool.dmipy import CascadeFitDmipy
 from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyTissueModel, \
     convert_diffusion_scheme2dmipy_scheme, \
     AnalyticBall
@@ -158,7 +158,7 @@ class TestModelSchemeIntegration:
             'partial_volume_1': 'partial_volume_1'
         }
 
-        cylinder_zeppelin_cascade = CascadeDecorator(cylinder_zeppelin, stick_zeppelin, name_map)
+        cylinder_zeppelin_cascade = CascadeFitDmipy(cylinder_zeppelin, stick_zeppelin, name_map)
         result = cylinder_zeppelin_cascade.fit(scheme_wrapped, signal, use_parallel_processing=False)
         result_dict = result.fitted_parameters
         expected_dict = expected_result.fitted_parameters
@@ -183,12 +183,14 @@ class TestModelSchemeIntegration:
         }
 
 
-class TestT2Decorator:
+class TestRelaxationT2:
     # "original"
+    lambda_par = 1.7e-9
     analytic_ball = AnalyticBall(1.7e-9)
 
+    # T2 included
     T2 = np.array(10.0)
-    relaxed_ball = RelaxationDecorator(analytic_ball, T2)
+    relaxed_ball = AnalyticBall(lambda_par, relaxation_time=10.0)
 
     # Scheme --------------
     dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
