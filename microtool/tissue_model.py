@@ -40,6 +40,9 @@ class TissueParameter:
 
 
 class TissueModel(Dict[str, TissueParameter], ABC):
+    # step size for the finite difference method.
+    _FD_step_size = 1e-3
+
     @abstractmethod
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
         """
@@ -50,17 +53,30 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         """
         raise NotImplementedError()
 
+    def __init__(self, parameters: Dict[str, TissueParameter]):
+        super().__init__(parameters)
+        self._set_finite_difference_vars()
+
     def __str__(self) -> str:
 
         table = []
         for key, value in self.items():
             table.append([key, value.value, value.scale, value.optimize])
 
-        table_str = tabulate(table, headers=["Tissueparameter", "Value", "Scale", "Optimize"])
+        table_str = tabulate(table, headers=["Tissue-parameter", "Value", "Scale", "Optimize"])
 
         return f'Tissue model with {len(self)} scalar parameters:\n{table_str}'
 
-    @abstractmethod
+    def _set_finite_difference_vars(self):
+        # Get the baseline parameter vector, but don't include S0.
+        self._parameter_baseline = np.array([parameter.value for parameter in self.values()])[:-1]
+
+        # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
+        h = np.array([parameter.scale * self._FD_step_size for parameter in self.values()])[:-1]
+        self._parameter_vectors_forward = self._parameter_baseline + 0.5 * np.diag(h)
+        self._parameter_vectors_backward = self._parameter_baseline - 0.5 * np.diag(h)
+        self._reciprocal_h = (1 / h).reshape(-1, 1)
+
     def jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
         """
         Calculates the change in MR signal attenuation due to a change in the tissue model parameters.
@@ -70,7 +86,40 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         :param scheme: An AcquisitionScheme.
         :return: An N×M Jacobian matrix, where N is the number of samples and M is the number of tissue parameters.
         """
-        raise NotImplementedError()
+        # compute the baseline signal
+        baseline = self.__call__(scheme)
+
+        forward_diff = self._simulate_signals(self._parameter_vectors_forward, scheme)
+        backward_diff = self._simulate_signals(self._parameter_vectors_backward, scheme)
+
+        central_diff = forward_diff - backward_diff
+
+        if np.all(central_diff == 0):
+            raise RuntimeError("Central differences evaluate to 0, probably error in the way signals are simulated?")
+
+        # reset parameters to original
+        self.set_parameters_from_vector(self._parameter_baseline)
+
+        # return jacobian
+        jac = np.concatenate((central_diff * self._reciprocal_h, [baseline])).T
+        return jac[:, self.include]
+
+    def _simulate_signals(self, parameter_vectors: np.ndarray, scheme: AcquisitionScheme) -> np.ndarray:
+        """
+
+        :param parameter_vectors:
+        :param scheme:
+        :return:
+        """
+        # number of parameter vectors
+        npv = parameter_vectors.shape[0]
+        signals = np.zeros((npv, scheme.pulse_count))
+        for i in range(npv):
+            self.set_parameters_from_vector(parameter_vectors[i, :])
+            signals[i, :] = self.__call__(scheme)
+
+        # self.set_parameters_from_vector(self._parameter_baseline)
+        return signals
 
     @abstractmethod
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
@@ -107,6 +156,12 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         return [key for key in self.keys()]
 
     def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
+        """
+        You should probably overwrite this method if you are using a wrapped model.
+
+        :param new_parameter_values:
+        :return:
+        """
         for parameter, new_value in zip(self.values(), new_parameter_values):
             parameter.value = new_value
 
@@ -418,3 +473,7 @@ class TissueModelDecorator(TissueModel, ABC):
     @property
     def include(self):
         return self._original.include
+
+    @property
+    def parameter_vector(self) -> np.ndarray:
+        return self._original.parameter_vector
