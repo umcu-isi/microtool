@@ -379,15 +379,17 @@ class RelaxedIsotropicModel(TissueModel):
         return jac[:, self.include]
 
 
-class TissueModelDecoratorBase(TissueModel, ABC):
+class TissueModelDecorator(TissueModel, ABC):
     """
     Abstract class for initialization of TissueModel decorators. this just passes all public methods to the original object
     override these methods to extend or alter functionality while retaining the same interface.
+
+    This concept is based on the decorator design pattern and more information can be found at
+    https://refactoring.guru/design-patterns/decorator
     """
 
     def __init__(self, original: TissueModel):
         self._original = deepcopy(original)
-        super().__init__(self._original)
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
         return self._original.__call__(scheme)

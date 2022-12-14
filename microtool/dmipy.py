@@ -11,7 +11,7 @@ from dmipy.signal_models.gaussian_models import G1Ball
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.scanner_parameters import ScannerParameters, default_scanner
-from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecoratorBase, FittedModel
+from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
 
 
 # TODO: deal with fractional parameter relations!
@@ -313,7 +313,7 @@ class AnalyticBall(DmipyTissueModel):
         return jac[:, self.include]
 
 
-class CascadeDecorator(TissueModelDecoratorBase):
+class CascadeFitDmipy(TissueModelDecorator):
     """
     Use this decorator to add dmipytissuemodels that should be fitted before to initialize parameter values in more
     complex models
@@ -363,73 +363,6 @@ class CascadeDecorator(TissueModelDecoratorBase):
             complex_name = name_map[simple_name]
             value_map[complex_name] = fit_values[simple_name]
         return value_map
-
-
-class RelaxationDecorator(TissueModelDecoratorBase):
-    # this is the variable we used for the original model in the decorator base (reminder)
-    _original: DmipyTissueModel
-
-    def __init__(self, model: DmipyTissueModel, T2: Union[List, np.ndarray, float]):
-        super().__init__(model)
-
-        # converting T2 to array
-        if not isinstance(T2, np.ndarray):
-            T2 = np.array(T2, dtype=float)
-
-        # check the number of relaxivities with the number of models
-        if T2.size != self._original.dmipy_model.N_models:
-            raise ValueError("Specifiy relaxation for all compartments")
-
-        # store as tissue_parameters
-        if T2.size > 1:
-            for i, value in enumerate(T2):
-                self._original.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0)})
-        else:
-            self._original.update({"T2_relaxation": TissueParameter(float(T2), 1.0)})
-
-        self._T2 = T2
-
-    def __call__(self, scheme: DiffusionAcquisitionScheme):
-        # making dmipy compatible scheme
-        dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
-
-        # Getting the original dmipy model
-        dmipy_model = self._original.dmipy_model
-
-        # Computing the signal that the individual comparments would generate given the acquisitionscheme
-        S_compartment = compute_compartment_signals(dmipy_model, dmipy_scheme)
-
-        # compute the decay caused by T2 relaxation for every compartment, shape (N_measure, N_comp)
-        t2decay_factors = np.exp(- scheme.echo_times[:, np.newaxis] / self._T2)
-
-        if dmipy_model.N_models == 1:
-            # a single compartment does not have partial volumes so we just multiply by 1
-            partial_volumes = 1.0
-        else:
-            # getting partial volumes as array
-            partial_volumes = np.array([self._original[pv_name] for pv_name in dmipy_model.partial_volume_names])
-
-        # multiply the computed signals of individual compartments by the T2-decay AND partial volumes!
-        S_total = np.sum(partial_volumes * t2decay_factors * S_compartment, axis=-1)
-        return S_total
-
-    def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
-        # fit the original model
-        naive_fit = super().fit(scheme, signal, **fit_options)
-
-        # fit relaxation equation to the partial volume result
-
-        raise NotImplementedError()
-
-    def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
-        # get the echo times from the scheme
-
-        # co
-
-        # convert the now extended parameter vector to the original partial volume only vector
-
-        # update
-        raise NotImplementedError()
 
 
 def compute_compartment_signals(dmipy_model: MultiCompartmentModel,
