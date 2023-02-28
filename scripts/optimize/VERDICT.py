@@ -32,7 +32,7 @@ def main():
 
     # Really the orientations should also be fixed?
     verdict_model.set_fixed_parameter('C1Stick_1_mu', [np.pi / 2, np.pi / 2])
-    verdict_model = DmipyTissueModel(verdict_model, [.3, .3, .4])
+    verdict_model = DmipyTissueModel(verdict_model, [.3, .3, .4], [20.0, 20.0, 20.0])
 
     IO.save_pickle(verdict_model, 'schemes/verdict_gt.pkl')
     print("The verdict tissue model:", verdict_model)

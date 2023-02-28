@@ -162,9 +162,8 @@ class DmipyTissueModel(TissueModel):
             for i, value in enumerate(relaxation_times):
                 parameters.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0, optimize=relax_opt_flag)})
         else:
-            parameters.update({"T2_relaxation": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag)})
-
-        self._relaxation_times = relaxation_times
+            parameters.update(
+                {"T2_relaxation_0": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag)})
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
         parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
@@ -224,19 +223,11 @@ class DmipyTissueModel(TissueModel):
 
     @property
     def relaxation_times(self):
-        return self._relaxation_times
-
-    # def _vector2dmipy_parameters(self, vector: np.ndarray) -> Dict[str, float]:
-    #     # going over every parameter in every model
-    #     # running index for the input array
-    #     k=0
-    #     for model, model_name in zip(self._model.models, self._model.model_names):
-    #         for parameter_name in model.parameter_names:
-    #             par_size = model.parameter_cardinality[parameter_name]
-    #             setattr(model, parameter_name, vector[k:(k+par_size)])
-    #             k+=par_size
-    #
-    #     raise NotImplementedError
+        rts = []
+        for key, value in self.items():
+            if key.startswith("T2_relaxation_"):
+                rts.append(value.value)
+        return np.array(rts)
 
     def _dmipy_set_parameters(self, vector: np.ndarray) -> None:
         """
