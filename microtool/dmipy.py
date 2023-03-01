@@ -11,7 +11,8 @@ from dmipy.signal_models.gaussian_models import G1Ball
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.scanner_parameters import ScannerParameters, default_scanner
-from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
+from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel, \
+    insert_relaxation_times
 
 
 # TODO: deal with fractional parameter relations!
@@ -144,26 +145,7 @@ class DmipyTissueModel(TissueModel):
                 parameters.update({key: TissueParameter(value=volume_fractions[i], scale=1.)})
 
         # Add relaxation times (if none are provided we set them to inifinity and exclude from optimization
-        relax_opt_flag = True
-        if relaxation_times is None:
-            relax_opt_flag = False
-            relaxation_times = [np.inf for _ in range(model.N_models)]
-
-        # converting T2 to array
-        if not isinstance(relaxation_times, np.ndarray):
-            relaxation_times = np.array(relaxation_times, dtype=float)
-
-        # check the number of relaxivities with the number of models
-        if relaxation_times.size != model.N_models:
-            raise ValueError("Specifiy relaxation for all compartments")
-
-        # store relaxations as tissue_parameters
-        if relaxation_times.size > 1:
-            for i, value in enumerate(relaxation_times):
-                parameters.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0, optimize=relax_opt_flag)})
-        else:
-            parameters.update(
-                {"T2_relaxation_0": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag)})
+        insert_relaxation_times(relaxation_times, parameters, model.N_models)
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
         parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
@@ -199,7 +181,7 @@ class DmipyTissueModel(TissueModel):
         super().set_parameters_from_vector(new_parameter_values)
 
         # the parameters in dmipy are the parameters excluding the T2's and S0 stored last in the model instance
-        dmipy_parameter_vector = new_parameter_values[:-(self._model.N_models)]
+        dmipy_parameter_vector = new_parameter_values[:-self._model.N_models]
 
         self._dmipy_set_parameters(dmipy_parameter_vector)
 

@@ -477,3 +477,38 @@ class TissueModelDecorator(TissueModel, ABC):
     @property
     def parameter_vector(self) -> np.ndarray:
         return self._original.parameter_vector
+
+
+def insert_relaxation_times(relaxation_times, parameters, N_models):
+    """
+    This function inserts relaxation times into the parameters dictionary
+
+    :param relaxation_times:
+    :param parameters:
+    :param N_models:
+    :return:
+    """
+    # Add relaxation times (if none are provided we set them to inifinity and exclude from optimization
+    relax_opt_flag = True
+    if relaxation_times is None:
+        relax_opt_flag = False
+        relaxation_times = [np.inf for _ in range(N_models)]
+
+    # converting T2 to array
+    if not isinstance(relaxation_times, np.ndarray):
+        relaxation_times = np.array(relaxation_times, dtype=float)
+
+    # check the number of relaxivities with the number of models
+    if relaxation_times.size != N_models:
+        raise ValueError("Specifiy relaxation for all compartments")
+
+    # store relaxations as tissue_parameters
+    if relaxation_times.size > 1:
+        for i, value in enumerate(relaxation_times):
+            parameters.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0, optimize=relax_opt_flag)})
+    else:
+        parameters.update(
+            {"T2_relaxation_0": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag)})
+
+    # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
+    parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
