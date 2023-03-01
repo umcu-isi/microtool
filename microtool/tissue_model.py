@@ -180,6 +180,73 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         return np.array([value.optimize for value in self.values()])
 
 
+class MultiTissueModel(TissueModel):
+    def __init__(self, models: List[TissueModel], volume_fractions: List[float]):
+
+        self._models = models
+
+        # making a parameter dictionary using parameters in the individual compartments
+        parameters = {}
+        for i, model in enumerate(models):
+            for key, value in model.items():
+                if key != "S0":
+                    parameters.update({f"model_{i}_" + key: value})
+
+        # Inserting the partial volumes as model parameters
+        if len(volume_fractions) != len(models):
+            raise ValueError("Not enough volume fractions provided for number of models")
+        if sum(volume_fractions) != 1.:
+            raise ValueError("Volume fractions dont sum to 1")
+
+        for i, vf in enumerate(volume_fractions):
+            parameters.update({
+                f"vf_{i}": TissueParameter(value=vf, scale=1.)
+            })
+
+        # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
+        parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
+        super().__init__(parameters)
+
+    def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
+        # Make sure that the parameters are updated on the individual models first
+        for model in self._models:
+            model.set_parameters_from_vector()
+
+        super().set_parameters_from_vector(new_parameter_values)
+
+    def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
+        # use the call functions of the models
+        compartment_signals = np.stack([model(scheme) for model in self._models], axis=-1)
+        return np.sum(compartment_signals * self.volume_fractions, axis=-1)
+
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
+        # Wrap the call function of self to get the proper signal equation
+        raise NotImplementedError
+
+    @property
+    def volume_fractions(self) -> np.ndarray:
+        vfs = []
+        for key, parameter in self.items():
+            if key.startswith("vf_"):
+                vfs.append(parameter.value)
+        return np.array(vfs)
+
+
+class RelaxedMultiTissueModel(MultiTissueModel):
+    def __init__(self, models, volume_fractions, relaxation_times):
+        super().__init__(models, volume_fractions)
+        # insert relaxation times
+        raise NotImplementedError
+
+    @property
+    def relaxation_times(self) -> np.ndarray:
+        rts = []
+        for key, value in self.items():
+            if key.startswith("T2_relaxation_"):
+                rts.append(value.value)
+        return np.array(rts)
+
+
 class FittedModel(ABC):
     @property
     @abstractmethod
