@@ -120,13 +120,13 @@ def check_insensitive(scheme: AcquisitionScheme, model: TissueModel):
     insensitive_parameters = np.all(jac == 0, axis=0)
     if np.any(insensitive_parameters):
         raise ValueError(
-            f"Initial AcquisitionScheme error: the parameters {np.array(model.parameter_names)[model.include][insensitive_parameters]} have a zero signal derivative for all measurements. "
+            f"Initial AcquisitionScheme error: the parameters {np.array(model.parameter_names)[model.include_optimize][insensitive_parameters]} have a zero signal derivative for all measurements. "
             f"Optimizing will not result in a scheme that better estimates these parameters. "
             f"Exclude them from optimization if you are okay with that.")
 
 
 def check_degrees_of_freedom(scheme: AcquisitionScheme, model: TissueModel):
-    M = int(np.sum(np.array(model.include)))
+    M = int(np.sum(np.array(model.include_optimize)))
     N = len(scheme.free_parameter_vector)
     if M > N:
         raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "

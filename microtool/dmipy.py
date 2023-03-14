@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import copy, deepcopy
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
 
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
@@ -31,9 +31,11 @@ def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParame
         # Iterate over all scalar and vector parameters in the tissue model.
         for parameter_name in model.parameter_names:
             value = np.array(getattr(model, parameter_name), dtype=np.float64, copy=True)
-            scale = model.parameter_scales[parameter_name]
+            scales = model.parameter_scales[parameter_name]
             cardinality = model.parameter_cardinality[parameter_name]
+            bounds = model.parameter_ranges[parameter_name]
 
+            scaled_bounds = get_scaled_bounds(bounds, scales)
             # Determine if the parameter is fixed in the multicompartment model before wrapping
             linked_or_fixed = False
 
@@ -51,12 +53,32 @@ def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParame
                 index_postfix = '' if cardinality == 1 else f'_{i}'
                 parameters[model_name + parameter_name + index_postfix] = TissueParameter(
                     value=value[i] if cardinality > 1 else value,
-                    scale=scale[i] if cardinality > 1 else scale,
+                    scale=scales[i] if cardinality > 1 else scales,
                     # non fixed or linked parameters can be included in the optimization.
-                    optimize=not linked_or_fixed
+                    optimize=not linked_or_fixed,
+                    fit_bounds=(*scaled_bounds[i],)
                 )
 
     return parameters
+
+
+def get_scaled_bounds(dmipy_bounds: Tuple[List[float]], scales: Union[List[float], float]):
+    """
+    Scales the bounds back to the order of magnitude scales.
+
+    :param dmipy_bounds:
+    :param scales:
+    :return: The bounds at the length scale of the parameter
+    """
+    bounds_lst = list(dmipy_bounds)
+    scaled_bounds = []
+    if isinstance(scales, np.ndarray):
+        for bound, scale in zip(bounds_lst, scales):
+            scaled_bounds.append([bound[0] * scale, bound[1] * scale])
+    else:
+        scale = scales
+        scaled_bounds.append([bounds_lst[0] * scale, bounds_lst[1] * scale])
+    return scaled_bounds
 
 
 def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) -> DmipyAcquisitionScheme:
@@ -142,13 +164,13 @@ class DmipyTissueModel(TissueModel):
                 raise ValueError("Provide volume fractions that sum to 1.")
             # Including the volume fractions as TissueParameters to the DmipyTissueModel
             for i, key in enumerate(vf_keys):
-                parameters.update({key: TissueParameter(value=volume_fractions[i], scale=1.)})
+                parameters.update({key: TissueParameter(value=volume_fractions[i], scale=1., fit_bounds=(0.0, 1.0))})
 
         # Add relaxation times (if none are provided we set them to inifinity and exclude from optimization
         insert_relaxation_times(relaxation_times, parameters, model.N_models)
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
-        parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
+        parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False)})
         self._model = model
         super().__init__(parameters)
 
@@ -317,7 +339,7 @@ class AnalyticBall(DmipyTissueModel):
 
         # d S / d D_iso, d S / d T_2 , d S / d S_0
         jac = np.array([s_diso, s_t2, S]).T
-        return jac[:, self.include]
+        return jac[:, self.include_optimize]
 
 
 class CascadeFitDmipy(TissueModelDecorator):

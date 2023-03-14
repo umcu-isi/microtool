@@ -10,10 +10,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Dict, Union, List, Optional
+from typing import Dict, Union, List, Optional, Tuple
 
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differential_evolution
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
@@ -30,18 +30,24 @@ class TissueParameter:
     :param scale: The typical parameter value scale (order of magnitude).
     :param optimize: Specifies if the parameter should be included in the optimization of an AcquisitionScheme.
                     If we dont optimize the scheme we assume the parameter is known and exclude it from fitting as well.
+    :param fit_flag: Specifies if the parameter should be included in the fitting process.
+    :param fit_bounds: Specificies the domain in which to attempt the fitting of this parameter.
     """
     value: float
     scale: float
     optimize: bool = True
+    fit_flag: bool = True
+    fit_bounds: Tuple[Union[float, np.ndarray], Union[float, np.ndarray]] = (0.0, np.inf)
+
+    def __post_init__(self):
+        self.fit_guess = self.scale
 
     def __str__(self):
-        return f'{self.value} (scale: {self.scale}, optimize: {self.optimize})'
+        return f'{self.value} (scale: {self.scale}, optimize: {self.optimize}, fit:{self.fit_flag})'
 
 
 class TissueModel(Dict[str, TissueParameter], ABC):
     # step size for the finite difference method.
-    _FD_step_size = 1e-3
 
     @abstractmethod
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
@@ -61,9 +67,9 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
         table = []
         for key, value in self.items():
-            table.append([key, value.value, value.scale, value.optimize])
+            table.append([key, value.value, value.scale, value.optimize, value.fit_flag])
 
-        table_str = tabulate(table, headers=["Tissue-parameter", "Value", "Scale", "Optimize"])
+        table_str = tabulate(table, headers=["Tissue-parameter", "Value", "Scale", "Optimize", "Fit"])
 
         return f'Tissue model with {len(self)} scalar parameters:\n{table_str}'
 
@@ -71,8 +77,9 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         # Get the baseline parameter vector, but don't include S0.
         self._parameter_baseline = np.array([parameter.value for parameter in self.values()])[:-1]
 
+        step_size = 1e-3
         # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
-        h = np.array([parameter.scale * self._FD_step_size for parameter in self.values()])[:-1]
+        h = np.array([parameter.scale * step_size for parameter in self.values()])[:-1]
         self._parameter_vectors_forward = self._parameter_baseline + 0.5 * np.diag(h)
         self._parameter_vectors_backward = self._parameter_baseline - 0.5 * np.diag(h)
         self._reciprocal_h = (1 / h).reshape(-1, 1)
@@ -102,7 +109,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
         # return jacobian
         jac = np.concatenate((central_diff * self._reciprocal_h, [baseline])).T
-        return jac[:, self.include]
+        return jac[:, self.include_optimize]
 
     def _simulate_signals(self, parameter_vectors: np.ndarray, scheme: AcquisitionScheme) -> np.ndarray:
         """
@@ -122,7 +129,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         return signals
 
     @abstractmethod
-    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
         """
         Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
         :param signal: The noisy signal
@@ -134,7 +141,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
     def scaled_jacobian(self, scheme: AcquisitionScheme):
         # Extracting the jacobian w.r.t the included parameters only
         # casting to numpy array if not done already
-        include = self.include
+        include = self.include_optimize
         scales = self.scales
         jac = self.jacobian(scheme)
 
@@ -165,6 +172,29 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         for parameter, new_value in zip(self.values(), new_parameter_values):
             parameter.value = new_value
 
+    def set_fit_parameters(self, new_values: Union[np.ndarray, dict]) -> None:
+        """
+        Sets the TissueParameters that are flagged for fitting to the provided values.
+
+        :param new_values: The parameter values to be set in vector form or dictionary form
+        :return: None
+        """
+        if isinstance(new_values, dict):
+            # check length
+            val_lst = list(new_values.values())
+            # Reenter the function as an array
+            self.set_fit_parameters(np.array(val_lst))
+        else:
+            if np.sum(self.include_fit) != new_values.shape[0]:
+                raise ValueError("Shape of new values does not match number of parameters marked for fitting.")
+
+            for i, parameter in enumerate(self.get_fit_parameters()):
+                if parameter.fit_flag:
+                    parameter.value = new_values[i]
+
+    def get_fit_parameters(self):
+        return np.array(list(self.values()))[self.include_fit]
+
     @property
     def parameter_vector(self) -> np.ndarray:
         # put all parameter values in a single array
@@ -176,8 +206,36 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         return np.array([value.scale for value in self.values()])
 
     @property
-    def include(self):
+    def include_optimize(self):
         return np.array([value.optimize for value in self.values()])
+
+    @property
+    def include_fit(self):
+        return np.array([value.fit_flag for value in self.values()])
+
+    @property
+    def fit_bounds_all(self) -> Bounds:
+        lbs = []
+        ubs = []
+        for parameter in self.get_fit_parameters():
+            ub = parameter.fit_bounds[1]
+            lb = parameter.fit_bounds[0]
+            if lb is None:
+                lbs.append(-np.inf)
+            else:
+                lbs.append(lb)
+            if ub is None:
+                ubs.append(np.inf)
+            else:
+                if ub < lb:
+                    raise ValueError("Upper bound is larger than lower bound.")
+                ubs.append(ub)
+
+        return Bounds(np.array(lbs), np.array(ubs), keep_feasible=True)
+
+    @property
+    def fit_initial_guess(self) -> np.ndarray:
+        return np.array([self.get(key).fit_guess for key in np.array(self.parameter_names)[self.include_fit]])
 
 
 class MultiTissueModel(TissueModel):
@@ -200,28 +258,60 @@ class MultiTissueModel(TissueModel):
 
         for i, vf in enumerate(volume_fractions):
             parameters.update({
-                f"vf_{i}": TissueParameter(value=vf, scale=1.)
+                f"vf_{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0))
             })
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
-        parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
+        parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False)})
         super().__init__(parameters)
 
     def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
         # Make sure that the parameters are updated on the individual models first
+        i = 0
         for model in self._models:
-            model.set_parameters_from_vector()
+            N_p = len(model)
+            model.set_parameters_from_vector(new_parameter_values[i:N_p])
+            i += N_p
 
         super().set_parameters_from_vector(new_parameter_values)
+
+    def set_fit_parameters(self, new_values: Union[np.ndarray, dict]) -> None:
+        super().set_fit_parameters(new_values)
+
+        # We also update the parameters on the models in this object
+        i = 0
+        for model in self._models:
+            N_flagged = np.sum(model.include_fit)
+            model.set_fit_parameters(new_values[i:(i + N_flagged)])
+            i += N_flagged
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
         # use the call functions of the models
         compartment_signals = np.stack([model(scheme) for model in self._models], axis=-1)
         return np.sum(compartment_signals * self.volume_fractions, axis=-1)
 
-    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
-        # Wrap the call function of self to get the proper signal equation
-        raise NotImplementedError
+    # TODO Least squares curve fitter
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, method: Union[str, callable],
+            **fit_options) -> FittedModelMinimize:
+
+        # define squared distance function as cost
+
+        if method == 'DE':
+            # A = [0, 0, 1, 1]
+            # constraint = LinearConstraint(A, lb=1.1, ub=1.1)
+            result = differential_evolution(fit_cost,
+                                            args=(signal, scheme, deepcopy(self)),
+                                            bounds=self.fit_bounds_all,
+                                            # constraints=constraint,
+                                            workers=-1,
+                                            updating='deferred',
+                                            disp=True)
+        else:
+            result = minimize(fit_cost, x0=self.fit_initial_guess, args=(signal, scheme, deepcopy(self)),
+                              bounds=self.fit_bounds_all,
+                              method=method)
+
+        return FittedModelMinimize(self, result)
 
     @property
     def volume_fractions(self) -> np.ndarray:
@@ -241,6 +331,7 @@ class RelaxedMultiTissueModel(MultiTissueModel):
     @property
     def relaxation_times(self) -> np.ndarray:
         rts = []
+
         for key, value in self.items():
             if key.startswith("T2_relaxation_"):
                 rts.append(value.value)
@@ -259,7 +350,7 @@ class FittedModel(ABC):
         raise NotImplementedError()
 
 
-class FittedTissueModelCurveFit(FittedModel):
+class FittedModelCurveFit(FittedModel):
     def __init__(self, model: TissueModel, curve_fit_result: tuple):
         if len(curve_fit_result) != 5:
             raise ValueError("Expected a full output curve fit result.")
@@ -277,7 +368,7 @@ class FittedTissueModelCurveFit(FittedModel):
 
         vector = self.fitted_parameters_vector
         parameter_names = self._model.parameter_names
-        include = self._model.include
+        include = self._model.include_optimize
 
         out = {}
         for i in range(len(parameter_names)):
@@ -289,6 +380,28 @@ class FittedTissueModelCurveFit(FittedModel):
     @property
     def fit_information(self) -> Optional[dict]:
         return self._fit_information
+
+
+class FittedModelMinimize(FittedModel):
+    def __init__(self, model: TissueModel, result: OptimizeResult):
+        self.model = model
+        self.result = result
+
+        if not self.result.success:
+            raise RuntimeError("Unsuccesfull optimization/fitting, possible solutions are to change optimizer or "
+                               "tweak optimization parameters")
+
+    @property
+    def fit_information(self) -> Optional[dict]:
+        return {"termination_message": self.result.message, "number of iterations": self.result.nit}
+
+    @property
+    def fitted_parameters(self) -> Dict[str, np.ndarray]:
+        fit_values = self.result.x
+        out = {}
+        for i, name in enumerate(np.array(self.model.parameter_names)[self.model.include_fit]):
+            out.update({name: fit_values[i]})
+        return out
 
 
 # TODO: Take T2* and relaxation parameter distributions into account. See eq. 5 and 6 in
@@ -342,16 +455,16 @@ class RelaxationTissueModel(TissueModel):
             self['S0'].value * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (self['T2'].value ** 2),  # δS(S0, T1, T2) / δT2
             (1 - 2 * ti_t1 + tr_t1) * te_t2,  # δS(S0, T1, T2) / δS0
         ]).T
-        return jac[:, self.include]
+        return jac[:, self.include_optimize]
 
     def fit(self, scheme: InversionRecoveryAcquisitionScheme, signal: np.ndarray,
-            **fit_options) -> FittedTissueModelCurveFit:
+            **fit_options) -> FittedModelCurveFit:
         ti = scheme.inversion_times  # ms
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
 
         # whether parameters are included in the fit
-        include = self.include
+        include = self.include_optimize
 
         # Using the current model parameters as initials for the fit (these are the *true* values!)
         initial_parameters = np.array([param.value for param in self.values()])
@@ -379,7 +492,7 @@ class RelaxationTissueModel(TissueModel):
         result = curve_fit(signal_fun, np.arange(len(tr)), signal, initial_parameters, bounds=bounds,
                            full_output=True, **fit_options)
 
-        return FittedTissueModelCurveFit(self, result)
+        return FittedModelCurveFit(self, result)
 
 
 class ExponentialTissueModel(TissueModel):
@@ -418,9 +531,9 @@ class ExponentialTissueModel(TissueModel):
         S = S0 * np.exp(-TE / T2)
         # return np.array([-TE * S, 1]).T
         jac = np.array([(TE / T2 ** 2) * S, S / S0]).T
-        return jac[:, self.include]
+        return jac[:, self.include_optimize]
 
-    def fit(self, scheme: EchoScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
+    def fit(self, scheme: EchoScheme, signal: np.ndarray, **fit_options) -> FittedModelCurveFit:
         """
 
         :param scheme:
@@ -432,7 +545,7 @@ class ExponentialTissueModel(TissueModel):
         te = scheme.echo_times
 
         # Whether or not to include a parameter in the fitting process?
-        include = self.include
+        include = self.include_optimize
 
         # initial parameters in case we want to exclude some parameter from the fitting process
         initial_parameters = list(self.parameters.values())
@@ -454,11 +567,11 @@ class ExponentialTissueModel(TissueModel):
                            bounds=bounds,
                            maxfev=4 ** 2 * 100, full_output=True, **fit_options)
 
-        return FittedTissueModelCurveFit(self, result)
+        return FittedModelCurveFit(self, result)
 
 
 class RelaxedIsotropicModel(TissueModel):
-    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedTissueModelCurveFit:
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModelCurveFit:
         raise NotImplementedError()
 
     def __init__(self, t2: float, diffusivity: float, s0: float = 1.0):
@@ -498,7 +611,7 @@ class RelaxedIsotropicModel(TissueModel):
         te_t2 = np.exp(- te / T2)
 
         jac = np.array([te * S0 * b_D * te_t2 / T2 ** 2, - bvalues * S0 * b_D * te_t2, b_D * te_t2]).T
-        return jac[:, self.include]
+        return jac[:, self.include_optimize]
 
 
 class TissueModelDecorator(TissueModel, ABC):
@@ -538,8 +651,8 @@ class TissueModelDecorator(TissueModel, ABC):
         return self._original.scales
 
     @property
-    def include(self):
-        return self._original.include
+    def include_optimize(self):
+        return self._original.include_optimize
 
     @property
     def parameter_vector(self) -> np.ndarray:
@@ -557,8 +670,10 @@ def insert_relaxation_times(relaxation_times, parameters, N_models):
     """
     # Add relaxation times (if none are provided we set them to inifinity and exclude from optimization
     relax_opt_flag = True
+    relax_fit_flag = True
     if relaxation_times is None:
         relax_opt_flag = False
+        relax_fit_flag = False
         relaxation_times = [np.inf for _ in range(N_models)]
 
     # converting T2 to array
@@ -572,10 +687,19 @@ def insert_relaxation_times(relaxation_times, parameters, N_models):
     # store relaxations as tissue_parameters
     if relaxation_times.size > 1:
         for i, value in enumerate(relaxation_times):
-            parameters.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0, optimize=relax_opt_flag)})
+            parameters.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0, optimize=relax_opt_flag,
+                                                                          fit_flag=relax_fit_flag)})
     else:
         parameters.update(
-            {"T2_relaxation_0": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag)})
+            {"T2_relaxation_0": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag,
+                                                fit_flag=relax_fit_flag)})
 
     # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
     parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
+
+
+def fit_cost(fit_parameter_vector, signal, scheme, model: TissueModel):
+    model.set_fit_parameters(fit_parameter_vector)
+    predicted_signal = model(scheme)
+    square_diff = (signal - predicted_signal) ** 2
+    return np.sum(square_diff)

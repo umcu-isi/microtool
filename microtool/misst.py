@@ -117,6 +117,6 @@ class MisstTissueModel(TissueModel):
         signal, jac = engine.SynthMeas(self._model, protocol, nargout=2)
 
         # Add the derivative to S0 (the signal itself).
-        return np.concatenate([s0 * np.array(jac), signal], axis=1)[:, self.include]
+        return np.concatenate([s0 * np.array(jac), signal], axis=1)[:, self.include_optimize]
 
     # TODO: Implement fit method
