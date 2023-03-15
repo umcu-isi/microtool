@@ -207,6 +207,14 @@ class DmipyTissueModel(TissueModel):
 
         self._dmipy_set_parameters(dmipy_parameter_vector)
 
+    def set_fit_parameters(self, new_values: Union[np.ndarray, dict]) -> None:
+        super().set_fit_parameters(new_values)
+        # Also we need to set the parameters on the dmipy model for the signal simulation to work
+        full_vector = self.parameter_vector
+        full_vector[self.include_fit] = new_values
+        # idee: maak een volledige vector waarbij de oude waarden gekopieerd worden voor dit object.
+        self._dmipy_set_parameters(full_vector[:-self._model.N_models])
+
     def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedDmipyModel:
         dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
 

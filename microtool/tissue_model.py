@@ -278,6 +278,8 @@ class MultiTissueModel(TissueModel):
     def set_fit_parameters(self, new_values: Union[np.ndarray, dict]) -> None:
         super().set_fit_parameters(new_values)
 
+        if isinstance(new_values, dict):
+            new_values = np.array(list(new_values.values()))
         # We also update the parameters on the models in this object
         i = 0
         for model in self._models:
@@ -294,23 +296,28 @@ class MultiTissueModel(TissueModel):
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, method: Union[str, callable],
             **fit_options) -> FittedModelMinimize:
 
-        # define squared distance function as cost
+        cost_fun_args = (signal, scheme, deepcopy(self))
+
+        # scaling the bounds
+        bounds = self.fit_bounds_all
+        bounds.ub /= self.scales[self.include_fit]
+        bounds.lb /= self.scales[self.include_fit]
+
+        x0 = self.fit_initial_guess / self.scales[self.include_fit]
 
         if method == 'DE':
-            # A = [0, 0, 1, 1]
-            # constraint = LinearConstraint(A, lb=1.1, ub=1.1)
             result = differential_evolution(fit_cost,
-                                            args=(signal, scheme, deepcopy(self)),
-                                            bounds=self.fit_bounds_all,
+                                            args=cost_fun_args,
+                                            bounds=bounds,
                                             # constraints=constraint,
                                             workers=-1,
                                             updating='deferred',
                                             disp=True)
         else:
-            result = minimize(fit_cost, x0=self.fit_initial_guess, args=(signal, scheme, deepcopy(self)),
-                              bounds=self.fit_bounds_all,
+            result = minimize(fit_cost, x0=x0, args=cost_fun_args,
+                              bounds=bounds,
                               method=method)
-
+        result.x = result.x * self.scales[self.include_fit]
         return FittedModelMinimize(self, result)
 
     @property
@@ -503,8 +510,8 @@ class ExponentialTissueModel(TissueModel):
         :param S0: The initial signal
         """
         super().__init__({
-            'T2': TissueParameter(value=T2, scale=T2, optimize=True),
-            'S0': TissueParameter(value=S0, scale=S0, optimize=True)
+            'T2': TissueParameter(value=T2, scale=1.0, optimize=True, fit_bounds=(.1, 10e3)),
+            'S0': TissueParameter(value=S0, scale=1.0, optimize=True, fit_bounds=(.1, 2))
         })
 
     def __call__(self, scheme: EchoScheme) -> np.ndarray:
@@ -548,23 +555,20 @@ class ExponentialTissueModel(TissueModel):
         include = self.include_optimize
 
         # initial parameters in case we want to exclude some parameter from the fitting process
-        initial_parameters = list(self.parameters.values())
+        parameter_value = list(self.parameters.values())
 
         # the function defining the signal in form compatible with scipy curve fitting
         def signal_fun(measurement, t2, s0):
             if not include[0]:
-                t2 = initial_parameters[0]
+                t2 = parameter_value[0]
             if not include[1]:
-                s0 = initial_parameters[1]
+                s0 = parameter_value[1]
 
             return s0 * np.exp(-te / t2)
 
-        # TODO create default value and add as a fitting option
-        # hard coding the fitting bounds for now
-        bounds = (np.array([0, 0]), np.array([np.inf, np.inf]))
-
-        result = curve_fit(signal_fun, np.arange(len(te)), signal, initial_parameters,
-                           bounds=bounds,
+        initial_guess = self.scales
+        result = curve_fit(signal_fun, np.arange(len(te)), signal, initial_guess,
+                           bounds=(self.fit_bounds_all.lb, self.fit_bounds_all.ub),
                            maxfev=4 ** 2 * 100, full_output=True, **fit_options)
 
         return FittedModelCurveFit(self, result)
@@ -699,7 +703,13 @@ def insert_relaxation_times(relaxation_times, parameters, N_models):
 
 
 def fit_cost(fit_parameter_vector, signal, scheme, model: TissueModel):
-    model.set_fit_parameters(fit_parameter_vector)
+    model.set_fit_parameters(fit_parameter_vector * model.scales[model.include_fit])
     predicted_signal = model(scheme)
     square_diff = (signal - predicted_signal) ** 2
     return np.sum(square_diff)
+
+
+def fit_residuals(fit_parameter_vector, signal, scheme, model: TissueModel):
+    model.set_fit_parameters(fit_parameter_vector)
+    predicted_signal = model(scheme)
+    return signal - predicted_signal
