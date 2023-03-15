@@ -13,11 +13,15 @@ from dataclasses import dataclass
 from typing import Dict, Union, List, Optional, Tuple
 
 import numpy as np
-from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differential_evolution
+from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differential_evolution, NonlinearConstraint, \
+    LinearConstraint
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
     ReducedDiffusionScheme
+from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY
+
+Constraints = Union[List[Union[LinearConstraint, NonlinearConstraint]], Union[LinearConstraint, NonlinearConstraint]]
 
 
 @dataclass
@@ -242,27 +246,27 @@ class MultiTissueModel(TissueModel):
     def __init__(self, models: List[TissueModel], volume_fractions: List[float]):
 
         self._models = models
-
+        self.N_models = len(models)
         # making a parameter dictionary using parameters in the individual compartments
         parameters = {}
         for i, model in enumerate(models):
             for key, value in model.items():
-                if key != "S0":
-                    parameters.update({f"model_{i}_" + key: value})
+                if key != BASE_SIGNAL_KEY:
+                    parameters.update({MODEL_PREFIX + f"{i}_" + key: value})
 
         # Inserting the partial volumes as model parameters
-        if len(volume_fractions) != len(models):
+        if len(volume_fractions) != self.N_models:
             raise ValueError("Not enough volume fractions provided for number of models")
         if sum(volume_fractions) != 1.:
             raise ValueError("Volume fractions dont sum to 1")
 
         for i, vf in enumerate(volume_fractions):
             parameters.update({
-                f"vf_{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0))
+                VOLUME_FRACTION_PREFIX + f"{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0))
             })
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
-        parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False)})
+        parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False)})
         super().__init__(parameters)
 
     def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
@@ -292,8 +296,7 @@ class MultiTissueModel(TissueModel):
         compartment_signals = np.stack([model(scheme) for model in self._models], axis=-1)
         return np.sum(compartment_signals * self.volume_fractions, axis=-1)
 
-    # TODO Least squares curve fitter
-    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, method: Union[str, callable],
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, method: Union[str, callable] = 'trust-constr',
             **fit_options) -> FittedModelMinimize:
 
         cost_fun_args = (signal, scheme, deepcopy(self))
@@ -309,22 +312,36 @@ class MultiTissueModel(TissueModel):
             result = differential_evolution(fit_cost,
                                             args=cost_fun_args,
                                             bounds=bounds,
-                                            # constraints=constraint,
+                                            constraints=self.fit_constraints,
                                             workers=-1,
                                             updating='deferred',
                                             disp=True)
         else:
+            # noinspection PyTypeChecker
             result = minimize(fit_cost, x0=x0, args=cost_fun_args,
                               bounds=bounds,
+                              constraints=self.fit_constraints,
                               method=method)
+
         result.x = result.x * self.scales[self.include_fit]
         return FittedModelMinimize(self, result)
+
+    @property
+    def fit_constraints(self) -> Constraints:
+        # for now only volume fractions.
+        A = []
+        for name in np.array(self.parameter_names)[self.include_fit]:
+            if name.startswith(VOLUME_FRACTION_PREFIX):
+                A.append(1)
+            else:
+                A.append(0)
+        return LinearConstraint(A, 1, 1)
 
     @property
     def volume_fractions(self) -> np.ndarray:
         vfs = []
         for key, parameter in self.items():
-            if key.startswith("vf_"):
+            if key.startswith(VOLUME_FRACTION_PREFIX):
                 vfs.append(parameter.value)
         return np.array(vfs)
 
