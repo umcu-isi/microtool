@@ -5,7 +5,7 @@ from dmipy.signal_models import cylinder_models, gaussian_models
 from matplotlib import pyplot as plt
 
 from microtool.dmipy import DmipyTissueModel, convert_dmipy_scheme2diffusion_scheme
-from microtool.tissue_model import MultiTissueModel
+from microtool.tissue_model import RelaxedMultiTissueModel
 
 if __name__ == "__main__":
     acq_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
@@ -21,18 +21,15 @@ if __name__ == "__main__":
 
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
     stick = cylinder_models.C1Stick(mu, lambda_par)
-    stick_zeppelin = MultiCompartmentModel(models=[zeppelin, stick])
-    single_model = DmipyTissueModel(stick_zeppelin, volume_fractions=[.5, .5])
 
     stick_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[stick]))
     zeppelin_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[zeppelin]))
 
-    multi_model = MultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5])
-    multi_model['S0'].fit_flag = True
+    multi_model = RelaxedMultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5], relaxation_times=[10.0, 10.0])
 
     signal = multi_model(acq_wrapped)
 
-    result = multi_model.fit(acq_wrapped, signal, method=None)
+    result = multi_model.fit(acq_wrapped, signal, method="DE")
     print(multi_model)
     multi_model.set_fit_parameters(result.fitted_parameters)
     print(multi_model)
@@ -40,6 +37,6 @@ if __name__ == "__main__":
     result.print_fit_information()
 
     predicted_signal = multi_model(acq_wrapped)
-    plt.figure()
+    plt.figure("Residuals")
     plt.plot(signal - predicted_signal, '.')
     plt.show()

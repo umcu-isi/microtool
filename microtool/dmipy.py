@@ -10,6 +10,7 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.gaussian_models import G1Ball
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool.constants import BASE_SIGNAL_KEY, RELAXATION_PREFIX
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel, \
     insert_relaxation_times
@@ -170,7 +171,7 @@ class DmipyTissueModel(TissueModel):
         insert_relaxation_times(relaxation_times, parameters, model.N_models)
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
-        parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False)})
+        parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False)})
         self._model = model
         super().__init__(parameters)
 
@@ -195,7 +196,7 @@ class DmipyTissueModel(TissueModel):
             partial_volumes = np.array([self[pv_name].value for pv_name in dmipy_model.partial_volume_names])
 
         # multiply the computed signals of individual compartments by the T2-decay AND partial volumes!
-        S_total = self['S0'].value * np.sum(partial_volumes * t2decay_factors * S_compartment, axis=-1)
+        S_total = self[BASE_SIGNAL_KEY].value * np.sum(partial_volumes * t2decay_factors * S_compartment, axis=-1)
         return S_total
 
     def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
@@ -237,7 +238,7 @@ class DmipyTissueModel(TissueModel):
     def relaxation_times(self):
         rts = []
         for key, value in self.items():
-            if key.startswith("T2_relaxation_"):
+            if key.startswith(RELAXATION_PREFIX):
                 rts.append(value.value)
         return np.array(rts)
 
@@ -317,7 +318,7 @@ class FittedDmipyModel(FittedModel):
         return self._model.dmipy_parameters2microtool_parameters(dmipy_pars)
 
     @property
-    def fit_information(self) -> Optional[dict]:
+    def print_fit_information(self) -> Optional[dict]:
         return None
 
 
@@ -336,7 +337,7 @@ class AnalyticBall(DmipyTissueModel):
         # convert to SI units
         bvals *= 1e6
 
-        S0 = self['S0'].value
+        S0 = self[BASE_SIGNAL_KEY].value
         Diso = self['G1Ball_1_lambda_iso'].value
         TR = self.relaxation_times
 

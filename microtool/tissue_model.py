@@ -7,19 +7,22 @@ In order to simulate the MR signal in response to a MICROtool acquisition scheme
 """
 from __future__ import annotations
 
+import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Dict, Union, List, Optional, Tuple
+from typing import Dict, Union, List, Optional
 
 import numpy as np
+from numpy.random import default_rng
 from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differential_evolution, NonlinearConstraint, \
     LinearConstraint
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
     ReducedDiffusionScheme
-from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY
+from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY, RELAXATION_PREFIX, T2_KEY, T1_KEY, \
+    DIFFUSIVITY_KEY, RELAXATION_BOUNDS
 
 Constraints = Union[List[Union[LinearConstraint, NonlinearConstraint]], Union[LinearConstraint, NonlinearConstraint]]
 
@@ -41,13 +44,13 @@ class TissueParameter:
     scale: float
     optimize: bool = True
     fit_flag: bool = True
-    fit_bounds: Tuple[Union[float, np.ndarray], Union[float, np.ndarray]] = (0.0, np.inf)
+    fit_bounds: tuple = (0.0, np.inf)
 
     def __post_init__(self):
-        self.fit_guess = self.scale
+        self.fit_guess = self.scale * .5
 
     def __str__(self):
-        return f'{self.value} (scale: {self.scale}, optimize: {self.optimize}, fit:{self.fit_flag})'
+        return f'{self.value} (scale: {self.scale}, optimize: {self.optimize}, fit:{self.fit_flag},bounds:{self.fit_bounds})'
 
 
 class TissueModel(Dict[str, TissueParameter], ABC):
@@ -71,9 +74,9 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
         table = []
         for key, value in self.items():
-            table.append([key, value.value, value.scale, value.optimize, value.fit_flag])
+            table.append([key, value.value, value.scale, value.optimize, value.fit_flag, value.fit_bounds])
 
-        table_str = tabulate(table, headers=["Tissue-parameter", "Value", "Scale", "Optimize", "Fit"])
+        table_str = tabulate(table, headers=["Tissue-parameter", "Value", "Scale", "Optimize", "Fit", "Fit Bounds"])
 
         return f'Tissue model with {len(self)} scalar parameters:\n{table_str}'
 
@@ -239,7 +242,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
     @property
     def fit_initial_guess(self) -> np.ndarray:
-        return np.array([self.get(key).fit_guess for key in np.array(self.parameter_names)[self.include_fit]])
+        return np.array([self[key].fit_guess for key in np.array(self.parameter_names)[self.include_fit]])
 
 
 class MultiTissueModel(TissueModel):
@@ -317,17 +320,35 @@ class MultiTissueModel(TissueModel):
                                             updating='deferred',
                                             disp=True)
         else:
-            # noinspection PyTypeChecker
-            result = minimize(fit_cost, x0=x0, args=cost_fun_args,
-                              bounds=bounds,
-                              constraints=self.fit_constraints,
-                              method=method)
+
+            rng = default_rng()
+            N_INIT = 10
+            best_cost = np.inf
+            best_result = None
+            for _ in range(N_INIT):
+                # Generate initial guess in bounds where we account for machine precision to prevent stepping out
+                machine_epsilon = np.finfo(float).eps
+                x0 = rng.uniform(low=bounds.lb + machine_epsilon, high=bounds.ub - machine_epsilon, size=bounds.lb.size)
+
+                result = minimize(fit_cost, x0=x0, args=cost_fun_args,
+                                  bounds=bounds,
+                                  constraints=self.fit_constraints,
+                                  method=method, options={})
+
+                if result.fun < best_cost:
+                    best_cost = result.fun
+                    best_result = result
+
+            result = best_result
 
         result.x = result.x * self.scales[self.include_fit]
         return FittedModelMinimize(self, result)
 
     @property
     def fit_constraints(self) -> Constraints:
+        if self.N_models == 1:
+            return ()
+
         # for now only volume fractions.
         A = []
         for name in np.array(self.parameter_names)[self.include_fit]:
@@ -335,7 +356,7 @@ class MultiTissueModel(TissueModel):
                 A.append(1)
             else:
                 A.append(0)
-        return LinearConstraint(A, 1, 1)
+        return LinearConstraint(A, 1, 1, keep_feasible=True)
 
     @property
     def volume_fractions(self) -> np.ndarray:
@@ -347,25 +368,36 @@ class MultiTissueModel(TissueModel):
 
 
 class RelaxedMultiTissueModel(MultiTissueModel):
-    def __init__(self, models, volume_fractions, relaxation_times):
+    def __init__(self, models: List[TissueModel], volume_fractions: List[float],
+                 relaxation_times: Union[List[float], np.ndarray]):
         super().__init__(models, volume_fractions)
+        # pop the base signal
+        base_signal = self.pop(BASE_SIGNAL_KEY)
         # insert relaxation times
-        raise NotImplementedError
+        insert_relaxation_times(relaxation_times, self, self.N_models)
+        # reinsert the base signal
+        self.update({BASE_SIGNAL_KEY: base_signal})
 
     @property
     def relaxation_times(self) -> np.ndarray:
         rts = []
 
         for key, value in self.items():
-            if key.startswith("T2_relaxation_"):
+            if key.startswith(RELAXATION_PREFIX):
                 rts.append(value.value)
         return np.array(rts)
 
+    def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
+        # use the call functions of the models
+        compartment_signals = np.stack([model(scheme) for model in self._models], axis=-1)
+        echo_times = scheme["EchoTime"].values
+        relaxation_decay = np.exp(- echo_times[:, np.newaxis] / self.relaxation_times)
+        return np.sum(compartment_signals * self.volume_fractions * relaxation_decay, axis=-1)
+
 
 class FittedModel(ABC):
-    @property
     @abstractmethod
-    def fit_information(self) -> Optional[dict]:
+    def print_fit_information(self) -> None:
         raise NotImplementedError()
 
     @property
@@ -402,7 +434,7 @@ class FittedModelCurveFit(FittedModel):
         return out
 
     @property
-    def fit_information(self) -> Optional[dict]:
+    def print_fit_information(self) -> Optional[dict]:
         return self._fit_information
 
 
@@ -412,12 +444,13 @@ class FittedModelMinimize(FittedModel):
         self.result = result
 
         if not self.result.success:
-            raise RuntimeError("Unsuccesfull optimization/fitting, possible solutions are to change optimizer or "
-                               "tweak optimization parameters")
+            warnings.warn(
+                "Minimize says optimization was unsuccesfull inspect fit information to decide on further actions.",
+                category=RuntimeWarning)
 
-    @property
-    def fit_information(self) -> Optional[dict]:
-        return {"termination_message": self.result.message, "number of iterations": self.result.nit}
+    def print_fit_information(self) -> None:
+        for key in self.result.keys():
+            print(key, self.result[key])
 
     @property
     def fitted_parameters(self) -> Dict[str, np.ndarray]:
@@ -441,9 +474,9 @@ class RelaxationTissueModel(TissueModel):
 
     def __init__(self, t1: float, t2: float, s0: float = 1.0):
         super().__init__({
-            'T1': TissueParameter(value=t1, scale=t1, optimize=False),
-            'T2': TissueParameter(value=t2, scale=t2),
-            'S0': TissueParameter(value=s0, scale=s0, optimize=False),
+            T1_KEY: TissueParameter(value=t1, scale=t1, optimize=False),
+            T2_KEY: TissueParameter(value=t2, scale=t2),
+            BASE_SIGNAL_KEY: TissueParameter(value=s0, scale=s0, optimize=False),
         })
 
     # TODO: Support other relaxation-acquisition schemes, e.g. Union[SpinEchoAcquisitionScheme,
@@ -453,30 +486,32 @@ class RelaxationTissueModel(TissueModel):
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
 
-        ti_t1 = np.exp(-ti / self['T1'].value)
-        tr_t1 = np.exp(-tr / self['T1'].value)
-        te_t2 = np.exp(-te / self['T2'].value)
+        ti_t1 = np.exp(-ti / self[T1_KEY].value)
+        tr_t1 = np.exp(-tr / self[T1_KEY].value)
+        te_t2 = np.exp(-te / self[T2_KEY].value)
 
         # Rather than varying TR to achieve different T1 weightings, Mulkern et al. (2000) incorporate an inversion
         # pulse prior to the 90° pulse in the diffusion-weighted SE sequence for simultaneous D-T1 measurement.
         #
         # See section 7.4.2 of 'Advanced Diffusion Encoding Methods in MRI', Topgaard D, editor (2020):
         # https://www.ncbi.nlm.nih.gov/books/NBK567564
-        return self['S0'].value * (1 - 2 * ti_t1 + tr_t1) * te_t2
+        return self[BASE_SIGNAL_KEY].value * (1 - 2 * ti_t1 + tr_t1) * te_t2
 
     def jacobian(self, scheme: InversionRecoveryAcquisitionScheme) -> np.ndarray:
         ti = scheme.inversion_times  # ms
         tr = scheme.repetition_times  # ms
         te = scheme.echo_times  # ms
 
-        ti_t1 = np.exp(-ti / self['T1'].value)
-        tr_t1 = np.exp(-tr / self['T1'].value)
-        te_t2 = np.exp(-te / self['T2'].value)
+        ti_t1 = np.exp(-ti / self[T1_KEY].value)
+        tr_t1 = np.exp(-tr / self[T1_KEY].value)
+        te_t2 = np.exp(-te / self[T2_KEY].value)
 
         # Calculate the derivative of the signal attenuation to T1, T2 and S0.
         jac = np.array([
-            self['S0'].value * (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (self['T1'].value ** 2),  # δS(S0, T1, T2) / δT1
-            self['S0'].value * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (self['T2'].value ** 2),  # δS(S0, T1, T2) / δT2
+            self[BASE_SIGNAL_KEY].value * (-2 * ti * ti_t1 + tr * tr_t1) * te_t2 / (self[T1_KEY].value ** 2),
+            # δS(S0, T1, T2) / δT1
+            self[BASE_SIGNAL_KEY].value * te * (1 - 2 * ti_t1 + tr_t1) * te_t2 / (self[T2_KEY].value ** 2),
+            # δS(S0, T1, T2) / δT2
             (1 - 2 * ti_t1 + tr_t1) * te_t2,  # δS(S0, T1, T2) / δS0
         ]).T
         return jac[:, self.include_optimize]
@@ -527,8 +562,8 @@ class ExponentialTissueModel(TissueModel):
         :param S0: The initial signal
         """
         super().__init__({
-            'T2': TissueParameter(value=T2, scale=1.0, optimize=True, fit_bounds=(.1, 10e3)),
-            'S0': TissueParameter(value=S0, scale=1.0, optimize=True, fit_bounds=(.1, 2))
+            T2_KEY: TissueParameter(value=T2, scale=1.0, optimize=True, fit_bounds=(.1, 10e3)),
+            BASE_SIGNAL_KEY: TissueParameter(value=S0, scale=1.0, optimize=True, fit_bounds=(.1, 2))
         })
 
     def __call__(self, scheme: EchoScheme) -> np.ndarray:
@@ -537,8 +572,8 @@ class ExponentialTissueModel(TissueModel):
         :return:
         """
         TE = scheme.echo_times
-        T2 = self['T2'].value
-        S0 = self['S0'].value
+        T2 = self[T2_KEY].value
+        S0 = self[BASE_SIGNAL_KEY].value
         return S0 * np.exp(- TE / T2)
 
     def jacobian(self, scheme: EchoScheme) -> np.ndarray:
@@ -548,8 +583,8 @@ class ExponentialTissueModel(TissueModel):
         :return:
         """
         TE = scheme.echo_times
-        T2 = self['T2'].value
-        S0 = self['S0'].value
+        T2 = self[T2_KEY].value
+        S0 = self[BASE_SIGNAL_KEY].value
 
         # the base signal
         S = S0 * np.exp(-TE / T2)
@@ -602,9 +637,9 @@ class RelaxedIsotropicModel(TissueModel):
         :param s0: signal at the zeroth measurement [dimensionless]
         """
         super().__init__({
-            'T2': TissueParameter(value=t2, scale=t2),
-            'Diffusivity': TissueParameter(value=diffusivity, scale=diffusivity),
-            'S0': TissueParameter(value=s0, scale=s0, optimize=False),
+            T2_KEY: TissueParameter(value=t2, scale=t2),
+            DIFFUSIVITY_KEY: TissueParameter(value=diffusivity, scale=diffusivity),
+            BASE_SIGNAL_KEY: TissueParameter(value=s0, scale=s0, optimize=False),
         })
 
     def __call__(self, scheme: ReducedDiffusionScheme) -> np.ndarray:
@@ -613,9 +648,9 @@ class RelaxedIsotropicModel(TissueModel):
         bvalues = scheme.b_values
         te = scheme.echo_times
 
-        b_D = np.exp(-bvalues * self['Diffusivity'].value)
-        te_t2 = np.exp(- te / self['T2'].value)
-        return self['S0'].value * b_D * te_t2
+        b_D = np.exp(-bvalues * self[DIFFUSIVITY_KEY].value)
+        te_t2 = np.exp(- te / self[T2_KEY].value)
+        return self[BASE_SIGNAL_KEY].value * b_D * te_t2
 
     def jacobian(self, scheme: ReducedDiffusionScheme) -> np.ndarray:
         # Acquisition parameters
@@ -623,9 +658,9 @@ class RelaxedIsotropicModel(TissueModel):
         te = scheme.echo_times
 
         # tissuemodel parameters
-        D = self['Diffusivity'].value
-        T2 = self['T2'].value
-        S0 = self['S0'].value
+        D = self[DIFFUSIVITY_KEY].value
+        T2 = self[T2_KEY].value
+        S0 = self[BASE_SIGNAL_KEY].value
 
         # Exponents
         b_D = np.exp(-bvalues * D)
@@ -680,12 +715,12 @@ class TissueModelDecorator(TissueModel, ABC):
         return self._original.parameter_vector
 
 
-def insert_relaxation_times(relaxation_times, parameters, N_models):
+def insert_relaxation_times(relaxation_times, tissue_model, N_models):
     """
     This function inserts relaxation times into the parameters dictionary
 
     :param relaxation_times:
-    :param parameters:
+    :param tissue_model:
     :param N_models:
     :return:
     """
@@ -708,15 +743,16 @@ def insert_relaxation_times(relaxation_times, parameters, N_models):
     # store relaxations as tissue_parameters
     if relaxation_times.size > 1:
         for i, value in enumerate(relaxation_times):
-            parameters.update({"T2_relaxation_" + str(i): TissueParameter(value, 1.0, optimize=relax_opt_flag,
-                                                                          fit_flag=relax_fit_flag)})
+            tissue_model.update({RELAXATION_PREFIX + str(i):
+                                     TissueParameter(value, 1.0,
+                                                     optimize=relax_opt_flag,
+                                                     fit_flag=relax_fit_flag,
+                                                     fit_bounds=RELAXATION_BOUNDS)})
     else:
-        parameters.update(
-            {"T2_relaxation_0": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag,
-                                                fit_flag=relax_fit_flag)})
-
-    # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
-    parameters.update({'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
+        tissue_model.update(
+            {RELAXATION_PREFIX + "0": TissueParameter(float(relaxation_times), 1.0, optimize=relax_opt_flag,
+                                                      fit_flag=relax_fit_flag,
+                                                      fit_bounds=RELAXATION_BOUNDS)})
 
 
 def fit_cost(fit_parameter_vector, signal, scheme, model: TissueModel):

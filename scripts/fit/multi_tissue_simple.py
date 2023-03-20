@@ -1,29 +1,37 @@
-import numpy as np
+from dmipy.core.modeling_framework import MultiCompartmentModel
+from dmipy.data import saved_acquisition_schemes
+from dmipy.signal_models.gaussian_models import G1Ball
 from matplotlib import pyplot as plt
 
-from microtool.acquisition_scheme import EchoScheme
-from microtool.tissue_model import ExponentialTissueModel, MultiTissueModel
+from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyTissueModel
+from microtool.tissue_model import RelaxedMultiTissueModel
 
 if __name__ == "__main__":
-    model = ExponentialTissueModel(T2=10.0)
-    multi_model = MultiTissueModel([model], [1.0])
-    scheme = EchoScheme(np.linspace(10, 20, num=30))
+    ball = G1Ball(lambda_iso=2e-9)
+    ball = MultiCompartmentModel([ball])
+    ball = DmipyTissueModel(ball)
+    multi_model = RelaxedMultiTissueModel([ball], [1.0], [100.0])
+
+    dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
+    scheme = convert_dmipy_scheme2diffusion_scheme(dmipy_scheme)
+
+    multi_model['vf_0'].fit_flag = False
+    multi_model["model_0_T2_relaxation_0"].fit_flag = False
+    multi_model["T2_relaxation_0"].scale = 1e2
+    print(scheme)
+    print(multi_model)
 
     actual_signal = multi_model(scheme)
     plt.figure("Signal")
     plt.plot(actual_signal, '.')
 
-    # Curve fit result
-    cf_result = model.fit(scheme, actual_signal)
-    print("Curve fit result:", cf_result.fit_information, cf_result.fitted_parameters)
-    plt.figure("Fitted signal prediction ETM")
-    model.set_fit_parameters(cf_result.fitted_parameters)
-    plt.plot(model(scheme) - actual_signal, '.')
-
     # MTM fit result
-    mtm_result = multi_model.fit(scheme, actual_signal, method='DE')
-    print("MTM fit result:", mtm_result.fit_information, mtm_result.fitted_parameters)
-    plt.figure("Fitted signal prediction MTM")
+    mtm_result = multi_model.fit(scheme, actual_signal, method="trust-constr")
+    print(mtm_result.fitted_parameters)
+    print("MTM fit information:")
+    mtm_result.print_fit_information()
+    multi_model.set_fit_parameters(mtm_result.fitted_parameters)
+    plt.figure("residuals MTM")
     plt.plot(multi_model(scheme) - actual_signal, '.')
 
     plt.show()
