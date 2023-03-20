@@ -53,7 +53,7 @@ class TestIntegration:
         signal = self.single_model(self.acq_wrapped)
         result = self.multi_model.fit(self.acq_wrapped, signal)
         print(result.fitted_parameters)
-        print(result.fit_information)
+        result.print_fit_information()
 
     def test_fit_integration(self):
         signal = self.single_model(self.acq_wrapped)

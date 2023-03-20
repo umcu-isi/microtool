@@ -181,36 +181,3 @@ class TestModelSchemeIntegration:
             'partial_volume_0': parameters['partial_volume_0'],
             'partial_volume_1': parameters['partial_volume_1']
         }
-
-
-class TestRelaxationT2:
-    # "original"
-    lambda_par = 1.7e-9
-    analytic_ball = AnalyticBall(1.7e-9)
-
-    # T2 included
-    T2 = np.array(10.0)
-    relaxed_ball = AnalyticBall(lambda_par, relaxation_time=10.0)
-
-    # Scheme --------------
-    dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
-    mt_scheme = convert_dmipy_scheme2diffusion_scheme(dmipy_scheme)
-
-    def test_simulate_signal(self):
-        # simulating signal using the decorator
-        result = self.relaxed_ball(self.mt_scheme)
-
-        # simulate signal
-        signal = self.analytic_ball(self.mt_scheme)
-        
-        attenuation_factor = np.exp(-self.mt_scheme.echo_times / self.T2)
-
-        # attenuating the signal based on T2 values and echotimes
-        expected = attenuation_factor * signal
-        np.testing.assert_allclose(result, expected)
-
-    def test_fit(self):
-        pass
-
-    def test_jacobian(self):
-        pass

@@ -10,10 +10,9 @@ from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.gaussian_models import G1Ball
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
-from microtool.constants import BASE_SIGNAL_KEY, RELAXATION_PREFIX
+from microtool.constants import BASE_SIGNAL_KEY
 from microtool.scanner_parameters import ScannerParameters, default_scanner
-from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel, \
-    insert_relaxation_times
+from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
 
 
 # TODO: deal with fractional parameter relations!
@@ -140,8 +139,7 @@ class DmipyTissueModel(TissueModel):
     """
     _model: MultiCompartmentModel  # Reminder that we store the dmipy multicompartment model in this attribute
 
-    def __init__(self, model: MultiCompartmentModel, volume_fractions: Union[List[float], float] = None,
-                 relaxation_times: List[float] = None):
+    def __init__(self, model: MultiCompartmentModel, volume_fractions: Union[List[float], float] = None):
         """
 
         :param model: MultiCompartment model
@@ -167,9 +165,6 @@ class DmipyTissueModel(TissueModel):
             for i, key in enumerate(vf_keys):
                 parameters.update({key: TissueParameter(value=volume_fractions[i], scale=1., fit_bounds=(0.0, 1.0))})
 
-        # Add relaxation times (if none are provided we set them to inifinity and exclude from optimization
-        insert_relaxation_times(relaxation_times, parameters, model.N_models)
-
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
         parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False)})
         self._model = model
@@ -185,9 +180,6 @@ class DmipyTissueModel(TissueModel):
         # Computing the signal that the individual comparments would generate given the acquisitionscheme
         S_compartment = compute_compartment_signals(dmipy_model, dmipy_scheme)
 
-        # compute the decay caused by T2 relaxation for every compartment, shape (N_measure, N_comp)
-        t2decay_factors = np.exp(- scheme.echo_times[:, np.newaxis] / self.relaxation_times)
-
         if dmipy_model.N_models == 1:
             # a single compartment does not have partial volumes so we just multiply by 1
             partial_volumes = 1.0
@@ -196,17 +188,13 @@ class DmipyTissueModel(TissueModel):
             partial_volumes = np.array([self[pv_name].value for pv_name in dmipy_model.partial_volume_names])
 
         # multiply the computed signals of individual compartments by the T2-decay AND partial volumes!
-        S_total = self[BASE_SIGNAL_KEY].value * np.sum(partial_volumes * t2decay_factors * S_compartment, axis=-1)
+        S_total = self[BASE_SIGNAL_KEY].value * np.sum(partial_volumes * S_compartment, axis=-1)
         return S_total
 
     def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
         # doing the microtool update
         super().set_parameters_from_vector(new_parameter_values)
-
-        # the parameters in dmipy are the parameters excluding the T2's and S0 stored last in the model instance
-        dmipy_parameter_vector = new_parameter_values[:-self._model.N_models]
-
-        self._dmipy_set_parameters(dmipy_parameter_vector)
+        self._dmipy_set_parameters(new_parameter_values)
 
     def set_fit_parameters(self, new_values: Union[np.ndarray, dict]) -> None:
         super().set_fit_parameters(new_values)
@@ -233,14 +221,6 @@ class DmipyTissueModel(TissueModel):
         for name, value in parameters.items():
             if name in self._model.parameter_names:
                 self._model.set_initial_guess_parameter(name, value)
-
-    @property
-    def relaxation_times(self):
-        rts = []
-        for key, value in self.items():
-            if key.startswith(RELAXATION_PREFIX):
-                rts.append(value.value)
-        return np.array(rts)
 
     def _dmipy_set_parameters(self, vector: np.ndarray) -> None:
         """
@@ -327,9 +307,9 @@ class AnalyticBall(DmipyTissueModel):
     Quick and dirty inheritance of dmipytissue model. Purpose is for testing finite differences
     """
 
-    def __init__(self, lambda_iso: float, relaxation_time: Optional[float] = None):
+    def __init__(self, lambda_iso: float):
         model = G1Ball(lambda_iso)
-        super().__init__(MultiCompartmentModel([model]), relaxation_times=relaxation_time)
+        super().__init__(MultiCompartmentModel([model]))
 
     def jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         bvals = copy(scheme.b_values)
@@ -339,15 +319,13 @@ class AnalyticBall(DmipyTissueModel):
 
         S0 = self[BASE_SIGNAL_KEY].value
         Diso = self['G1Ball_1_lambda_iso'].value
-        TR = self.relaxation_times
 
         # the signal S = S_0 * e^{-T_E / T_2} * e^{-b * D}
-        S = S0 * np.exp(-bvals * Diso) * np.exp(- TE / TR)
+        S = S0 * np.exp(-bvals * Diso)
         s_diso = - bvals * S
-        s_t2 = (1 / TR ** 2) * S
 
-        # d S / d D_iso, d S / d T_2 , d S / d S_0
-        jac = np.array([s_diso, s_t2, S]).T
+        # d S / d D_iso , d S / d S_0
+        jac = np.array([s_diso, S]).T
         return jac[:, self.include_optimize]
 
 
