@@ -17,7 +17,6 @@ if __name__ == "__main__":
     dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
     scheme = convert_dmipy_scheme2diffusion_scheme(dmipy_scheme)
 
-    multi_model['vf_0'].fit_flag = False
     print(scheme)
     print(multi_model)
 

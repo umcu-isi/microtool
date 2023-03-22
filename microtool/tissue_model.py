@@ -255,7 +255,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
 
 class MultiTissueModel(TissueModel):
-    def __init__(self, models: List[TissueModel], volume_fractions: List[float]):
+    def __init__(self, models: List[TissueModel], volume_fractions: Optional[List[float]] = None):
 
         self._models = models
         self.N_models = len(models)
@@ -266,16 +266,21 @@ class MultiTissueModel(TissueModel):
                 if key != BASE_SIGNAL_KEY:
                     parameters.update({MODEL_PREFIX + f"{i}_" + key: value})
 
-        # Inserting the partial volumes as model parameters
-        if len(volume_fractions) != self.N_models:
-            raise ValueError("Not enough volume fractions provided for number of models")
-        if sum(volume_fractions) != 1.:
-            raise ValueError("Volume fractions dont sum to 1")
+        if self.N_models > 1:
+            if volume_fractions is None:
+                raise ValueError("Please provide volume fractions if you include multiple models")
+            # Inserting the partial volumes as model parameters
+            if len(volume_fractions) != self.N_models:
+                raise ValueError("Not enough volume fractions provided for number of models")
+            if sum(volume_fractions) != 1.:
+                raise ValueError("Volume fractions dont sum to 1")
 
-        for i, vf in enumerate(volume_fractions):
-            parameters.update({
-                VOLUME_FRACTION_PREFIX + f"{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0))
-            })
+            # The 0th volume fractions is defined as 1 - the others so we mark it to be excluded from fitting
+            for i, vf in enumerate(volume_fractions):
+                parameters.update({
+                    VOLUME_FRACTION_PREFIX + f"{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0),
+                                                                     fit_flag=False if i == 0 else True)
+                })
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
         parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False,
@@ -297,12 +302,17 @@ class MultiTissueModel(TissueModel):
 
         if isinstance(new_values, dict):
             new_values = np.array(list(new_values.values()))
+
         # We also update the parameters on the models in this object
         i = 0
         for model in self._models:
             N_flagged = np.sum(model.include_fit)
             model.set_fit_parameters(new_values[i:(i + N_flagged)])
             i += N_flagged
+
+        # update volume fraction 0 if necessary
+        if self.N_models > 1:
+            self[VOLUME_FRACTION_PREFIX + "0"].value = 1 - np.sum(self.volume_fractions[1:])
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
         # use the call functions of the models
@@ -367,7 +377,7 @@ class MultiTissueModel(TissueModel):
                 A.append(1)
             else:
                 A.append(0)
-        return LinearConstraint(A, 1, 1, keep_feasible=False)
+        return LinearConstraint(A, 0, 1, keep_feasible=False)
 
     @property
     def volume_fractions(self) -> np.ndarray:
@@ -375,6 +385,11 @@ class MultiTissueModel(TissueModel):
         for key, parameter in self.items():
             if key.startswith(VOLUME_FRACTION_PREFIX):
                 vfs.append(parameter.value)
+
+        # if no volume fractions are present we are dealing with single model so return 1.0
+        if len(vfs) == 0:
+            vfs.append(1.0)
+
         return np.array(vfs)
 
 

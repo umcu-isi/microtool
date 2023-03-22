@@ -26,7 +26,7 @@ if __name__ == "__main__":
     zeppelin_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[zeppelin]))
 
     multi_model = RelaxedMultiTissueModel([stick_wrapped, zeppelin_wrapped], [.75, .25], relaxation_times=[10.0, 120.0])
-
+    multi_model['T2_relaxation_0'].fit_flag = False
     signal = multi_model(acq_wrapped)
 
     result = multi_model.fit(acq_wrapped, signal, method="trust-constr")
