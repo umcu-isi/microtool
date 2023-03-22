@@ -25,7 +25,7 @@ if __name__ == "__main__":
     plt.plot(actual_signal, '.')
 
     # MTM fit result
-    mtm_result = multi_model.fit(scheme, actual_signal, method="trust-constr")
+    mtm_result = multi_model.fit(scheme, actual_signal, method="basinhopping")
     print("MTM fit information:")
     mtm_result.print_fit_information()
     print('\n')

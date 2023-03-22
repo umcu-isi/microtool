@@ -16,7 +16,7 @@ from typing import Dict, Union, List, Optional
 import numpy as np
 from numpy.random import default_rng
 from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differential_evolution, NonlinearConstraint, \
-    LinearConstraint
+    LinearConstraint, basinhopping
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
@@ -330,17 +330,17 @@ class MultiTissueModel(TissueModel):
         bounds.lb /= self.scales[self.include_fit]
 
         x0 = self.fit_initial_guess / self.scales[self.include_fit]
-
+        minimize_kwargs = {"args": cost_fun_args, "bounds": bounds, "constraints": self.fit_constraints}
         if method == 'DE':
             result = differential_evolution(fit_cost,
-                                            args=cost_fun_args,
-                                            bounds=bounds,
-                                            constraints=self.fit_constraints,
+                                            **minimize_kwargs,
                                             workers=-1,
                                             updating='deferred',
                                             disp=True)
+        elif method == "basinhopping":
+            minimize_kwargs.update({"method": "trust-constr"})
+            result = basinhopping(fit_cost, x0, minimizer_kwargs=minimize_kwargs, disp=True)
         else:
-
             rng = default_rng()
             machine_epsilon = np.finfo(float).eps
             N_INIT = 10
@@ -351,9 +351,7 @@ class MultiTissueModel(TissueModel):
 
                 x0 = rng.uniform(low=bounds.lb + machine_epsilon, high=bounds.ub - machine_epsilon, size=bounds.lb.size)
 
-                result = minimize(fit_cost, x0=x0, args=cost_fun_args,
-                                  bounds=bounds,
-                                  constraints=self.fit_constraints,
+                result = minimize(fit_cost, x0=x0, **minimize_kwargs,
                                   method=method, options={})
 
                 if result.fun < best_cost:

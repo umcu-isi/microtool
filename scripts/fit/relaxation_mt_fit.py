@@ -29,7 +29,7 @@ if __name__ == "__main__":
     multi_model['T2_relaxation_0'].fit_flag = False
     signal = multi_model(acq_wrapped)
 
-    result = multi_model.fit(acq_wrapped, signal, method="trust-constr")
+    result = multi_model.fit(acq_wrapped, signal, method="basinhopping")
     print(multi_model)
     multi_model.set_fit_parameters(result.fitted_parameters)
     print(multi_model)
