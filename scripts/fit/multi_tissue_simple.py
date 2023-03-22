@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models.gaussian_models import G1Ball
@@ -16,8 +18,6 @@ if __name__ == "__main__":
     scheme = convert_dmipy_scheme2diffusion_scheme(dmipy_scheme)
 
     multi_model['vf_0'].fit_flag = False
-    multi_model["model_0_T2_relaxation_0"].fit_flag = False
-    multi_model["T2_relaxation_0"].scale = 1e2
     print(scheme)
     print(multi_model)
 
@@ -27,11 +27,16 @@ if __name__ == "__main__":
 
     # MTM fit result
     mtm_result = multi_model.fit(scheme, actual_signal, method="trust-constr")
-    print(mtm_result.fitted_parameters)
     print("MTM fit information:")
     mtm_result.print_fit_information()
-    multi_model.set_fit_parameters(mtm_result.fitted_parameters)
+    print('\n')
+
+    fit_model = deepcopy(multi_model)
+    fit_model.set_fit_parameters(mtm_result.fitted_parameters)
+
+    multi_model.print_comparison(fit_model)
+
     plt.figure("residuals MTM")
-    plt.plot(multi_model(scheme) - actual_signal, '.')
+    plt.plot(fit_model(scheme) - actual_signal, '.')
 
     plt.show()

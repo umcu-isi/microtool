@@ -25,11 +25,11 @@ if __name__ == "__main__":
     stick_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[stick]))
     zeppelin_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[zeppelin]))
 
-    multi_model = RelaxedMultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5], relaxation_times=[10.0, 10.0])
+    multi_model = RelaxedMultiTissueModel([stick_wrapped, zeppelin_wrapped], [.75, .25], relaxation_times=[10.0, 120.0])
 
     signal = multi_model(acq_wrapped)
 
-    result = multi_model.fit(acq_wrapped, signal, method="DE")
+    result = multi_model.fit(acq_wrapped, signal, method="trust-constr")
     print(multi_model)
     multi_model.set_fit_parameters(result.fitted_parameters)
     print(multi_model)

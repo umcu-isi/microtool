@@ -238,11 +238,20 @@ class TissueModel(Dict[str, TissueParameter], ABC):
                     raise ValueError("Upper bound is larger than lower bound.")
                 ubs.append(ub)
 
-        return Bounds(np.array(lbs), np.array(ubs), keep_feasible=True)
+        return Bounds(np.array(lbs), np.array(ubs), keep_feasible=False)
 
     @property
     def fit_initial_guess(self) -> np.ndarray:
         return np.array([self[key].fit_guess for key in np.array(self.parameter_names)[self.include_fit]])
+
+    def print_comparison(self, other: TissueModel):
+        """
+        Method for comparing two tissue models of the same type
+        :param other:
+        :return:
+        """
+        for k_, v_me, v_him in zip(self.parameter_names, self.parameter_vector, other.parameter_vector):
+            print(k_, v_me, v_him)
 
 
 class MultiTissueModel(TissueModel):
@@ -269,7 +278,8 @@ class MultiTissueModel(TissueModel):
             })
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
-        parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False)})
+        parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False,
+                                                            fit_bounds=(0.0, 2.0))})
         super().__init__(parameters)
 
     def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
@@ -322,12 +332,13 @@ class MultiTissueModel(TissueModel):
         else:
 
             rng = default_rng()
+            machine_epsilon = np.finfo(float).eps
             N_INIT = 10
             best_cost = np.inf
             best_result = None
             for _ in range(N_INIT):
                 # Generate initial guess in bounds where we account for machine precision to prevent stepping out
-                machine_epsilon = np.finfo(float).eps
+
                 x0 = rng.uniform(low=bounds.lb + machine_epsilon, high=bounds.ub - machine_epsilon, size=bounds.lb.size)
 
                 result = minimize(fit_cost, x0=x0, args=cost_fun_args,
@@ -356,7 +367,7 @@ class MultiTissueModel(TissueModel):
                 A.append(1)
             else:
                 A.append(0)
-        return LinearConstraint(A, 1, 1, keep_feasible=True)
+        return LinearConstraint(A, 1, 1, keep_feasible=False)
 
     @property
     def volume_fractions(self) -> np.ndarray:

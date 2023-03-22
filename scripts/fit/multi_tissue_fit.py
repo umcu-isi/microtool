@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     signal = multi_model(acq_wrapped)
 
-    result = multi_model.fit(acq_wrapped, signal, method=None)
+    result = multi_model.fit(acq_wrapped, signal, method="trust-constr")
     print(multi_model)
     multi_model.set_fit_parameters(result.fitted_parameters)
     print(multi_model)
@@ -40,6 +40,6 @@ if __name__ == "__main__":
     result.print_fit_information()
 
     predicted_signal = multi_model(acq_wrapped)
-    plt.figure()
+    plt.figure("Residuals")
     plt.plot(signal - predicted_signal, '.')
     plt.show()
