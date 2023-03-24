@@ -82,11 +82,11 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
     def _set_finite_difference_vars(self):
         # Get the baseline parameter vector, but don't include S0.
-        self._parameter_baseline = np.array([parameter.value for parameter in self.values()])[:-1]
+        self._parameter_baseline = np.array([parameter.value for parameter in self.values()])
 
         step_size = 1e-3
         # Calculate finite differences and corresponding parameter vectors for calculating derivatives.
-        h = np.array([parameter.scale * step_size for parameter in self.values()])[:-1]
+        h = np.array([parameter.scale * step_size for parameter in self.values()])
         self._parameter_vectors_forward = self._parameter_baseline + 0.5 * np.diag(h)
         self._parameter_vectors_backward = self._parameter_baseline - 0.5 * np.diag(h)
         self._reciprocal_h = (1 / h).reshape(-1, 1)
@@ -115,8 +115,8 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         self.set_parameters_from_vector(self._parameter_baseline)
 
         # return jacobian
-        jac = np.concatenate((central_diff * self._reciprocal_h, [baseline])).T
-        return jac[:, self.include_optimize]
+        jac = central_diff * self._reciprocal_h
+        return jac.T[:, self.include_optimize]
 
     def _simulate_signals(self, parameter_vectors: np.ndarray, scheme: AcquisitionScheme) -> np.ndarray:
         """
