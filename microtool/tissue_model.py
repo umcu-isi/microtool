@@ -66,7 +66,6 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
     def __init__(self, parameters: Dict[str, TissueParameter]):
         super().__init__(parameters)
-        self._set_finite_difference_vars()
 
     def __str__(self) -> str:
 
@@ -98,6 +97,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         :param scheme: An AcquisitionScheme.
         :return: An N×M Jacobian matrix, where N is the number of samples and M is the number of tissue parameters.
         """
+        self._set_finite_difference_vars()
         # compute the baseline signal
         baseline = self.__call__(scheme)
 
