@@ -7,15 +7,13 @@ from pathlib import Path
 from typing import Union, List, Tuple, Dict, Optional
 
 import numpy as np
-from scipy.optimize import NonlinearConstraint, LinearConstraint
+from scipy.optimize import NonlinearConstraint
 from tabulate import tabulate
 
 from microtool.gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.utils.solve_echo_time import minimal_echo_time
-
-ConstraintTypes = Union[
-    NonlinearConstraint, LinearConstraint, List[Union[LinearConstraint, NonlinearConstraint]]]
+from .constants import ConstraintTypes
 
 
 class AcquisitionParameters:

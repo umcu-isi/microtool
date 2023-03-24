@@ -23,7 +23,7 @@ def main():
     model = ExponentialTissueModel(T2=10.0)
 
     # optimization
-    scheme_opt, _ = optimize_scheme(scheme, model, noise, method="trust-constr")
+    scheme_opt, _ = optimize_scheme(scheme, model, noise, method="differential_evolution")
     IO.save_pickle(scheme_opt, 'schemes/exponential_optimal.pkl')
     print(compute_loss(scheme, model, noise, default_loss))
 

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import Union, List
+
+from scipy.optimize import LinearConstraint, NonlinearConstraint
+
 # Key for the starting signal
 BASE_SIGNAL_KEY = "S0"
 
@@ -15,3 +19,6 @@ RELAXATION_BOUNDS = (.1, 1e3)  # ms
 T2_KEY = 'T2'
 T1_KEY = 'T1'
 DIFFUSIVITY_KEY = 'Diffusivity'
+
+ConstraintTypes = Union[
+    List[Union[LinearConstraint, NonlinearConstraint]], Union[LinearConstraint, NonlinearConstraint]]

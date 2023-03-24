@@ -15,16 +15,14 @@ from typing import Dict, Union, List, Optional
 
 import numpy as np
 from numpy.random import default_rng
-from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differential_evolution, NonlinearConstraint, \
-    LinearConstraint, basinhopping
+from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differential_evolution, LinearConstraint, \
+    basinhopping
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
     ReducedDiffusionScheme
 from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY, RELAXATION_PREFIX, T2_KEY, T1_KEY, \
-    DIFFUSIVITY_KEY, RELAXATION_BOUNDS
-
-Constraints = Union[List[Union[LinearConstraint, NonlinearConstraint]], Union[LinearConstraint, NonlinearConstraint]]
+    DIFFUSIVITY_KEY, RELAXATION_BOUNDS, ConstraintTypes
 
 
 @dataclass
@@ -364,7 +362,7 @@ class MultiTissueModel(TissueModel):
         return FittedModelMinimize(self, result)
 
     @property
-    def fit_constraints(self) -> Constraints:
+    def fit_constraints(self) -> ConstraintTypes:
         if self.N_models == 1:
             return ()
 
