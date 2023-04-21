@@ -1,13 +1,13 @@
-setuptools  # Packaging and installation
+dmipy
+jupyter
+matlab
+matplotlib
+numba
+pathos
+numpy
+pandas
+scipy
+setuptools
+tabulate
+tqdm
 
-numpy  # Requirement for MICROtool
-scipy  # Requirement for MICROtool
-
-dmipy  # Optional requirement for MICROtool
-numba  # Optional though preferred requirement for dmipy
-pathos  # Optional though preferred requirement for dmipy
-
-notebook  # Provides Jupyter Notebook
-matplotlib  # Plotting
-
-matlab  # Requirement for MISST
