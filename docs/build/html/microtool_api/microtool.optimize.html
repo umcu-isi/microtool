@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/"/>
+
+    <title>microtool.optimize package &#8212; MICROtool 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css"/>
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css"/>
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/sphinx_highlight.js"></script>
+    <link rel="index" title="Index" href="../genindex.html"/>
+    <link rel="search" title="Search" href="../search.html"/>
+
+    <link rel="stylesheet" href="../_static/custom.css" type="text/css"/>
+
+
+    <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9"/>
+
+</head>
+<body>
+
+
+<div class="document">
+    <div class="documentwrapper">
+        <div class="bodywrapper">
+
+
+            <div class="body" role="main">
+
+                <section id="module-microtool.optimize">
+                    <span id="microtool-optimize-package"></span>
+                    <h1>microtool.optimize package<a class="headerlink" href="#module-microtool.optimize"
+                                                     title="Permalink to this heading">¶</a></h1>
+                    <section id="submodules">
+                        <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this heading">¶</a>
+                        </h2>
+                    </section>
+                    <section id="module-microtool.optimize.loss_functions">
+                        <span id="microtool-optimize-loss-functions-module"></span>
+                        <h2>microtool.optimize.loss_functions module<a class="headerlink"
+                                                                       href="#module-microtool.optimize.loss_functions"
+                                                                       title="Permalink to this heading">¶</a></h2>
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.optimize.loss_functions.CrlbBase">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span class="pre">microtool.optimize.loss_functions.</span></span><span
+                                    class="sig-name descname"><span class="pre">CrlbBase</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">information_func</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">Callable</span><span class="p"><span
+                                    class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span
+                                    class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">float</span><span class="p"><span
+                                    class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span></span></em><span
+                                    class="sig-paren">)</span><a class="headerlink"
+                                                                 href="#microtool.optimize.loss_functions.CrlbBase"
+                                                                 title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <a class="reference internal"
+                                             href="#microtool.optimize.loss_functions.LossFunction"
+                                             title="microtool.optimize.loss_functions.LossFunction"><code
+                                    class="xref py py-class docutils literal notranslate"><span
+                                    class="pre">LossFunction</span></code></a>, <code
+                                    class="xref py py-class docutils literal notranslate"><span
+                                    class="pre">ABC</span></code></p>
+                                <p>Base class for CRLB-based loss functions. This bass class is made because checking of
+                                    the fisher information matrix
+                                    is the same for all crlb based loss functions. We ensure that derived classes can
+                                    actually
+                                    compute crlb by abstractmethod.</p>
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.optimize.loss_functions.CrlbBase.compute_crlb">
+                                        <em class="property"><span class="pre">abstract</span><span
+                                                class="w"> </span><span class="pre">static</span><span
+                                                class="w"> </span></em><span class="sig-name descname"><span
+                                            class="pre">compute_crlb</span></span><span class="sig-paren">(</span><em
+                                            class="sig-param"><span class="n"><span
+                                            class="pre">information</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span
+                                            class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">float</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.optimize.loss_functions.CrlbBase.compute_crlb"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd><p>Computes the cramer roa lower bound based loss given the fisher information
+                                        (assumed well conditioned)</p>
+                                        <dl class="field-list simple">
+                                            <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                            <dd class="field-odd"><p><strong>information</strong> – A well conditioned
+                                                fisher information matrix</p>
+                                            </dd>
+                                            <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                            <dd class="field-even"><p>loss</p>
+                                            </dd>
+                                        </dl>
+                                    </dd>
+                                </dl>
+
+                            </dd>
+                        </dl>
+
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.optimize.loss_functions.CrlbEigenvalues">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span class="pre">microtool.optimize.loss_functions.</span></span><span
+                                    class="sig-name descname"><span class="pre">CrlbEigenvalues</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">information_func</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">Callable</span><span class="p"><span
+                                    class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span
+                                    class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">float</span><span class="p"><span
+                                    class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span></span></em><span
+                                    class="sig-paren">)</span><a class="headerlink"
+                                                                 href="#microtool.optimize.loss_functions.CrlbEigenvalues"
+                                                                 title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <a class="reference internal"
+                                             href="#microtool.optimize.loss_functions.CrlbBase"
+                                             title="microtool.optimize.loss_functions.CrlbBase"><code
+                                    class="xref py py-class docutils literal notranslate"><span
+                                    class="pre">CrlbBase</span></code></a></p>
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.optimize.loss_functions.CrlbEigenvalues.compute_crlb">
+                                        <em class="property"><span class="pre">static</span><span
+                                                class="w"> </span></em><span class="sig-name descname"><span
+                                            class="pre">compute_crlb</span></span><span class="sig-paren">(</span><em
+                                            class="sig-param"><span class="n"><span
+                                            class="pre">information</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span
+                                            class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">float</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.optimize.loss_functions.CrlbEigenvalues.compute_crlb"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd><p>Computes the crlb-based loss using eigenvalues of the information matrix. For
+                                        proof see appendix of notes</p>
+                                        <dl class="field-list simple">
+                                            <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                            <dd class="field-odd"><p><strong>information</strong> – Fisher information
+                                                matrix of shape N,N</p>
+                                            </dd>
+                                            <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                            <dd class="field-even"><p>The crlb based loss</p>
+                                            </dd>
+                                        </dl>
+                                    </dd>
+                                </dl>
+
+                            </dd>
+                        </dl>
+
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.optimize.loss_functions.CrlbInversion">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span class="pre">microtool.optimize.loss_functions.</span></span><span
+                                    class="sig-name descname"><span class="pre">CrlbInversion</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">information_func</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">Callable</span><span class="p"><span
+                                    class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span
+                                    class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">float</span><span class="p"><span
+                                    class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span
+                                    class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span></span></em><span
+                                    class="sig-paren">)</span><a class="headerlink"
+                                                                 href="#microtool.optimize.loss_functions.CrlbInversion"
+                                                                 title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <a class="reference internal"
+                                             href="#microtool.optimize.loss_functions.CrlbBase"
+                                             title="microtool.optimize.loss_functions.CrlbBase"><code
+                                    class="xref py py-class docutils literal notranslate"><span
+                                    class="pre">CrlbBase</span></code></a></p>
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.optimize.loss_functions.CrlbInversion.compute_crlb">
+                                        <em class="property"><span class="pre">static</span><span
+                                                class="w"> </span></em><span class="sig-name descname"><span
+                                            class="pre">compute_crlb</span></span><span class="sig-paren">(</span><em
+                                            class="sig-param"><span class="n"><span
+                                            class="pre">information</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span
+                                            class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">float</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.optimize.loss_functions.CrlbInversion.compute_crlb"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd><p>Computes the crlb-based loss by inverting the information matrix</p>
+                                        <dl class="field-list simple">
+                                            <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                            <dd class="field-odd"><p><strong>information</strong> – Fisher information
+                                                matrix of shape (N,N) where N is number of parameters in model</p>
+                                            </dd>
+                                            <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                            <dd class="field-even"><p>crlb-based loss</p>
+                                            </dd>
+                                        </dl>
+                                    </dd>
+                                </dl>
+
+                            </dd>
+                        </dl>
+
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.optimize.loss_functions.LossFunction">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span class="pre">microtool.optimize.loss_functions.</span></span><span
+                                    class="sig-name descname"><span class="pre">LossFunction</span></span><a
+                                    class="headerlink" href="#microtool.optimize.loss_functions.LossFunction"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code>
+                            </p>
+                                <p>Base class for lossfunctions, just to ensure call signature constant between
+                                    different loss functions</p>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.loss_functions.compute_loss">
+                                <span class="sig-prename descclassname"><span class="pre">microtool.optimize.loss_functions.</span></span><span
+                                    class="sig-name descname"><span class="pre">compute_loss</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><a class="reference internal"
+                                                 href="microtool.html#microtool.acquisition_scheme.AcquisitionScheme"
+                                                 title="microtool.acquisition_scheme.AcquisitionScheme"><span
+                                    class="pre">AcquisitionScheme</span></a></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">model</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><a
+                                    class="reference internal" href="microtool.html#microtool.tissue_model.TissueModel"
+                                    title="microtool.tissue_model.TissueModel"><span class="pre">TissueModel</span></a></span></em>,
+                                <em class="sig-param"><span class="n"><span class="pre">noise_var</span></span><span
+                                        class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                        class="n"><span class="pre">float</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">loss</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><a class="reference internal"
+                                                 href="#microtool.optimize.loss_functions.LossFunction"
+                                                 title="microtool.optimize.loss_functions.LossFunction"><span
+                                    class="pre">LossFunction</span></a></span></em><span class="sig-paren">)</span>
+                                <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                        class="sig-return-typehint"><span class="pre">float</span></span></span><a
+                                    class="headerlink" href="#microtool.optimize.loss_functions.compute_loss"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Function for computing the loss given the following parameters</p>
+                                <dl class="field-list simple">
+                                    <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                    <dd class="field-odd">
+                                        <ul class="simple">
+                                            <li><p><strong>model</strong> – The tissuemodel for which you wish to know
+                                                the loss</p></li>
+                                            <li><p><strong>scheme</strong> – The acquisition scheme for which you wish
+                                                to know the loss</p></li>
+                                            <li><p><strong>noise_var</strong> – The scaling factor of the noise
+                                                distribution</p></li>
+                                            <li><p><strong>loss</strong> – The loss function</p></li>
+                                        </ul>
+                                    </dd>
+                                    <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                    <dd class="field-even"><p>The loss value associated with this model and scheme</p>
+                                    </dd>
+                                </dl>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py"
+                                id="microtool.optimize.loss_functions.fisher_information_gauss">
+                                <span class="sig-prename descclassname"><span class="pre">microtool.optimize.loss_functions.</span></span><span
+                                    class="sig-name descname"><span
+                                    class="pre">fisher_information_gauss</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">jac</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">signal</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span
+                                    class="pre">noise_var</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">float</span></span></em><span
+                                    class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a
+                                    class="headerlink"
+                                    href="#microtool.optimize.loss_functions.fisher_information_gauss"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Calculates the Fisher information matrix, assuming Gaussian noise.
+                                This is the sum of the matrices of squared gradients, for all samples, divided by the
+                                noise variance.
+                                See equation A2 in Alexander, 2008 (DOI 0.1002/mrm.21646)</p>
+                                <dl class="field-list simple">
+                                    <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                    <dd class="field-odd">
+                                        <ul class="simple">
+                                            <li><p><strong>signal</strong> – </p></li>
+                                            <li><p><strong>jac</strong> – An N×M Jacobian matrix, where N is the number
+                                                of samples and M is the number of parameters.</p></li>
+                                            <li><p><strong>noise_var</strong> – Noise variance.</p></li>
+                                        </ul>
+                                    </dd>
+                                    <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                    <dd class="field-even"><p>The M×M information matrix.</p>
+                                    </dd>
+                                </dl>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py"
+                                id="microtool.optimize.loss_functions.fisher_information_rice">
+                                <span class="sig-prename descclassname"><span class="pre">microtool.optimize.loss_functions.</span></span><span
+                                    class="sig-name descname"><span
+                                    class="pre">fisher_information_rice</span></span><span class="sig-paren">(</span><em
+                                    class="sig-param"><span class="n"><span class="pre">jac</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">signal</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span
+                                    class="pre">noise_var</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">float</span></span></em><span
+                                    class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a
+                                    class="headerlink" href="#microtool.optimize.loss_functions.fisher_information_rice"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Calculates the fisher information matrix assuming Rician noise.</p>
+                                <p>The integral term can be approximated up to 4% as reported in <a
+                                        class="reference external" href="https://doi.org/10.1109/TIT.1967.1054037">https://doi.org/10.1109/TIT.1967.1054037</a>
+                                    :param signal:
+                                    :param jac:
+                                    :param noise_var:
+                                    :return:</p>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.loss_functions.scipy_loss">
+                                <span class="sig-prename descclassname"><span class="pre">microtool.optimize.loss_functions.</span></span><span
+                                    class="sig-name descname"><span class="pre">scipy_loss</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                    class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">scheme</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><a class="reference internal"
+                                                 href="microtool.html#microtool.acquisition_scheme.AcquisitionScheme"
+                                                 title="microtool.acquisition_scheme.AcquisitionScheme"><span
+                                    class="pre">AcquisitionScheme</span></a></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">model</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><a
+                                    class="reference internal" href="microtool.html#microtool.tissue_model.TissueModel"
+                                    title="microtool.tissue_model.TissueModel"><span class="pre">TissueModel</span></a></span></em>,
+                                <em class="sig-param"><span class="n"><span
+                                        class="pre">noise_variance</span></span><span class="p"><span
+                                        class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                        class="pre">float</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">loss</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><a
+                                    class="reference internal" href="#microtool.optimize.loss_functions.LossFunction"
+                                    title="microtool.optimize.loss_functions.LossFunction"><span class="pre">LossFunction</span></a></span></em>,
+                                <em class="sig-param"><span class="n"><span
+                                        class="pre">scaling_factor</span></span><span class="p"><span
+                                        class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                        class="pre">float</span></span><span class="w"> </span><span class="o"><span
+                                        class="pre">=</span></span><span class="w"> </span><span
+                                        class="default_value"><span class="pre">1.0</span></span></em><span
+                                    class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">float</span></span></span><a
+                                    class="headerlink" href="#microtool.optimize.loss_functions.scipy_loss"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Wraps the compute loss function, where we use the API of AcquisitionScheme to set the
+                                acquisition parameters to
+                                the optimizers’ desired values.</p>
+                                <dl class="field-list simple">
+                                    <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                    <dd class="field-odd">
+                                        <ul class="simple">
+                                            <li><p><strong>x</strong> – The acquisiton parameter vector provided by
+                                                scipy optimization (so scaled values in an np.ndarray)</p></li>
+                                            <li><p><strong>scheme</strong> – The AcquisitionScheme</p></li>
+                                            <li><p><strong>model</strong> – The TissueModel</p></li>
+                                            <li><p><strong>noise_variance</strong> – The noise shape parameter (variance
+                                                for gaussian)</p></li>
+                                            <li><p><strong>loss</strong> – The loss function to be used in optimization
+                                            </p></li>
+                                            <li><p><strong>scaling_factor</strong> – The factor by which the output of
+                                                the loss function is scaled</p></li>
+                                        </ul>
+                                    </dd>
+                                    <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                    <dd class="field-even"><p>The loss value associated with parameters above.</p>
+                                    </dd>
+                                </dl>
+                            </dd>
+                        </dl>
+
+                    </section>
+                    <section id="module-microtool.optimize.methods">
+                        <span id="microtool-optimize-methods-module"></span>
+                        <h2>microtool.optimize.methods module<a class="headerlink"
+                                                                href="#module-microtool.optimize.methods"
+                                                                title="Permalink to this heading">¶</a></h2>
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.optimize.methods.BruteForce">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span
+                                    class="pre">microtool.optimize.methods.</span></span><span
+                                    class="sig-name descname"><span class="pre">BruteForce</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                    class="pre">Ns</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">int</span></span><span
+                                    class="w"> </span><span class="o"><span class="pre">=</span></span><span
+                                    class="w"> </span><span class="default_value"><span
+                                    class="pre">10</span></span></em><span class="sig-paren">)</span><a
+                                    class="headerlink" href="#microtool.optimize.methods.BruteForce"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <a class="reference internal" href="#microtool.optimize.methods.Optimizer"
+                                             title="microtool.optimize.methods.Optimizer"><code
+                                    class="xref py py-class docutils literal notranslate"><span
+                                    class="pre">Optimizer</span></code></a></p>
+                            </dd>
+                        </dl>
+
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.optimize.methods.Optimizer">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span
+                                    class="pre">microtool.optimize.methods.</span></span><span
+                                    class="sig-name descname"><span class="pre">Optimizer</span></span><a
+                                    class="headerlink" href="#microtool.optimize.methods.Optimizer"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code>
+                            </p>
+                                <p>Optimizer base class. just to ensure all optimizers are compatible with the
+                                    optimization routine….
+                                    However we decide to do this in the future.</p>
+                            </dd>
+                        </dl>
+
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.optimize.methods.Population">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span
+                                    class="pre">microtool.optimize.methods.</span></span><span
+                                    class="sig-name descname"><span class="pre">Population</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                    class="pre">sz</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">bounds</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">Bounds</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">constraint</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">fun</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">callable</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">args</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">tuple</span></span></em>, <em class="sig-param"><span class="n"><span
+                                    class="pre">max_evals</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">values</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">ndarray</span><span class="w"> </span><span
+                                    class="p"><span class="pre">|</span></span><span class="w"> </span><span
+                                    class="pre">None</span></span><span class="w"> </span><span class="o"><span
+                                    class="pre">=</span></span><span class="w"> </span><span class="default_value"><span
+                                    class="pre">None</span></span></em><span class="sig-paren">)</span><a
+                                    class="headerlink" href="#microtool.optimize.methods.Population"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code>
+                            </p>
+                                <p>This class defines the population in the SOMA algorithm</p>
+                                <dl class="py method">
+                                    <dt class="sig sig-object py" id="microtool.optimize.methods.Population.cost_fun">
+                                        <span class="sig-name descname"><span class="pre">cost_fun</span></span><span
+                                            class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                            class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span
+                                            class="w"> </span><span class="n"><span
+                                            class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a
+                                            class="headerlink" href="#microtool.optimize.methods.Population.cost_fun"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd></dd>
+                                </dl>
+
+                                <dl class="py method">
+                                    <dt class="sig sig-object py" id="microtool.optimize.methods.Population.migrate">
+                                        <span class="sig-name descname"><span class="pre">migrate</span></span><span
+                                            class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                            class="pre">path_length</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span
+                                            class="pre">N_jump</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">int</span></span></em>, <em class="sig-param"><span
+                                            class="n"><span class="pre">PRT</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">float</span></span></em><span class="sig-paren">)</span><a
+                                            class="headerlink" href="#microtool.optimize.methods.Population.migrate"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd><p>Executes a single population migration</p>
+                                        <dl class="field-list simple">
+                                            <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                            <dd class="field-odd">
+                                                <ul class="simple">
+                                                    <li><p><strong>path_length</strong> – The path an individual will
+                                                        follow</p></li>
+                                                    <li><p><strong>N_jump</strong> – Number of jumps along the path</p>
+                                                    </li>
+                                                    <li><p><strong>PRT</strong> – Probability of accepting a step vector
+                                                    </p></li>
+                                                </ul>
+                                            </dd>
+                                        </dl>
+                                    </dd>
+                                </dl>
+
+                            </dd>
+                        </dl>
+
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.optimize.methods.SOMA">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span
+                                    class="pre">microtool.optimize.methods.</span></span><span
+                                    class="sig-name descname"><span class="pre">SOMA</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">population_sz</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">int</span></span><span class="w"> </span><span
+                                    class="o"><span class="pre">=</span></span><span class="w"> </span><span
+                                    class="default_value"><span class="pre">50</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span
+                                    class="pre">max_migrations</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">int</span></span><span class="w"> </span><span class="o"><span
+                                    class="pre">=</span></span><span class="w"> </span><span class="default_value"><span
+                                    class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span
+                                    class="pre">max_fevals</span></span><span class="o"><span
+                                    class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>,
+                                <em class="sig-param"><span class="n"><span class="pre">PRT</span></span><span
+                                        class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                        class="n"><span class="pre">float</span></span><span class="w"> </span><span
+                                        class="o"><span class="pre">=</span></span><span class="w"> </span><span
+                                        class="default_value"><span class="pre">0.1</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">path_length</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">float</span></span><span class="w"> </span><span
+                                    class="o"><span class="pre">=</span></span><span class="w"> </span><span
+                                    class="default_value"><span class="pre">3.0</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">step</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">float</span></span><span class="w"> </span><span
+                                    class="o"><span class="pre">=</span></span><span class="w"> </span><span
+                                    class="default_value"><span class="pre">0.11</span></span></em><span
+                                    class="sig-paren">)</span><a class="headerlink"
+                                                                 href="#microtool.optimize.methods.SOMA"
+                                                                 title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <a class="reference internal" href="#microtool.optimize.methods.Optimizer"
+                                             title="microtool.optimize.methods.Optimizer"><code
+                                    class="xref py py-class docutils literal notranslate"><span
+                                    class="pre">Optimizer</span></code></a></p>
+                                <p>A class for defining a classic all to one soma algorithm. The __call__ method
+                                    executes the algorithm The
+                                    other class methods are made to initialize all parts of the algorithm with control
+                                    parameters defined on
+                                    initialization. Visit <a class="reference external"
+                                                             href="https://ivanzelinka.eu/somaalgorithm/About.html">https://ivanzelinka.eu/somaalgorithm/About.html</a>
+                                    for the more information on this algorithm
+                                    and codes for which this implementation is the source.</p>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.methods.is_constrained">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.methods.</span></span><span
+                                    class="sig-name descname"><span class="pre">is_constrained</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                    class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">constraint</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span>
+                                <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                        class="sig-return-typehint"><span class="pre">bool</span></span></span><a
+                                    class="headerlink" href="#microtool.optimize.methods.is_constrained"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>A function for checking if a given parameter combination breaks a given
+                                constraint.</p>
+                                <dl class="field-list simple">
+                                    <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                    <dd class="field-odd">
+                                        <ul class="simple">
+                                            <li><p><strong>constraint</strong> – A scipy compatible constraint
+                                                dictionary</p></li>
+                                            <li><p><strong>x</strong> – Parameter combination</p></li>
+                                        </ul>
+                                    </dd>
+                                    <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                    <dd class="field-even"><p>boolean that is true if the parameter combination breaks
+                                        the constraint</p>
+                                    </dd>
+                                </dl>
+                            </dd>
+                        </dl>
+
+                    </section>
+                    <section id="module-microtool.optimize.optimize">
+                        <span id="microtool-optimize-optimize-module"></span>
+                        <h2>microtool.optimize.optimize module<a class="headerlink"
+                                                                 href="#module-microtool.optimize.optimize"
+                                                                 title="Permalink to this heading">¶</a></h2>
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.optimize.bounds_tuple2scipy">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.optimize.</span></span><span
+                                    class="sig-name descname"><span class="pre">bounds_tuple2scipy</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">microtool_bounds</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">List</span><span class="p"><span
+                                    class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span
+                                    class="pre">[</span></span><span class="pre">float</span><span class="p"><span
+                                    class="pre">,</span></span><span class="w"> </span><span
+                                    class="pre">float</span><span class="p"><span class="pre">]</span></span><span
+                                    class="p"><span class="pre">]</span></span></span></em><span
+                                    class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">Bounds</span></span></span><a
+                                    class="headerlink" href="#microtool.optimize.optimize.bounds_tuple2scipy"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd></dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.optimize.check_degrees_of_freedom">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.optimize.</span></span><span
+                                    class="sig-name descname"><span
+                                    class="pre">check_degrees_of_freedom</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><a class="reference internal"
+                                                 href="microtool.html#microtool.acquisition_scheme.AcquisitionScheme"
+                                                 title="microtool.acquisition_scheme.AcquisitionScheme"><span
+                                    class="pre">AcquisitionScheme</span></a></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">model</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><a
+                                    class="reference internal" href="microtool.html#microtool.tissue_model.TissueModel"
+                                    title="microtool.tissue_model.TissueModel"><span class="pre">TissueModel</span></a></span></em><span
+                                    class="sig-paren">)</span><a class="headerlink"
+                                                                 href="#microtool.optimize.optimize.check_degrees_of_freedom"
+                                                                 title="Permalink to this definition">¶</a></dt>
+                            <dd></dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.optimize.check_ill_conditioned">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.optimize.</span></span><span
+                                    class="sig-name descname"><span class="pre">check_ill_conditioned</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">loss_value</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span><a
+                                    class="headerlink" href="#microtool.optimize.optimize.check_ill_conditioned"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd></dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.optimize.check_insensitive">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.optimize.</span></span><span
+                                    class="sig-name descname"><span class="pre">check_insensitive</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><a class="reference internal"
+                                                 href="microtool.html#microtool.acquisition_scheme.AcquisitionScheme"
+                                                 title="microtool.acquisition_scheme.AcquisitionScheme"><span
+                                    class="pre">AcquisitionScheme</span></a></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">model</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><a
+                                    class="reference internal" href="microtool.html#microtool.tissue_model.TissueModel"
+                                    title="microtool.tissue_model.TissueModel"><span class="pre">TissueModel</span></a></span></em><span
+                                    class="sig-paren">)</span><a class="headerlink"
+                                                                 href="#microtool.optimize.optimize.check_insensitive"
+                                                                 title="Permalink to this definition">¶</a></dt>
+                            <dd></dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.optimize.optimize_scheme">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.optimize.</span></span><span
+                                    class="sig-name descname"><span class="pre">optimize_scheme</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">scheme:</span> <span
+                                    class="pre">~microtool.optimize.optimize.AcquisitionType</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">model:</span> <span class="pre">~microtool.tissue_model.TissueModel</span></span></em>,
+                                <em class="sig-param"><span class="n"><span class="pre">noise_variance:</span> <span
+                                        class="pre">float</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">loss:</span> <span class="pre">~microtool.optimize.loss_functions.LossFunction</span> <span
+                                    class="pre">=</span> <span class="pre">&lt;microtool.optimize.loss_functions.CrlbEigenvalues</span> <span
+                                    class="pre">object&gt;</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">loss_scaling_factor:</span> <span
+                                    class="pre">float</span> <span class="pre">=</span> <span
+                                    class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span
+                                    class="pre">method:</span> <span class="pre">str</span> <span
+                                    class="pre">|</span> <span class="pre">~microtool.optimize.methods.Optimizer</span> <span
+                                    class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span
+                                    class="pre">'differential_evolution'</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">solver_options:</span> <span
+                                    class="pre">dict</span> <span class="pre">|</span> <span
+                                    class="pre">None</span> <span class="pre">=</span> <span
+                                    class="pre">None</span></span></em><span class="sig-paren">)</span> <span
+                                    class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span
+                                    class="pre">[</span></span><span class="pre">AcquisitionType</span><span
+                                    class="p"><span class="pre">,</span></span><span class="w"> </span><span
+                                    class="pre">OptimizeResult</span><span class="w"> </span><span class="p"><span
+                                    class="pre">|</span></span><span class="w"> </span><span
+                                    class="pre">None</span><span class="p"><span
+                                    class="pre">]</span></span></span></span><a class="headerlink"
+                                                                                href="#microtool.optimize.optimize.optimize_scheme"
+                                                                                title="Permalink to this definition">¶</a>
+                            </dt>
+                            <dd><p>Optimizes the free parameters in the given MR acquisition scheme such that the loss
+                                is minimized.
+                                The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an
+                                array with M parameter
+                                scales, and the noise variance. The loss function should return a scalar loss. N is the
+                                number of measurements
+                                in the acquisition and M is the number of tissue parameters.</p>
+                                <dl class="field-list simple">
+                                    <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                    <dd class="field-odd">
+                                        <ul class="simple">
+                                            <li><p><strong>scheme</strong> – The MR acquisition scheme to be optimized.
+                                                (NOTE: a reference of the scheme is passed,
+                                                so it will be changed.</p></li>
+                                            <li><p><strong>model</strong> – The tissuemodel for which we want the
+                                                optimal acquisition scheme.</p></li>
+                                            <li><p><strong>noise_variance</strong> – Noise variance on the MR signal
+                                                attenuation.</p></li>
+                                            <li><p><strong>loss</strong> – a function of type LossFunction.</p></li>
+                                            <li><p><strong>loss_scaling_factor</strong> – Can be used to scale the loss
+                                                function to order 1.0 if you notice extreme values.</p></li>
+                                            <li><p><strong>method</strong> – Type of solver. See the documentation for
+                                                scipy.optimize.minimize</p></li>
+                                            <li><p><strong>solver_options</strong> – Options specific to the solver
+                                                check the documentation of the solver to see what can be done.</p></li>
+                                        </ul>
+                                    </dd>
+                                    <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                    <dd class="field-even"><p>A scipy.optimize.OptimizeResult object.</p>
+                                    </dd>
+                                </dl>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.optimize.warn_early_termination">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.optimize.</span></span><span
+                                    class="sig-name descname"><span
+                                    class="pre">warn_early_termination</span></span><span class="sig-paren">(</span><em
+                                    class="sig-param"><span class="n"><span class="pre">result</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">OptimizeResult</span></span></em><span
+                                    class="sig-paren">)</span><a class="headerlink"
+                                                                 href="#microtool.optimize.optimize.warn_early_termination"
+                                                                 title="Permalink to this definition">¶</a></dt>
+                            <dd></dd>
+                        </dl>
+
+                    </section>
+                    <section id="module-microtool.optimize.utils">
+                        <span id="microtool-optimize-utils-module"></span>
+                        <h2>microtool.optimize.utils module<a class="headerlink" href="#module-microtool.optimize.utils"
+                                                              title="Permalink to this heading">¶</a></h2>
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.utils.cartesian_product">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.utils.</span></span><span
+                                    class="sig-name descname"><span class="pre">cartesian_product</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">jac</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">ndarray</span></span></em><span
+                                    class="sig-paren">)</span><a class="headerlink"
+                                                                 href="#microtool.optimize.utils.cartesian_product"
+                                                                 title="Permalink to this definition">¶</a></dt>
+                            <dd></dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.optimize.utils.diagonal">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.optimize.utils.</span></span><span
+                                    class="sig-name descname"><span class="pre">diagonal</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">square</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">ndarray</span></span></em><span
+                                    class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a
+                                    class="headerlink" href="#microtool.optimize.utils.diagonal"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd></dd>
+                        </dl>
+
+                    </section>
+                </section>
+
+
+            </div>
+
+        </div>
+    </div>
+    <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <h1 class="logo"><a href="../index.html">MICROtool</a></h1>
+
+
+            <h3>Navigation</h3>
+
+            <div class="relations">
+                <h3>Related Topics</h3>
+                <ul>
+                    <li><a href="../index.html">Documentation overview</a>
+                        <ul>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            <div id="searchbox" style="display: none" role="search">
+                <h3 id="searchlabel">Quick search</h3>
+                <div class="searchformwrapper">
+                    <form class="search" action="../search.html" method="get">
+                        <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off"
+                               autocapitalize="off" spellcheck="false"/>
+                        <input type="submit" value="Go"/>
+                    </form>
+                </div>
+            </div>
+            <script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+        </div>
+    </div>
+    <div class="clearer"></div>
+</div>
+<div class="footer">
+    &copy;2023, FWH Otto.
+
+    |
+    Powered by <a href="http://sphinx-doc.org/">Sphinx 6.2.1</a>
+    &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+
+    |
+    <a href="../_sources/microtool_api/microtool.optimize.rst.txt"
+       rel="nofollow">Page source</a>
+</div>
+
+
+</body>
+</html>

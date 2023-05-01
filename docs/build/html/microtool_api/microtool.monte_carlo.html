@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/"/>
+
+    <title>microtool.monte_carlo package &#8212; MICROtool 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css"/>
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css"/>
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/sphinx_highlight.js"></script>
+    <link rel="index" title="Index" href="../genindex.html"/>
+    <link rel="search" title="Search" href="../search.html"/>
+
+    <link rel="stylesheet" href="../_static/custom.css" type="text/css"/>
+
+
+    <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9"/>
+
+</head>
+<body>
+
+
+<div class="document">
+    <div class="documentwrapper">
+        <div class="bodywrapper">
+
+
+            <div class="body" role="main">
+
+                <section id="module-microtool.monte_carlo">
+                    <span id="microtool-monte-carlo-package"></span>
+                    <h1>microtool.monte_carlo package<a class="headerlink" href="#module-microtool.monte_carlo"
+                                                        title="Permalink to this heading">¶</a></h1>
+                    <section id="submodules">
+                        <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this heading">¶</a>
+                        </h2>
+                    </section>
+                    <section id="module-microtool.monte_carlo.IO">
+                        <span id="microtool-monte-carlo-io-module"></span>
+                        <h2>microtool.monte_carlo.IO module<a class="headerlink" href="#module-microtool.monte_carlo.IO"
+                                                              title="Permalink to this heading">¶</a></h2>
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.monte_carlo.IO.make_result_dirs">
+                                <span class="sig-prename descclassname"><span
+                                        class="pre">microtool.monte_carlo.IO.</span></span><span
+                                    class="sig-name descname"><span class="pre">make_result_dirs</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">result_directory</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">category_name</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">str</span></span></em><span class="sig-paren">)</span> <span
+                                    class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span
+                                    class="pre">[</span></span><span class="pre">Path</span><span class="p"><span
+                                    class="pre">,</span></span><span class="w"> </span><span
+                                    class="pre">Path</span><span class="p"><span
+                                    class="pre">]</span></span></span></span><a class="headerlink"
+                                                                                href="#microtool.monte_carlo.IO.make_result_dirs"
+                                                                                title="Permalink to this definition">¶</a>
+                            </dt>
+                            <dd><p>Makes a subfolder in the result directory with catergory_name, and subsequently makes
+                                subfolders in that folder
+                                with names plots and data</p>
+                                <dl class="field-list simple">
+                                    <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                    <dd class="field-odd">
+                                        <ul class="simple">
+                                            <li><p><strong>result_directory</strong> – Path to result directory</p></li>
+                                            <li><p><strong>category_name</strong> – name for the subdirectory to be
+                                                created</p></li>
+                                        </ul>
+                                    </dd>
+                                    <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                    <dd class="field-even"><p>plotsubdir, datasubdir</p>
+                                    </dd>
+                                </dl>
+                            </dd>
+                        </dl>
+
+                    </section>
+                    <section id="module-microtool.monte_carlo.parameter_distributions">
+                        <span id="microtool-monte-carlo-parameter-distributions-module"></span>
+                        <h2>microtool.monte_carlo.parameter_distributions module<a class="headerlink"
+                                                                                   href="#module-microtool.monte_carlo.parameter_distributions"
+                                                                                   title="Permalink to this heading">¶</a>
+                        </h2>
+                        <dl class="py function">
+                            <dt class="sig sig-object py"
+                                id="microtool.monte_carlo.parameter_distributions.fit_gaussian">
+                                <span class="sig-prename descclassname"><span class="pre">microtool.monte_carlo.parameter_distributions.</span></span><span
+                                    class="sig-name descname"><span class="pre">fit_gaussian</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameter_distribution</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">DataFrame</span></span></em><span
+                                    class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a
+                                    class="headerlink"
+                                    href="#microtool.monte_carlo.parameter_distributions.fit_gaussian"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Function that returns a nested dataframe containing the results of gaussian fit.
+                                :param parameter_distribution:
+                                :return: Nested dataframe containing df[parameter][‘mean’] and df[parameter][‘std’]</p>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py"
+                                id="microtool.monte_carlo.parameter_distributions.plot_dataframe_index">
+                                <span class="sig-prename descclassname"><span class="pre">microtool.monte_carlo.parameter_distributions.</span></span><span
+                                    class="sig-name descname"><span class="pre">plot_dataframe_index</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                    class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>,
+                                <em class="sig-param"><span class="n"><span class="pre">index_name</span></span><span
+                                        class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                        class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">ax</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">Axes</span></span></em><span class="sig-paren">)</span> <span
+                                    class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">None</span></span></span><a
+                                    class="headerlink"
+                                    href="#microtool.monte_carlo.parameter_distributions.plot_dataframe_index"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Plots an index from a pandas dataframe to the given axes object
+                                :param df: The dataframe
+                                :param index_name: The index you wish to plot
+                                :param ax: The axes you wish to plot to
+                                :return:</p>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py"
+                                id="microtool.monte_carlo.parameter_distributions.plot_parameter_distributions">
+                                <span class="sig-prename descclassname"><span class="pre">microtool.monte_carlo.parameter_distributions.</span></span><span
+                                    class="sig-name descname"><span
+                                    class="pre">plot_parameter_distributions</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mc_result</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">DataFrame</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">gt_model</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><a class="reference internal"
+                                                 href="microtool.html#microtool.tissue_model.TissueModel"
+                                                 title="microtool.tissue_model.TissueModel"><span class="pre">TissueModel</span></a></span></em>,
+                                <em class="sig-param"><span class="n"><span class="pre">symbols</span></span><span
+                                        class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                        class="n"><span class="pre">Dict</span><span class="p"><span
+                                        class="pre">[</span></span><span class="pre">str</span><span class="p"><span
+                                        class="pre">,</span></span><span class="w"> </span><span
+                                        class="pre">str</span><span class="p"><span class="pre">]</span></span><span
+                                        class="w"> </span><span class="p"><span class="pre">|</span></span><span
+                                        class="w"> </span><span class="pre">None</span></span><span
+                                        class="w"> </span><span class="o"><span class="pre">=</span></span><span
+                                        class="w"> </span><span class="default_value"><span
+                                        class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span
+                                    class="pre">gaussian_fit</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">DataFrame</span><span class="w"> </span><span class="p"><span
+                                    class="pre">|</span></span><span class="w"> </span><span
+                                    class="pre">None</span></span><span class="w"> </span><span class="o"><span
+                                    class="pre">=</span></span><span class="w"> </span><span class="default_value"><span
+                                    class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span
+                                    class="pre">color</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">str</span><span class="w"> </span><span class="p"><span
+                                    class="pre">|</span></span><span class="w"> </span><span
+                                    class="pre">None</span></span><span class="w"> </span><span class="o"><span
+                                    class="pre">=</span></span><span class="w"> </span><span class="default_value"><span
+                                    class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span
+                                    class="pre">fig_label</span></span><span class="p"><span class="pre">:</span></span><span
+                                    class="w"> </span><span class="n"><span class="pre">str</span></span><span
+                                    class="w"> </span><span class="o"><span class="pre">=</span></span><span
+                                    class="w"> </span><span class="default_value"><span
+                                    class="pre">'parameter</span> <span class="pre">distributions'</span></span></em>,
+                                <em class="sig-param"><span class="n"><span class="pre">hist_label</span></span><span
+                                        class="o"><span class="pre">=</span></span><span class="default_value"><span
+                                        class="pre">'parameter_dst'</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">draw_gt</span></span><span class="o"><span
+                                    class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span
+                                    class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">Figure</span></span></span><a
+                                    class="headerlink"
+                                    href="#microtool.monte_carlo.parameter_distributions.plot_parameter_distributions"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd>
+                                <dl class="field-list simple">
+                                    <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                    <dd class="field-odd">
+                                        <ul class="simple">
+                                            <li><p><strong>mc_result</strong> – The result from a montecarlo simulation
+                                            </p></li>
+                                            <li><p><strong>gt_model</strong> – The groundtruth tissuemodel used in the
+                                                montecarlo simulation</p></li>
+                                            <li><p><strong>symbols</strong> – A dict mapping a tissuemodel name to
+                                                another string used to format the plot</p></li>
+                                            <li><p><strong>gaussian_fit</strong> – Result from fitting gaussian
+                                                distributions to monte carlo result</p></li>
+                                            <li><p><strong>color</strong> – Color used in plotting</p></li>
+                                            <li><p><strong>fig_label</strong> – </p></li>
+                                        </ul>
+                                    </dd>
+                                    <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                    <dd class="field-even"><p></p>
+                                    </dd>
+                                </dl>
+                            </dd>
+                        </dl>
+
+                        <dl class="py function">
+                            <dt class="sig sig-object py" id="microtool.monte_carlo.parameter_distributions.scale">
+                                <span class="sig-prename descclassname"><span class="pre">microtool.monte_carlo.parameter_distributions.</span></span><span
+                                    class="sig-name descname"><span class="pre">scale</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mc_result</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">DataFrame</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">ground_truth</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><a class="reference internal"
+                                                 href="microtool.html#microtool.tissue_model.TissueModel"
+                                                 title="microtool.tissue_model.TissueModel"><span class="pre">TissueModel</span></a></span></em><span
+                                    class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                    class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a
+                                    class="headerlink" href="#microtool.monte_carlo.parameter_distributions.scale"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Helper function for rescaling the parameter distribution</p>
+                                <dl class="field-list simple">
+                                    <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                    <dd class="field-odd">
+                                        <ul class="simple">
+                                            <li><p><strong>mc_result</strong> – Parameter distribution which we wish to
+                                                rescale</p></li>
+                                            <li><p><strong>ground_truth</strong> – The ground truth tissue model w.r.t.
+                                                we wish to scale</p></li>
+                                        </ul>
+                                    </dd>
+                                    <dt class="field-even">Returns<span class="colon">:</span></dt>
+                                    <dd class="field-even"><p>The scaled distribution</p>
+                                    </dd>
+                                </dl>
+                            </dd>
+                        </dl>
+
+                    </section>
+                    <section id="module-microtool.monte_carlo.simulation">
+                        <span id="microtool-monte-carlo-simulation-module"></span>
+                        <h2>microtool.monte_carlo.simulation module<a class="headerlink"
+                                                                      href="#module-microtool.monte_carlo.simulation"
+                                                                      title="Permalink to this heading">¶</a></h2>
+                        <p>This module contains all functions and classes involved in the monte carlo simulation of
+                            acquisition schemes
+                            and how the noise distribution affects the estimated tissueparameters.</p>
+                        <p>IMPORTANT: Always execute run inside a if name main clause! otherwise the parralel processing
+                            throws a cryptic error</p>
+                        <dl class="py class">
+                            <dt class="sig sig-object py" id="microtool.monte_carlo.simulation.MonteCarloSimulation">
+                                <em class="property"><span class="pre">class</span><span class="w"> </span></em><span
+                                    class="sig-prename descclassname"><span class="pre">microtool.monte_carlo.simulation.</span></span><span
+                                    class="sig-name descname"><span class="pre">MonteCarloSimulation</span></span><span
+                                    class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><a class="reference internal"
+                                                 href="microtool.html#microtool.acquisition_scheme.AcquisitionScheme"
+                                                 title="microtool.acquisition_scheme.AcquisitionScheme"><span
+                                    class="pre">AcquisitionScheme</span></a></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">model</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><a
+                                    class="reference internal" href="microtool.html#microtool.tissue_model.TissueModel"
+                                    title="microtool.tissue_model.TissueModel"><span class="pre">TissueModel</span></a></span></em>,
+                                <em class="sig-param"><span class="n"><span class="pre">noise_distribution</span></span><span
+                                        class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                        class="n"><span class="pre">rv_continuous_frozen</span></span></em>, <em
+                                    class="sig-param"><span class="n"><span class="pre">n_sim</span></span><span
+                                    class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                    class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span
+                                    class="n"><span class="pre">fit_options</span></span><span class="p"><span
+                                    class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                    class="pre">dict</span><span class="w"> </span><span class="p"><span
+                                    class="pre">|</span></span><span class="w"> </span><span
+                                    class="pre">None</span></span><span class="w"> </span><span class="o"><span
+                                    class="pre">=</span></span><span class="w"> </span><span class="default_value"><span
+                                    class="pre">None</span></span></em><span class="sig-paren">)</span><a
+                                    class="headerlink" href="#microtool.monte_carlo.simulation.MonteCarloSimulation"
+                                    title="Permalink to this definition">¶</a></dt>
+                            <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code>
+                            </p>
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.monte_carlo.simulation.MonteCarloSimulation.run">
+                                        <span class="sig-name descname"><span class="pre">run</span></span><span
+                                            class="sig-paren">(</span><span class="sig-paren">)</span> <span
+                                            class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.monte_carlo.simulation.MonteCarloSimulation.run"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd>
+                                        <dl class="field-list simple">
+                                            <dt class="field-odd">Returns<span class="colon">:</span></dt>
+                                            <dd class="field-odd"><p></p>
+                                            </dd>
+                                        </dl>
+                                    </dd>
+                                </dl>
+
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.monte_carlo.simulation.MonteCarloSimulation.save">
+                                        <span class="sig-name descname"><span class="pre">save</span></span><span
+                                            class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                            class="pre">datadir</span></span><span class="p"><span class="pre">:</span></span><span
+                                            class="w"> </span><span class="n"><span class="pre">Path</span></span></em>,
+                                        <em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span
+                                                class="p"><span class="pre">:</span></span><span class="w"> </span><span
+                                                class="n"><span class="pre">str</span></span></em>, <em
+                                            class="sig-param"><span class="n"><span
+                                            class="pre">scheme_name</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">str</span></span></em><span class="sig-paren">)</span> <span
+                                            class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">None</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.monte_carlo.simulation.MonteCarloSimulation.save"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd><p>Saves the montecarlo result and the scheme and model used during the
+                                        simulation.
+                                        :param datadir: A path with folder and name included</p>
+                                    </dd>
+                                </dl>
+
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.monte_carlo.simulation.MonteCarloSimulation.set_fitting_options">
+                                        <span class="sig-name descname"><span
+                                                class="pre">set_fitting_options</span></span><span
+                                            class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                            class="pre">fit_options</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">dict</span></span></em><span class="sig-paren">)</span> <span
+                                            class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">None</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.monte_carlo.simulation.MonteCarloSimulation.set_fitting_options"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd><p>See the fit options of the tissuemodel that is in use.</p>
+                                        <dl class="field-list simple">
+                                            <dt class="field-odd">Parameters<span class="colon">:</span></dt>
+                                            <dd class="field-odd"><p><strong>fit_options</strong> – Dictionary of fit
+                                                options compatible with fitting routine of tissuemodel</p>
+                                            </dd>
+                                        </dl>
+                                    </dd>
+                                </dl>
+
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.monte_carlo.simulation.MonteCarloSimulation.set_model">
+                                        <span class="sig-name descname"><span class="pre">set_model</span></span><span
+                                            class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                            class="pre">model</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><a
+                                            class="reference internal"
+                                            href="microtool.html#microtool.tissue_model.TissueModel"
+                                            title="microtool.tissue_model.TissueModel"><span
+                                            class="pre">TissueModel</span></a></span></em><span
+                                            class="sig-paren">)</span> <span class="sig-return"><span
+                                            class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">None</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.monte_carlo.simulation.MonteCarloSimulation.set_model"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd></dd>
+                                </dl>
+
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.monte_carlo.simulation.MonteCarloSimulation.set_n_sim">
+                                        <span class="sig-name descname"><span class="pre">set_n_sim</span></span><span
+                                            class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                            class="pre">n_sim</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">int</span></span></em><span class="sig-paren">)</span> <span
+                                            class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">None</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.monte_carlo.simulation.MonteCarloSimulation.set_n_sim"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd></dd>
+                                </dl>
+
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.monte_carlo.simulation.MonteCarloSimulation.set_noise_distribution">
+                                        <span class="sig-name descname"><span class="pre">set_noise_distribution</span></span><span
+                                            class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                            class="pre">noise_distribution</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><span
+                                            class="pre">rv_continuous</span></span></em><span class="sig-paren">)</span>
+                                        <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span
+                                                class="sig-return-typehint"><span
+                                                class="pre">None</span></span></span><a class="headerlink"
+                                                                                        href="#microtool.monte_carlo.simulation.MonteCarloSimulation.set_noise_distribution"
+                                                                                        title="Permalink to this definition">¶</a>
+                                    </dt>
+                                    <dd></dd>
+                                </dl>
+
+                                <dl class="py method">
+                                    <dt class="sig sig-object py"
+                                        id="microtool.monte_carlo.simulation.MonteCarloSimulation.set_scheme">
+                                        <span class="sig-name descname"><span class="pre">set_scheme</span></span><span
+                                            class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                                            class="pre">scheme</span></span><span class="p"><span
+                                            class="pre">:</span></span><span class="w"> </span><span class="n"><a
+                                            class="reference internal"
+                                            href="microtool.html#microtool.acquisition_scheme.AcquisitionScheme"
+                                            title="microtool.acquisition_scheme.AcquisitionScheme"><span class="pre">AcquisitionScheme</span></a></span></em><span
+                                            class="sig-paren">)</span> <span class="sig-return"><span
+                                            class="sig-return-icon">&#x2192;</span> <span
+                                            class="sig-return-typehint"><span class="pre">None</span></span></span><a
+                                            class="headerlink"
+                                            href="#microtool.monte_carlo.simulation.MonteCarloSimulation.set_scheme"
+                                            title="Permalink to this definition">¶</a></dt>
+                                    <dd></dd>
+                                </dl>
+
+                            </dd>
+                        </dl>
+
+                    </section>
+                </section>
+
+
+            </div>
+
+        </div>
+    </div>
+    <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <h1 class="logo"><a href="../index.html">MICROtool</a></h1>
+
+
+            <h3>Navigation</h3>
+
+            <div class="relations">
+                <h3>Related Topics</h3>
+                <ul>
+                    <li><a href="../index.html">Documentation overview</a>
+                        <ul>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            <div id="searchbox" style="display: none" role="search">
+                <h3 id="searchlabel">Quick search</h3>
+                <div class="searchformwrapper">
+                    <form class="search" action="../search.html" method="get">
+                        <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off"
+                               autocapitalize="off" spellcheck="false"/>
+                        <input type="submit" value="Go"/>
+                    </form>
+                </div>
+            </div>
+            <script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+        </div>
+    </div>
+    <div class="clearer"></div>
+</div>
+<div class="footer">
+    &copy;2023, FWH Otto.
+
+    |
+    Powered by <a href="http://sphinx-doc.org/">Sphinx 6.2.1</a>
+    &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+
+    |
+    <a href="../_sources/microtool_api/microtool.monte_carlo.rst.txt"
+       rel="nofollow">Page source</a>
+</div>
+
+
+</body>
+</html>
