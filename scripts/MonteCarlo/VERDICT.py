@@ -15,7 +15,7 @@ plotdir, datadir = make_result_dirs(resultdir, "VERDICT")
 
 if __name__ == "__main__":
     # ---- load model
-    verdict = get_pickle('../optimize/schemes/verdict_gt.pkl')
+    verdict = get_pickle('../optimize/models/verdict_gt.pkl')
     # ---- load schemes
     optimal_scheme = get_pickle("../optimize/schemes/verdict_optimal.pkl")
     initial_scheme = get_pickle("../optimize/schemes/verdict_start.pkl")
