@@ -26,3 +26,5 @@
 # Dot files for hierarchy graphs
 *.dot
 
+# not sure why this directory is even here?
+/build/
