@@ -516,6 +516,15 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         return constraints
 
+    def fix_b0_measurements(self) -> None:
+        """
+        Fixes the b0 values so they are not optimised. This is a utility method for using diffusion acquisition
+        schemes with the dmipy package.
+
+        :return:
+        """
+        self["DiffusionBValue"].set_fixed_mask(self.b_values == 0)
+
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
