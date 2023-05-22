@@ -15,6 +15,8 @@ from microtool.utils.plotting import plot_acquisition_parameters
 currentdir = pathlib.Path(__file__).parent
 resultdir = currentdir / "results"
 plotdir, datadir = make_result_dirs(resultdir, "stick_model")
+sim_dir = resultdir / "simulations"
+sim_dir.mkdir(exist_ok=True)
 
 
 def main():
@@ -37,12 +39,12 @@ def main():
 
     # for optimal scheme
     result = simulation.run()
-    simulation.save(datadir, "stick_model", "optimized")
+    simulation.save(sim_dir / "optimal.pkl")
 
     # for non optimal scheme
     simulation.set_scheme(scheme_start)
     result_start = simulation.run()
-    simulation.save(datadir, model_name="stick", scheme_name='start')
+    simulation.save(sim_dir / "non_optimal.pkl")
 
     plot_parameter_distributions(result, stick_model, fig_label="optimal")
     plt.suptitle("optimal")

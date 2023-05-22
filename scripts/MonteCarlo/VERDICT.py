@@ -12,6 +12,8 @@ from microtool.utils.IO import get_pickle
 currentdir = pathlib.Path(__file__).parent
 resultdir = currentdir / "results"
 plotdir, datadir = make_result_dirs(resultdir, "VERDICT")
+sim_dir = resultdir / "simulations"
+sim_dir.mkdir(exist_ok=True)
 
 if __name__ == "__main__":
     # ---- load model
@@ -29,12 +31,12 @@ if __name__ == "__main__":
     simulation = MonteCarloSimulation(optimal_scheme, verdict, noise_distribution, n_sim=1000)
     simulation.set_fitting_options({"use_parallel_processing": False})
     optimal_result = simulation.run()
-    simulation.save(datadir, "verdict", "optimal")
+    simulation.save("optimal.pkl")
 
     # non -optimal simulation
     simulation.set_scheme(initial_scheme)
     non_optimal_result = simulation.run()
-    simulation.save(datadir, "verdict", "non-optimal")
+    simulation.save("non_optimal.pkl")
 
     # ---- plotting
     plot_parameter_distributions(optimal_result, verdict, fig_label="optimal")

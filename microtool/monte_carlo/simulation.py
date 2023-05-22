@@ -5,7 +5,7 @@ and how the noise distribution affects the estimated tissueparameters.
 IMPORTANT: Always execute run inside a if name main clause! otherwise the parralel processing throws a cryptic error
 """
 import pathlib
-import pickle
+from typing import Union
 
 import pandas as pd
 from scipy import stats
@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from ..acquisition_scheme import AcquisitionScheme
 from ..tissue_model import TissueModel
-from ..utils.IO import HiddenPrints
+from ..utils.IO import HiddenPrints, save_pickle
 
 
 class MonteCarloSimulation:
@@ -102,30 +102,17 @@ class MonteCarloSimulation:
         self._result = pd.DataFrame(result).astype('float64')
         return self._result
 
-    def save(self, datadir: pathlib.Path, model_name: str, scheme_name: str) -> None:
+    @property
+    def result(self):
+        return self._result
+
+    def save(self, result_path: Union[pathlib.Path, str]) -> None:
         """
-        Saves the montecarlo result and the scheme and model used during the simulation.
-        :param datadir: A path with folder and name included
+        Saves the result of the monte carlo simulation
+
+        :param result_path:
         """
-        if self._result is None:
+        if self.result is None:
             raise RuntimeError("You cannot save a simulation that has not been run yet.")
 
-        sim_name = self._save_name
-
-        # save ground truth
-        with open(datadir / (model_name + "_gt.pkl"), 'wb') as f:
-            pickle.dump(self._model, f)
-
-        # save scheme
-        with open(datadir / (scheme_name + "_scheme.pkl"), 'wb') as f:
-            pickle.dump(self._scheme, f)
-
-        # save simulation result
-        with open(datadir / (model_name + scheme_name + sim_name + ".pkl"), 'wb') as f:
-            pickle.dump(self._result, f)
-
-    @property
-    def _save_name(self) -> str:
-        scale = self._noise_distribution.kwds["scale"]
-        std = "{:.2f}".format(scale)
-        return f"_nsim={self._n_sim}_{self._noise_distribution.dist.name}_sigma=" + std
+        save_pickle(self.result, result_path)

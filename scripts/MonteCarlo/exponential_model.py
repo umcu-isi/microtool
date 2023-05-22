@@ -29,12 +29,12 @@ if __name__ == "__main__":
     # running simulation with optimal scheme
     simulation = MonteCarloSimulation(scheme_optimal, model, noise_distribution, n_sim)
     result = simulation.run()
-    simulation.save(datadir, "T2=10", "optimized")
+    simulation.save(datadir / "simulations" / "optimal")
 
     # doing same for non optimal scheme
     simulation.set_scheme(scheme_start)
     non_optimal_result = simulation.run()
-    simulation.save(datadir, "T2=10", "non-optimized")
+    simulation.save(datadir / "simulations" / "non_optimal")
 
     # ------------ plotting
 
@@ -47,13 +47,13 @@ if __name__ == "__main__":
     plot_parameter_distributions(result, model, symbols=symbols, hist_label="Optimal", draw_gt=False)
     plot_parameter_distributions(non_optimal_result, model, symbols=symbols, hist_label="Non-optimal")
 
-    plt.savefig(plotdir / ("optimal_PD" + simulation._save_name + ".png"))
+    plt.savefig(plotdir / "optimal_PD.png")
 
     # plotting the aquisition parameters
     plot_acquisition_parameters(scheme_optimal, title="Acquisition parameters", label="optimal")
     plot_acquisition_parameters(scheme_start, title="Acquisition parameters", label='non-optimal')
     plt.legend()
-    plt.savefig((plotdir / ("non_optimal_AP.png")))
+    plt.savefig((plotdir / "non_optimal_AP.png"))
 
     # plotting the signal
 
