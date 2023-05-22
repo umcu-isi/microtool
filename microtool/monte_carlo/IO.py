@@ -1,5 +1,6 @@
+import warnings
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Union
 
 
 def make_result_dirs(result_directory: Path, category_name: str) -> Tuple[Path, Path]:
@@ -19,3 +20,29 @@ def make_result_dirs(result_directory: Path, category_name: str) -> Tuple[Path, 
     plotdir.mkdir(exist_ok=True)
     datadir.mkdir(exist_ok=True)
     return plotdir, datadir
+
+
+def make_expirement_directories(parent_directory: Union[Path, str], expirement_name: str):
+    """
+
+    :param parent_directory:
+    :param expirement_name:
+    :return: plotdir,modeldir,simdir,schemedir
+    """
+    if isinstance(parent_directory, str):
+        parent_directory = Path(parent_directory)
+
+    exp_dir = parent_directory / expirement_name
+    plotdir = exp_dir / "plots"
+    modeldir = exp_dir / "models"
+    schemedir = exp_dir / "schemes"
+    simdir = exp_dir / "simulations"
+    all_sub_dirs = plotdir, modeldir, simdir, schemedir
+    if exp_dir.is_dir():
+        warnings.warn("There is already a folder with the name of the experiment. No new folders have been created.")
+    else:
+        exp_dir.mkdir()
+        for dir in all_sub_dirs:
+            dir.mkdir()
+
+    return all_sub_dirs
