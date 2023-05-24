@@ -9,9 +9,8 @@ from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 
+from microtool.constants import GAMMA
 from microtool.scanner_parameters import ScannerParameters, default_scanner
-
-GAMMA = 42.57747892 * 2 * np.pi  # MHz / T == 1/ms . 1/mT
 
 
 def main():

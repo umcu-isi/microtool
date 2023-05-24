@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Union, List
 
+import numpy as np
 from scipy.optimize import LinearConstraint, NonlinearConstraint
 
 # Key for the starting signal
@@ -22,3 +23,5 @@ DIFFUSIVITY_KEY = 'Diffusivity'
 
 ConstraintTypes = Union[
     List[Union[LinearConstraint, NonlinearConstraint]], Union[LinearConstraint, NonlinearConstraint]]
+
+GAMMA = 42.57747892 * 2 * np.pi  # MHz / T == 1/ms . 1/mT
