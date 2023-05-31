@@ -14,6 +14,7 @@ from microtool.gradient_sampling.utils import unitvector_to_angles, angles_to_un
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.utils.solve_echo_time import minimal_echo_time
 from .constants import ConstraintTypes
+from .pulse_relations import get_b_value_complete
 
 
 class AcquisitionParameters:
@@ -300,16 +301,16 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
     Defines a diffusion MR acquisition scheme. (PGSE?)
 
-    :param b_values: A list or numpy array of b-values in s/mm².
-    :param b_vectors: A list or numpy array of direction cosines.
+    :param gradient_directions: A list or numpy array of direction cosines.
+    :param gradient_magnitudes: The gradient magnitudes in millitesla per meter (mT/m)
     :param pulse_widths: A list or numpy array of pulse widths δ in milliseconds.
     :param pulse_intervals: A list or numpy array of pulse intervals Δ in milliseconds.
     :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
     """
 
     def __init__(self,
-                 b_values: Union[List[float], np.ndarray],
-                 b_vectors: Union[List[Tuple[float, float, float]], np.ndarray],
+                 gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],
+                 gradient_magnitudes: Union[List[float], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray],
                  echo_times: Optional[Union[List[float], np.ndarray]] = None,
@@ -317,6 +318,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         self.scan_parameters = scan_parameters
 
+        b_values = get_b_value_complete(gradient_magnitudes, pulse_intervals, pulse_widths, scan_parameters)
         # set default echo times to minimal echo time based on scan parameters and b values
         if echo_times is None:
             echo_times = minimal_echo_time(b_values, scan_parameters)
@@ -324,17 +326,17 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         self._check_constraints(pulse_widths, pulse_intervals, b_values, echo_times, scan_parameters)
 
         # converting to np array of correct type
-        b_vectors = np.asarray(b_vectors, dtype=np.float64)
+        gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
 
         # Calculate the spherical angles φ and θ.
-        theta, phi = unitvector_to_angles(b_vectors).T
+        theta, phi = unitvector_to_angles(gradient_directions).T
 
         # checking for b0 values and setting vector to zero for these values
-        self._check_b_vectors(b_values, b_vectors)
+        self._check_b_vectors(b_values, gradient_directions)
 
         super().__init__({
-            'DiffusionBValue': AcquisitionParameters(
-                values=b_values, unit='s/mm²', scale=1e3, symbol="b", lower_bound=0.0, upper_bound=20e3
+            'DiffusionPulseMagnitude': AcquisitionParameters(
+                values=gradient_magnitudes, unit='mT/m', scale=1e3, symbol="|G|", lower_bound=0.0, upper_bound=5e3
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -372,6 +374,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
     @staticmethod
     def _check_constraints(pulse_widths, pulse_intervals, b_values, echo_times, scanner_parameters):
+        # TODO handle code duplication between this and self.constraints
+
         # Check the delta constraint
         if np.any(pulse_widths > pulse_intervals):
             raise ValueError(
@@ -387,7 +391,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         An array of N b-values in s/mm².
         """
-        return self['DiffusionBValue'].values
+        return get_b_value_complete(self.pulse_magnitude, self.pulse_intervals, self.pulse_widths, self.scan_parameters)
 
     @property
     def phi(self) -> np.ndarray:
@@ -421,17 +425,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     @property
     def pulse_magnitude(self) -> np.ndarray:
         """
-        :return: An array of N gradient magnitudes in mT/m. Assumes b = γ² G² δ² (Δ - δ/3).
+        Array of pulse magnitudes in mT/m
         """
-        b_values = self.b_values * 1e6  # Convert from s/mm² to s/m².
-        pulse_widths = self.pulse_widths * 1e-3  # Convert from ms to s.
-        pulse_intervals = self.pulse_intervals * 1e-3  # Convert from ms to s.
-        gyromagnetic_ratio = 2.6752218744e8 * 1e-3  # Convert from 1/s/T to 1/s/mT.
-
-        return np.sqrt(
-            3 * b_values /
-            (np.square(gyromagnetic_ratio * pulse_widths) * (3 * pulse_intervals - pulse_widths))
-        )
+        return self['DiffusionPulseMagnitude'].values
 
     @property
     def b_vectors(self) -> np.ndarray:
@@ -502,17 +498,33 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints.append(delta_constraint)
 
-        if not self._are_fixed(['EchoTime', 'DiffusionBValue']):
-            # Make constraint function enforcing TE > TE_min
+        if not self._are_fixed(['DiffusionPulseMagnitude']):
+            def gradient_constraint_fun(x: np.ndarray):
+                G = self._copy_and_update_parameter('DiffusionPulseMagnitude', x)
+                G_max = self.scan_parameters.G_max
+                return G - G_max
 
+            G_constraint = NonlinearConstraint(gradient_constraint_fun, 0.0, np.inf, keep_feasible=True)
+            constraints.append(G_constraint)
+
+        if not self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval', 'EchoTime']):
             def echo_constraint_fun(x: np.ndarray):
-                b = self._copy_and_update_parameter('DiffusionBValue', x)
-                TE = self._copy_and_update_parameter('EchoTime', x)
-                TEmin = minimal_echo_time(b, self.scan_parameters)
-                return TE - TEmin
+                delta = self._copy_and_update_parameter('DiffusionPulseWidth', x)
+                # noinspection PyPep8Naming
+                Delta = self._copy_and_update_parameter('DiffusionPulseInterval', x)
+                echo_time = self._copy_and_update_parameter("EchoTime", x)
 
-            TE_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
-            constraints.append(TE_constraint)
+                t_180 = self.scan_parameters.t_180
+                t_90 = self.scan_parameters.t_90
+                t_rise = self.scan_parameters.t_rise
+                t_half = self.scan_parameters.t_half
+                T_min_1 = 0.5 * delta + t_180 + 0.5 * t_rise + 0.5 * t_half
+                T_min_2 = t_90 + t_180 + 2.0 * delta + 2.0 * t_rise
+                T_min = np.maximum(T_min_1, T_min_2)
+                return echo_time - T_min
+
+            echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
+            constraints.append(echo_time_constraint)
 
         return constraints
 
