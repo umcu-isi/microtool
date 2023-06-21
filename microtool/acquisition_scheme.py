@@ -13,7 +13,8 @@ from tabulate import tabulate
 from microtool.gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.utils.solve_echo_time import minimal_echo_time
-from .constants import ConstraintTypes
+from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT, PULSE_TIMING_LB, PULSE_TIMING_UB, \
+    PULSE_TIMING_SCALE
 from .pulse_relations import get_b_value_complete
 
 
@@ -318,7 +319,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         self.scan_parameters = scan_parameters
 
-        b_values = get_b_value_complete(gradient_magnitudes, pulse_intervals, pulse_widths, scan_parameters)
+        b_values = get_b_value_complete(GAMMA, gradient_magnitudes, pulse_intervals, pulse_widths, scan_parameters)
         # set default echo times to minimal echo time based on scan parameters and b values
         if echo_times is None:
             echo_times = minimal_echo_time(b_values, scan_parameters)
@@ -336,7 +337,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         super().__init__({
             'DiffusionPulseMagnitude': AcquisitionParameters(
-                values=gradient_magnitudes, unit='mT/m', scale=1e3, symbol="|G|", lower_bound=0.0, upper_bound=5e3
+                values=gradient_magnitudes, unit=GRADIENT_UNIT, scale=1., symbol="|G|", lower_bound=0.0, upper_bound=5e3
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -345,15 +346,20 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 values=theta, unit='rad', scale=1., symbol=r"$\theta$", lower_bound=None, fixed=True
             ),
             'DiffusionPulseWidth': AcquisitionParameters(
-                values=pulse_widths, unit='ms', scale=10., symbol=r"$\delta$", fixed=False, lower_bound=1.,
-                upper_bound=1e2
+                values=pulse_widths, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$\delta$", fixed=False,
+                lower_bound=PULSE_TIMING_LB,
+                upper_bound=PULSE_TIMING_UB
             ),
             'DiffusionPulseInterval': AcquisitionParameters(
-                values=pulse_intervals, unit='ms', scale=10., symbol=r"$\Delta$", fixed=False, lower_bound=1.,
-                upper_bound=1e3
+                values=pulse_intervals, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$\Delta$",
+                fixed=False,
+                lower_bound=PULSE_TIMING_LB,
+                upper_bound=PULSE_TIMING_UB
             ),
             'EchoTime': AcquisitionParameters(
-                values=echo_times, unit='ms', scale=1.0, symbol=r"$T_E$", fixed=False, lower_bound=.1, upper_bound=1e3
+                values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
+                lower_bound=PULSE_TIMING_LB,
+                upper_bound=PULSE_TIMING_UB
             )
         })
 
@@ -362,8 +368,6 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         # Checking for b0 measurements
         b0 = b_values == 0
-        if not np.any(b0):
-            raise ValueError("No b0 measurements detected. The b0 measurements are required to estimate S0.")
 
         # Checking for unit vectors
         if not np.allclose(np.linalg.norm(b_vectors[np.logical_not(b0)], axis=1), 1):
@@ -391,7 +395,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         An array of N b-values in s/mm².
         """
-        return get_b_value_complete(self.pulse_magnitude, self.pulse_intervals, self.pulse_widths, self.scan_parameters)
+        return get_b_value_complete(GAMMA, self.pulse_magnitude, self.pulse_intervals, self.pulse_widths,
+                                    self.scan_parameters)
 
     @property
     def phi(self) -> np.ndarray:
@@ -410,14 +415,14 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     @property
     def pulse_widths(self) -> np.ndarray:
         """
-        An array of N pulse widths in milliseconds.
+        An array of N pulse widths in seconds.
         """
         return self['DiffusionPulseWidth'].values
 
     @property
     def pulse_intervals(self) -> np.ndarray:
         """
-        An array of N pulse intervals in milliseconds.
+        An array of N pulse intervals in seconds.
         """
         return self['DiffusionPulseInterval'].values
 
