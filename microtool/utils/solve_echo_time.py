@@ -1,41 +1,35 @@
 """
-The following expressions were found analytically
-
-
+All the times in this script are computed in ms. so we scale them at the final function.
 """
 from copy import copy
 from typing import Union
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 from microtool.constants import GAMMA
-from microtool.scanner_parameters import ScannerParameters, default_scanner
+from microtool.scanner_parameters import ScannerParameters
 
-
-def main():
-    b = np.linspace(0.05, 3, num=500) * 1e3  # s/mm^2
-
-    print(minimal_echo_time(b, default_scanner))
-    plt.plot(minimal_echo_time(b, default_scanner), b)
-    plt.xlabel("TE_min")
-    plt.ylabel("b")
-    plt.tight_layout()
-    plt.show()
+gamma_different_unit = 1e-3 * GAMMA
 
 
 def minimal_echo_time(b, scanner_parameters: ScannerParameters):
+    """
+
+    :param b: The bvalue in seconds/millimeters^2
+    :param scanner_parameters: Scan parameters
+    :return: The minimal echo time in seconds
+    """
     # copying so we dont actually change bvalues that this function takes
     b = copy(b)
     # for the zero b-values we just take the b = 50 s/mm^2 since it will be a suitable constraint
     b[b == 0] = 50
     # converting units
-    b *= 1e3  # s/m^2 ?
+    b *= 1e3
 
     delta_max = compute_delta_max(b, scanner_parameters)
     domain = np.linspace(1e-6, delta_max, num=1000)
     TE_min = np.min(echo_time(domain, b, scanner_parameters), axis=0)
-    return TE_min
+    return TE_min * 1e-3
 
 
 def echo_time(delta, b, scanner_parameters: ScannerParameters):
@@ -45,7 +39,7 @@ def echo_time(delta, b, scanner_parameters: ScannerParameters):
     t90 = scanner_parameters.t_90
     t_half = scanner_parameters.t_half
     # surrogate parameter for readability
-    B = b / (GAMMA ** 2 * G_max ** 2)
+    B = b / (gamma_different_unit ** 2 * G_max ** 2)
     Delta = (B - t_rise / 30) * delta ** (-2) + (t_rise / 6) * delta ** (-1) + delta / 3
     return 0.5 * t90 + Delta + delta + t_rise + t_half
 
@@ -70,7 +64,7 @@ def compute_delta_max(b, scanner_parameters: ScannerParameters):
         p = t180 - 0.5 * t90 + t_rise + t_half
         a2 = (3 / 2) * p
         a1 = -t_rise / 4
-        a0 = (-3 / 2) * (b / (GAMMA ** 2 * G_max ** 2)) + t_rise / 20
+        a0 = (-3 / 2) * (b / (gamma_different_unit ** 2 * G_max ** 2)) + t_rise / 20
         return largest_real_cbrt(a2, a1, a0)
 
     def compute_delta_max_2():
@@ -82,7 +76,7 @@ def compute_delta_max(b, scanner_parameters: ScannerParameters):
         T1 = 0.5 * t90 + 0.5 * t180 + t_rise
         T2 = 0.5 * t90 + t_rise + t_half
 
-        B = b / (GAMMA ** 2 * G_max ** 2)
+        B = b / (gamma_different_unit ** 2 * G_max ** 2)
 
         a2 = -3 * (0.5 * T2 - T1)
         a1 = -0.25 * t_rise
@@ -127,7 +121,3 @@ def largest_real_cbrt(a2: Union[float, np.ndarray], a1: Union[float, np.ndarray]
     largest_real_roots = np.max(np.real(masked_roots), axis=1)
 
     return largest_real_roots
-
-
-if __name__ == '__main__':
-    main()
