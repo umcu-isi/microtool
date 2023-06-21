@@ -1,6 +1,5 @@
 import numpy as np
 
-from .constants import GAMMA
 from .scanner_parameters import ScannerParameters
 
 
@@ -15,7 +14,8 @@ def get_b_value_simplified(gamma, G, Delta, delta):
     return b_val
 
 
-def get_b_value_complete(G: np.ndarray, Delta: np.ndarray, delta: np.ndarray, scanner_parameters: ScannerParameters):
+def get_b_value_complete(gamma, G: np.ndarray, Delta: np.ndarray, delta: np.ndarray,
+                         scanner_parameters: ScannerParameters):
     """
 
     :param G: mT/mm
@@ -24,7 +24,7 @@ def get_b_value_complete(G: np.ndarray, Delta: np.ndarray, delta: np.ndarray, sc
     :return: b value in s/mm^2
     """
     t_rise = compute_t_rise(G, scanner_parameters)
-    prefactor = GAMMA ** 2 * G ** 2
+    prefactor = gamma ** 2 * G ** 2
     term1 = delta ** 2 * (Delta - delta / 3)
     term2 = (1 / 30) * t_rise ** 3
     term3 = - (delta / 6) * t_rise ** 2
