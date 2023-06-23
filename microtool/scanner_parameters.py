@@ -18,9 +18,9 @@ class ScannerParameters:
     @property
     def t_rise(self) -> float:
         """
-        :return: The inferred rise time in seconds
+        :return: The inferred rise time in milliseconds
         """
         return self.G_max / self.S_max
 
 
-default_scanner = ScannerParameters(4., 6., 14., 200e-3, 1300)
+default_scanner = ScannerParameters(4., 6., 14., 200e-3, 1300e-3)

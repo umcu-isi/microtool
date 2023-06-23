@@ -303,12 +303,13 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     Defines a diffusion MR acquisition scheme. (PGSE?)
 
     :param gradient_directions: A list or numpy array of direction cosines.
-    :param gradient_magnitudes: The gradient magnitudes in millitesla per meter (mT/m)
-    :param pulse_widths: A list or numpy array of pulse widths δ in milliseconds.
-    :param pulse_intervals: A list or numpy array of pulse intervals Δ in milliseconds.
+    :param gradient_magnitudes: The gradient magnitudes in tesla per meter (T/m)
+    :param pulse_widths: A list or numpy array of pulse widths δ in seconds.
+    :param pulse_intervals: A list or numpy array of pulse intervals Δ in seconds.
+    :param echo_times: A list or numpy array of the echo times in seconds.
+    :param scan_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
     :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
     """
-
     def __init__(self,
                  gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],
                  gradient_magnitudes: Union[List[float], np.ndarray],
