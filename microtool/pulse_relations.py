@@ -34,9 +34,10 @@ def get_b_value_complete(gamma, G: np.ndarray, Delta: np.ndarray, delta: np.ndar
 def compute_t_rise(G: np.ndarray, scanner_parameters: ScannerParameters):
     """
 
-    :param G: mT/m
+    :param G: mT/mm
     :param scanner_parameters:
-    :return:
+    :return: The rise time in s
     """
-    s_max = scanner_parameters.S_max
-    return G / s_max
+    s_max = scanner_parameters.S_max  # mT/mm/ms
+    tr_ms = G / s_max
+    return tr_ms * 1e-3

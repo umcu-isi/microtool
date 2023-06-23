@@ -31,6 +31,10 @@ def test_simple_pulse_relation():
 class TestFullPulseRelation:
     def test_t_rise(self):
         t_r = compute_t_rise(G_magnitude, scanner_parameters)
+
+        # since we convert units in this particular function we add a correction factor
+        t_r = t_r.to('s') * 1e3
+
         assert t_r.units == ureg.second
 
     def test_b_value(self):
