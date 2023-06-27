@@ -15,7 +15,7 @@ from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.utils.solve_echo_time import minimal_echo_time
 from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT, PULSE_TIMING_LB, PULSE_TIMING_UB, \
     PULSE_TIMING_SCALE
-from .pulse_relations import get_b_value_complete
+from .pulse_relations import get_b_value_complete, get_gradients
 
 
 class AcquisitionParameters:
@@ -302,8 +302,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
     Defines a diffusion MR acquisition scheme. (PGSE?)
 
-    :param gradient_directions: A list or numpy array of direction cosines.
     :param gradient_magnitudes: The gradient magnitudes in tesla per meter or equivalently mT/mm
+    :param gradient_directions: A list or numpy array of direction cosines.
     :param pulse_widths: A list or numpy array of pulse widths δ in seconds.
     :param pulse_intervals: A list or numpy array of pulse intervals Δ in seconds.
     :param echo_times: A list or numpy array of the echo times in seconds.
@@ -312,8 +312,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
 
     def __init__(self,
-                 gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],
                  gradient_magnitudes: Union[List[float], np.ndarray],
+                 gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray],
                  echo_times: Optional[Union[List[float], np.ndarray]] = None,
@@ -364,6 +364,16 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 upper_bound=PULSE_TIMING_UB
             )
         })
+
+    @classmethod
+    def from_bvals(cls, b_values, b_vectors, pulse_intervals, pulse_widths,
+                   echo_times: Optional[Union[List[float], np.ndarray]] = None,
+                   scan_parameters: ScannerParameters = default_scanner):
+
+        # convert bvals to pulse magnitudes
+        gradient_magnitude = get_gradients(GAMMA, b_values, pulse_intervals, pulse_widths, scan_parameters)
+
+        return cls(gradient_magnitude, b_vectors, pulse_widths, pulse_intervals, echo_times, scan_parameters)
 
     @staticmethod
     def _check_b_vectors(b_values, b_vectors) -> None:
