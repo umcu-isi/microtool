@@ -2,9 +2,9 @@ from microtool.constants import GRADIENT_UNIT, SLEW_RATE_UNIT
 from microtool.scanner_parameters import ScannerParameters
 from unit_registry import Q_, ureg
 
-t90 = Q_(4., 'ms')
-t_180 = Q_(6., 'ms')
-t_half = Q_(14, 'ms')
+t90 = Q_(4.e-3, 's')
+t_180 = Q_(6.e-3, 's')
+t_half = Q_(14e-3, 's')
 
 # typical is 40 mT/m = 40e-3 mT/mm
 g_max = Q_(200e-3, GRADIENT_UNIT)
@@ -18,4 +18,4 @@ def test_inferred_units():
     """
     Making sure that correct units are inferred
     """
-    assert scanner_parameters.t_rise.units == ureg('ms').units
+    assert scanner_parameters.t_rise.units == ureg('s').units

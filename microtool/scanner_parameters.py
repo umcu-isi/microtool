@@ -23,4 +23,4 @@ class ScannerParameters:
         return self.G_max / self.S_max
 
 
-default_scanner = ScannerParameters(4., 6., 14., 200e-3, 1300e-3)
+default_scanner = ScannerParameters(4.e-3, 6.e-3, 14.e-3, 200e-3, 1300)

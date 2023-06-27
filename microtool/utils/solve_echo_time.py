@@ -25,11 +25,22 @@ def minimal_echo_time(b, scanner_parameters: ScannerParameters):
     b[b == 0] = 50
     # converting units
     b *= 1e3
+    scanner_parameters = copy(scanner_parameters)
+    scan_parameter_to_ms(scanner_parameters)
 
     delta_max = compute_delta_max(b, scanner_parameters)
     domain = np.linspace(1e-6, delta_max, num=1000)
     TE_min = np.min(echo_time(domain, b, scanner_parameters), axis=0)
     return TE_min * 1e-3
+
+
+def scan_parameter_to_ms(scanner_parameters: ScannerParameters):
+    # time parameters
+    scanner_parameters.t_90 *= 1e3
+    scanner_parameters.t_half *= 1e3
+    scanner_parameters.t_180 *= 1e3
+    # inverse time parameter
+    scanner_parameters.S_max *= 1e-3
 
 
 def echo_time(delta, b, scanner_parameters: ScannerParameters):

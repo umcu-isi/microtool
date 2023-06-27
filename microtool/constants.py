@@ -17,7 +17,7 @@ PULSE_TIMING_LB = 1e-3
 PULSE_TIMING_UB = 100e-3
 PULSE_TIMING_SCALE = 1e-2
 
-SLEW_RATE_UNIT = 'mT/mm/ms'
+SLEW_RATE_UNIT = 'mT/mm/s'
 
 # Key for the starting signal
 BASE_SIGNAL_KEY = "S0"
