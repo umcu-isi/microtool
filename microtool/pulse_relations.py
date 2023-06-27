@@ -3,6 +3,23 @@ import numpy as np
 from .scanner_parameters import ScannerParameters
 
 
+# TODO update docstrings
+
+def get_gradients(gamma, b, Delta, delta, scanner_parameters: ScannerParameters):
+    """
+
+    :param gamma:
+    :param b:
+    :param Delta:
+    :param delta:
+    :param scanner_parameters:
+    :return:
+    """
+    t_r = scanner_parameters.t_rise
+    d = gamma ** 2 * (delta ** 2 * (Delta - delta / 3) + (1 / 30) * t_r ** 3 - (delta * t_r ** 2) / 6)
+    return np.sqrt(b / d)
+
+
 def get_b_value_simplified(gamma, G, Delta, delta):
     """
     :param G: T/m
