@@ -300,7 +300,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
 class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
-    Defines a diffusion MR acquisition scheme. (PGSE?)
+    Defines a diffusion MR acquisition scheme.
 
     :param gradient_magnitudes: The gradient magnitudes in tesla per meter or equivalently mT/mm
     :param gradient_directions: A list or numpy array of direction cosines.
@@ -366,9 +366,22 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         })
 
     @classmethod
-    def from_bvals(cls, b_values, b_vectors, pulse_widths, pulse_intervals,
+    def from_bvals(cls, b_values: np.ndarray, b_vectors: np.ndarray, pulse_widths: np.ndarray,
+                   pulse_intervals: np.ndarray,
                    echo_times: Optional[Union[List[float], np.ndarray]] = None,
                    scan_parameters: ScannerParameters = default_scanner):
+        """
+        Converts parameters and passes them to the main constructor __init__. See this constructor for more details.
+
+        :param b_values: A list or numpy array of b-values in s/mm².
+        :param b_vectors: A list or numpy array of direction cosines.
+        :param pulse_widths: A list or numpy array of pulse widths δ in seconds.
+        :param pulse_intervals: A list or numpy array of pulse intervals Δ in seconds.
+        :param echo_times: A list or numpy array of the echo times in seconds.
+        :param scan_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
+        :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
+        :return: DiffusionAcquisitionScheme
+        """
 
         # convert bvals to pulse magnitudes
         gradient_magnitude = get_gradients(GAMMA, b_values, pulse_intervals, pulse_widths, scan_parameters)
