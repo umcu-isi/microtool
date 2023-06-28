@@ -20,6 +20,6 @@ I recommend using the following flags as well for better understanding of how th
 sphinx-apidocs -M -o ./build/microtool_api
 ```
 
-By using the `-M` flag it makes sure that internal references but the module before submodules such that the hierarchy
+By using the `-M` flag it makes sure that internal references put the module before submodules such that the hierarchy
 in the documentation makes more sense.
 
