@@ -32,3 +32,6 @@ class TestDiffusionAcquisitionScheme:
         scheme = DiffusionAcquisitionScheme.from_bvals(self.expected_b_values, self.gradient_vectors, self.delta,
                                                        self.Delta)
         assert scheme.pulse_magnitude == pytest.approx(self.gradient_magnitudes, rel=.1)
+
+    def test_optimize_scheme(self):
+        raise NotImplementedError
