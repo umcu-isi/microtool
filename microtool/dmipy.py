@@ -98,8 +98,8 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     return acquisition_scheme_from_bvalues(
         scheme.b_values * 1e6,  # Convert from s/mm² to s/m².
         scheme.b_vectors,
-        scheme.pulse_widths * 1e-3,  # Convert from ms to s.
-        scheme.pulse_intervals * 1e-3,  # Convert from ms to s.
+        scheme.pulse_widths,
+        scheme.pulse_intervals,
     )
 
 
@@ -120,16 +120,17 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme,
     # convert to s/mm^2 from s/m^2
     b_values = scheme.bvalues * 1e-6
     b_vectors = scheme.gradient_directions
-    # convert to ms from s
-    pulse_widths = scheme.delta * 1e3
-    pulse_intervals = scheme.Delta * 1e3
+
+    pulse_widths = scheme.delta
+    pulse_intervals = scheme.Delta
     echo_times_SI = scheme.TE
     if echo_times_SI is None:
-        return DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals,
-                                          scan_parameters=scanner_parameters)
+        return DiffusionAcquisitionScheme.from_bvals(b_values, b_vectors, pulse_widths, pulse_intervals,
+                                                     scan_parameters=scanner_parameters)
     else:
-        return DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals, echo_times_SI * 1e3,
-                                          scan_parameters=scanner_parameters)
+        return DiffusionAcquisitionScheme.from_bvals(b_values, b_vectors, pulse_widths, pulse_intervals,
+                                                     echo_times_SI,
+                                                     scan_parameters=scanner_parameters)
 
 
 class DmipyTissueModel(TissueModel):

@@ -366,7 +366,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         })
 
     @classmethod
-    def from_bvals(cls, b_values, b_vectors, pulse_intervals, pulse_widths,
+    def from_bvals(cls, b_values, b_vectors, pulse_widths, pulse_intervals,
                    echo_times: Optional[Union[List[float], np.ndarray]] = None,
                    scan_parameters: ScannerParameters = default_scanner):
 

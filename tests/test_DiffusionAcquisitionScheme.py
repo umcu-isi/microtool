@@ -23,12 +23,12 @@ class TestDiffusionAcquisitionScheme:
         Checking if we come up with the same b_values as alexander given the other pulse parameters
         """
 
-        scheme = DiffusionAcquisitionScheme(self.gradient_vectors, self.gradient_magnitudes, self.delta, self.Delta,
+        scheme = DiffusionAcquisitionScheme(self.gradient_magnitudes, self.gradient_vectors, self.delta, self.Delta,
                                             echo_times=np.repeat(80.0e-3, self.M))
 
         assert scheme.b_values == pytest.approx(self.expected_b_values, rel=0.1)
 
     def test_b_value_constructor(self):
-        scheme = DiffusionAcquisitionScheme.from_bvals(self.expected_b_values, self.gradient_vectors, self.Delta,
-                                                       self.delta)
+        scheme = DiffusionAcquisitionScheme.from_bvals(self.expected_b_values, self.gradient_vectors, self.delta,
+                                                       self.Delta)
         assert scheme.pulse_magnitude == pytest.approx(self.gradient_magnitudes, rel=.1)

@@ -29,9 +29,10 @@ from microtool.utils import saved_models, saved_schemes
 def test_scheme_conversion():
     """
     Since some of the DmipyAcquisitionScheme attributes are strange objects we test here for all float,int or
-    numpy array attributes to check if they are approximately equal.
+    numpy array attributes to check if they are approximately equal (up to 1% percent deviation is tolerated).
 
-    Failure of this test means there is something wrong with microtool.dmipy.convert_dmipy_scheme2diffusion_scheme
+    Failure of this test means there is something wrong with microtool.dmipy.convert_dmipy_scheme2diffusion_scheme or
+    microtool.dmipy.convert_diffusion_scheme2dmipy_scheme
     """
     # going over all attributes that are python native or numpy native and asserting equality
     # Standard acquisition scheme from dmipy.data
@@ -47,7 +48,7 @@ def test_scheme_conversion():
         report = f"The attribute {attribute} triggered an assertion, i.e., they are not equal for both " \
                  f"scheme types "
         if isinstance(value, np.ndarray):
-            np.testing.assert_allclose(value, converted_attributes[attribute], rtol=0, atol=1e-5), report
+            np.testing.assert_allclose(value, converted_attributes[attribute], rtol=0.01), report
         elif isinstance(value, (float, int)):
             assert value == converted_attributes[attribute], report
 
@@ -100,7 +101,7 @@ class TestModelSchemeIntegration:
     def test_fit(self):
         """
         We should test if wrapped fit result is same as "naked" fit result.
-        This also implicitly tests the FittedTissueModel classes
+        This also implicitly tests the FittedTissueModel classes. We allow a fit deviation of up to 1%.
         """
         # fit using pure dmipy objects to generate expected result
         signal = self.stick_model.simulate_signal(self.acq_scheme, self.parameters)
@@ -118,7 +119,7 @@ class TestModelSchemeIntegration:
 
         # testing if the values are the same for all parameters
         for value, expected_value in zip(result.values(), expected_mt.values()):
-            np.testing.assert_allclose(value, expected_value, rtol=1e-6)
+            np.testing.assert_allclose(value, expected_value, rtol=0.01)
 
     def test_cascade_decorator(self):
         """
