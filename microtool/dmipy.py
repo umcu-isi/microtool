@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Union, Tuple
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
 from dmipy.core.fitted_modeling_framework import FittedMultiCompartmentModel
+from dmipy.core.modeling_framework import ModelProperties as SingleDmipyModel
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.gaussian_models import G1Ball
 
@@ -130,6 +131,19 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme,
     else:
         return DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals, echo_times_SI * 1e3,
                                           scan_parameters=scanner_parameters)
+
+
+def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel]):
+    """
+
+    :param dmipy_models:
+    :return:
+    """
+    if not isinstance(dmipy_models, list):
+        dmipy_models = [dmipy_models]
+
+    multi_comp_model = MultiCompartmentModel(dmipy_models)
+    return DmipyTissueModel(multi_comp_model)
 
 
 class DmipyTissueModel(TissueModel):
