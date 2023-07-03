@@ -1,11 +1,11 @@
 class ScannerParameters:
     """
 
-    :param t_90: Time for the 90 degree radio pulse in milliseconds
-    :param t_180: Time for the 180 degree radio pulse in milliseconds
-    :param t_half: The half readout time (or EPI pulse time) in milliseconds
+    :param t_90: Time for the 90 degree radio pulse in seconds
+    :param t_180: Time for the 180 degree radio pulse in seconds
+    :param t_half: The half readout time (or EPI pulse time) in seconds
     :param G_max: The maximum gradient strength in millitesla/millimeters
-    :param S_max: The maximum slew rate in millitesla/millimeters/milliseconds
+    :param S_max: The maximum slew rate in millitesla/millimeters/seconds
     """
 
     def __init__(self, t_90: float, t_180: float, t_half: float, G_max: float, S_max: float):
