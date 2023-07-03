@@ -242,13 +242,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
     @property
     def pulse_count(self) -> int:
-        max_parameter_length = 0
-        for parameter in self.free_parameters:
-            par_length = len(self.free_parameters[parameter])
-            if par_length > max_parameter_length:
-                max_parameter_length = par_length
-
-        return max_parameter_length
+        return len(self["DiffusionPulseMagnitude"])
 
     def get_parameter_from_parameter_vector(self, parameter: str, x: np.ndarray) -> np.ndarray:
         """
@@ -565,7 +559,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         :return:
         """
-        self["DiffusionBValue"].set_fixed_mask(self.b_values == 0)
+        mask = self.b_values == 0
+        for par in ["DiffusionPulseMagnitude", "DiffusionPulseWidth", "DiffusionPulseInterval", "EchoTime"]:
+            self[par].set_fixed_mask(mask)
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
