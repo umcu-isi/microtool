@@ -50,8 +50,8 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     scheme_copy = deepcopy(scheme)
 
     # getting all the parameters needed for scipy optimization
-    acquisition_parameter_scales = scheme_copy.free_parameter_scales
-    x0 = scheme_copy.free_parameter_vector / acquisition_parameter_scales
+    x0 = scheme_copy.x0
+
     scaled_bounds = scheme_copy.free_parameter_bounds_scaled
     scipy_bounds = bounds_tuple2scipy(scaled_bounds)
     constraints = scheme_copy.constraints
@@ -75,7 +75,7 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
 
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
-        scheme_copy.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
+        scheme_copy.set_free_parameter_vector(result['x'] * scheme_copy.free_parameter_scales)
 
     # check if the optimized scheme is better than the initial scheme
     current_loss = compute_loss(scheme_copy, model, noise_variance, loss)

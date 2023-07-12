@@ -320,8 +320,6 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         if echo_times is None:
             echo_times = minimal_echo_time(b_values, scan_parameters)
 
-        self._check_constraints(pulse_widths, pulse_intervals, b_values, echo_times, scan_parameters)
-
         # converting to np array of correct type
         gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
 
@@ -359,6 +357,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             )
         })
 
+        self._check_constraints()
+
     @classmethod
     def from_bvals(cls, b_values: np.ndarray, b_vectors: np.ndarray, pulse_widths: np.ndarray,
                    pulse_intervals: np.ndarray,
@@ -395,19 +395,14 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         # setting the vectors to (0,0,0) for the b0 measurements
         b_vectors[b0] = 0
 
-    @staticmethod
-    def _check_constraints(pulse_widths, pulse_intervals, b_values, echo_times, scanner_parameters):
-        # TODO handle code duplication between this and self.constraints
+    def _check_constraints(self):
+        for desc, constraint in self.constraints.items():
+            fun_val = constraint.fun(self.x0)
 
-        # Check the delta constraint
-        if np.any(pulse_widths > pulse_intervals):
-            raise ValueError(
-                "Invalid DiffusionAcquisitionScheme: atleast one measurement with pulse_width > pulse_interval")
-
-        # check the echo time constraint
-        Tmin = minimal_echo_time(b_values, scanner_parameters)
-        if np.any(echo_times < Tmin):
-            raise ValueError("Invalid DiffusionAcquisitionScheme: atleast one measurement with TE<TE_min")
+            lower_than_lb = fun_val < constraint.lb
+            higher_than_ub = fun_val > constraint.ub
+            if lower_than_lb.any() or higher_than_ub.any():
+                raise ValueError(f"DiffusionAcquisitionScheme: constraint violated, description {desc}")
 
     @property
     def b_values(self) -> np.ndarray:
@@ -504,9 +499,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
     @property
-    def constraints(self) -> Optional[Union[NonlinearConstraint, List[NonlinearConstraint]]]:
+    def constraints(self) -> Optional[Dict[str, NonlinearConstraint]]:
 
-        constraints = []
+        constraints = {}
 
         # Defining Δ > δ or equivalently 0 < Δ - δ < \infty
         # We check in case both parameters are fixed we need not apply a constraint
@@ -520,16 +515,16 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 return Delta - delta
 
             delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
-            constraints.append(delta_constraint)
+            constraints["PulseIntervalLargerThanPulseWidth"] = delta_constraint
 
         if not self._are_fixed(['DiffusionPulseMagnitude']):
             def gradient_constraint_fun(x: np.ndarray):
                 G = self._copy_and_update_parameter('DiffusionPulseMagnitude', x)
                 G_max = self.scan_parameters.G_max
-                return G - G_max
+                return G_max - G
 
             G_constraint = NonlinearConstraint(gradient_constraint_fun, 0.0, np.inf, keep_feasible=True)
-            constraints.append(G_constraint)
+            constraints["PulseMagnitudeSmallerThanMaxMagnitude"] = G_constraint
 
         if not self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval', 'EchoTime']):
             def echo_constraint_fun(x: np.ndarray):
@@ -538,17 +533,17 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 Delta = self._copy_and_update_parameter('DiffusionPulseInterval', x)
                 echo_time = self._copy_and_update_parameter("EchoTime", x)
 
+                # TODO Teken schema en ga na of dit correct is.
                 t_180 = self.scan_parameters.t_180
                 t_90 = self.scan_parameters.t_90
                 t_rise = self.scan_parameters.t_rise
                 t_half = self.scan_parameters.t_half
-                T_min_1 = 0.5 * delta + t_180 + 0.5 * t_rise + 0.5 * t_half
-                T_min_2 = t_90 + t_180 + 2.0 * delta + 2.0 * t_rise
-                T_min = np.maximum(T_min_1, T_min_2)
+
+                T_min = Delta + delta + 0.5 * t_90 + t_half + t_rise
                 return echo_time - T_min
 
             echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
-            constraints.append(echo_time_constraint)
+            constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
 
         return constraints
 
@@ -562,6 +557,12 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         mask = self.b_values == 0
         for par in ["DiffusionPulseMagnitude", "DiffusionPulseWidth", "DiffusionPulseInterval", "EchoTime"]:
             self[par].set_fixed_mask(mask)
+
+    @property
+    def x0(self):
+        scales = self.free_parameter_scales
+        vector = self.free_parameter_vector
+        return vector / scales
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
