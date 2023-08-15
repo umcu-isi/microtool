@@ -36,9 +36,6 @@ class TestDiffusionAcquisitionScheme:
                                                        self.Delta)
         assert scheme.pulse_magnitude == pytest.approx(self.gradient_magnitudes, rel=.1)
 
-    def test_constraints(self):
-        raise NotImplementedError
-
     def test_optimize_scheme(self):
         model = make_microtool_tissue_model(G1Ball(lambda_iso=1.7e-9))
 
