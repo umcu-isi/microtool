@@ -402,7 +402,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             lower_than_lb = fun_val < constraint.lb
             higher_than_ub = fun_val > constraint.ub
             if lower_than_lb.any() or higher_than_ub.any():
-                raise ValueError(f"DiffusionAcquisitionScheme: constraint violated, description {desc}")
+                raise ValueError(f"DiffusionAcquisitionScheme: constraint violated, scheme does not satisfy {desc}")
 
     @property
     def b_values(self) -> np.ndarray:
