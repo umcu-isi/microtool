@@ -12,6 +12,7 @@ from tabulate import tabulate
 
 from microtool.gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
 from microtool.scanner_parameters import ScannerParameters, default_scanner
+from microtool.utils.math import is_smaller_than_with_tolerance, is_higher_than_with_tolerance
 from microtool.utils.solve_echo_time import minimal_echo_time
 from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT, PULSE_TIMING_LB, PULSE_TIMING_UB, \
     PULSE_TIMING_SCALE
@@ -399,8 +400,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         for desc, constraint in self.constraints.items():
             fun_val = constraint.fun(self.x0)
 
-            lower_than_lb = fun_val < constraint.lb
-            higher_than_ub = fun_val > constraint.ub
+            lower_than_lb = is_smaller_than_with_tolerance(fun_val, constraint.lb)
+            higher_than_ub = is_higher_than_with_tolerance(fun_val, constraint.ub)
             if lower_than_lb.any() or higher_than_ub.any():
                 raise ValueError(f"DiffusionAcquisitionScheme: constraint violated, scheme does not satisfy {desc}")
 
@@ -528,18 +529,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         if not self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval', 'EchoTime']):
             def echo_constraint_fun(x: np.ndarray):
-                delta = self._copy_and_update_parameter('DiffusionPulseWidth', x)
-                # noinspection PyPep8Naming
-                Delta = self._copy_and_update_parameter('DiffusionPulseInterval', x)
                 echo_time = self._copy_and_update_parameter("EchoTime", x)
+                T_min = minimal_echo_time(self.b_values, self.scan_parameters)
 
-                # TODO Teken schema en ga na of dit correct is.
-                t_180 = self.scan_parameters.t_180
-                t_90 = self.scan_parameters.t_90
-                t_rise = self.scan_parameters.t_rise
-                t_half = self.scan_parameters.t_half
-
-                T_min = Delta + delta + 0.5 * t_90 + t_half + t_rise
                 return echo_time - T_min
 
             echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
