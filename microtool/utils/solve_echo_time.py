@@ -9,6 +9,7 @@ import numpy as np
 from microtool.constants import GAMMA
 from microtool.scanner_parameters import ScannerParameters
 
+# to '1/mT . 1/ms'
 gamma_different_unit = 1e-3 * GAMMA
 
 
@@ -21,9 +22,12 @@ def minimal_echo_time(b, scanner_parameters: ScannerParameters):
     """
     # copying so we dont actually change bvalues that this function takes
     b = copy(b)
+
     # for the zero b-values we just take the b = 50 s/mm^2 since it will be a suitable constraint
-    b[b == 0] = 50
-    # converting units
+    # Avoids singularity in minimal echo time computation
+    b[b == 0] = 5.0
+
+    # converting units to milliseconds/millimeters^2
     b *= 1e3
     scanner_parameters = copy(scanner_parameters)
     scan_parameter_to_ms(scanner_parameters)
@@ -31,6 +35,8 @@ def minimal_echo_time(b, scanner_parameters: ScannerParameters):
     delta_max = compute_delta_max(b, scanner_parameters)
     domain = np.linspace(1e-6, delta_max, num=1000)
     TE_min = np.min(echo_time(domain, b, scanner_parameters), axis=0)
+
+    # echo time convert back to seconds
     return TE_min * 1e-3
 
 
@@ -51,7 +57,9 @@ def echo_time(delta, b, scanner_parameters: ScannerParameters):
     t_half = scanner_parameters.t_half
     # surrogate parameter for readability
     B = b / (gamma_different_unit ** 2 * G_max ** 2)
-    Delta = (B - t_rise / 30) * delta ** (-2) + (t_rise / 6) * delta ** (-1) + delta / 3
+
+    # TODO check met vergelijking (20)
+    Delta = (1 / delta ** 2) * (B + (1 / 30) * t_rise ** 3) + delta / 3 - (1 / (6 * delta)) * t_rise ** 2
     return 0.5 * t90 + Delta + delta + t_rise + t_half
 
 

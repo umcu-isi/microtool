@@ -9,7 +9,7 @@ def test_solve_echo_time():
     """
     The relation found should present as a cubic
     """
-    b = np.linspace(0.05, 3, num=500) * 1e3  # s/mm^2
+    b = np.linspace(0, 3, num=500) * 1e3  # s/mm^2
 
     print(minimal_echo_time(b, default_scanner))
     plt.plot(minimal_echo_time(b, default_scanner), b)
