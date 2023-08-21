@@ -1,6 +1,7 @@
 """
 Insert useful information
 """
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from dmipy.signal_models.gaussian_models import G1Ball
@@ -9,6 +10,7 @@ from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.dmipy import make_microtool_tissue_model
 from microtool.gradient_sampling import sample_uniform
 from microtool.optimize import optimize_scheme
+from microtool.utils.plotting import plot_acquisition_parameters
 
 
 class TestDiffusionAcquisitionScheme:
@@ -27,8 +29,6 @@ class TestDiffusionAcquisitionScheme:
         """
 
         scheme = DiffusionAcquisitionScheme(self.gradient_magnitudes, self.gradient_vectors, self.delta, self.Delta)
-        # echo_times=np.repeat(80.0e-3, self.M))
-
         assert scheme.b_values == pytest.approx(self.expected_b_values, rel=0.1)
 
     def test_b_value_constructor(self):
@@ -45,4 +45,11 @@ class TestDiffusionAcquisitionScheme:
         delta = np.array([20.0, 20.0, 18.0, 16.0, 8.0]) * 1e-3
         scheme = DiffusionAcquisitionScheme(gradient_magnitudes, directions, delta, Delta)
         scheme.fix_b0_measurements()
-        optimal_scheme, _ = optimize_scheme(scheme, model, noise_variance=.02, method='trust-constr')
+        print(scheme)
+        plot_acquisition_parameters(scheme)
+        plt.savefig("initial_scheme.png")
+        plt.close()
+        optimal_scheme, _ = optimize_scheme(scheme, model, noise_variance=.02)
+        print(optimal_scheme)
+        plot_acquisition_parameters(optimal_scheme)
+        plt.savefig("optimal_scheme.png")
