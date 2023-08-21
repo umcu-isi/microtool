@@ -319,7 +319,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         b_values = get_b_value_complete(GAMMA, gradient_magnitudes, pulse_intervals, pulse_widths, scan_parameters)
         # set default echo times to minimal echo time based on scan parameters and b values
         if echo_times is None:
-            echo_times = minimal_echo_time(b_values, scan_parameters)
+            # offset to prevent being to close to actual minimal echo times
+            offset = 1e-6
+            echo_times = minimal_echo_time(b_values, scan_parameters) + offset
 
         # converting to np array of correct type
         gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
