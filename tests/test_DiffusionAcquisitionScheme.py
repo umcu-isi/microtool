@@ -10,10 +10,10 @@ from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.dmipy import make_microtool_tissue_model
 from microtool.gradient_sampling import sample_uniform
 from microtool.optimize import optimize_scheme
-from microtool.utils.plotting import plot_acquisition_parameters
+from microtool.utils.plotting import plot_acquisition_parameters, LossInspector
 
 
-class TestDiffusionAcquisitionScheme:
+class TestDiffusionAcquisitionSchemeConstruction:
     expected_b_values = [20087, 18771, 6035, 1744]
     M = 4  # number of parameter combinations for every direction
 
@@ -36,20 +36,29 @@ class TestDiffusionAcquisitionScheme:
                                                        self.Delta)
         assert scheme.pulse_magnitude == pytest.approx(self.gradient_magnitudes, rel=.1)
 
-    def test_optimize_scheme(self):
-        model = make_microtool_tissue_model(G1Ball(lambda_iso=1.7e-9))
 
-        directions = sample_uniform(5)
-        gradient_magnitudes = np.array([0.0, .200, .200, .121, .200])
-        Delta = np.array([25.0, 25.0, 26.0, 29.0, 13.0]) * 1e-3
-        delta = np.array([20.0, 20.0, 18.0, 16.0, 8.0]) * 1e-3
-        scheme = DiffusionAcquisitionScheme(gradient_magnitudes, directions, delta, Delta)
-        scheme.fix_b0_measurements()
-        print(scheme)
-        plot_acquisition_parameters(scheme)
+class TestDiffusionAcquisitionSchemeOptimization:
+    model = make_microtool_tissue_model(G1Ball(lambda_iso=1.7e-9))
+
+    directions = sample_uniform(5)
+    gradient_magnitudes = np.array([0.0, .200, .200, .121, .200])
+    Delta = np.array([25.0, 25.0, 26.0, 29.0, 13.0]) * 1e-3
+    delta = np.array([20.0, 20.0, 5.0, 16.0, 8.0]) * 1e-3
+    scheme = DiffusionAcquisitionScheme(gradient_magnitudes, directions, delta, Delta)
+    scheme.fix_b0_measurements()
+
+    def test_loss_landscape(self):
+        loss_inspector = LossInspector(self.scheme, self.model, noise_var=.02)
+        loss_inspector.plot([{"DiffusionPulseWidth": 1}])
+        plt.savefig("loss_landscape.png")
+
+    def test_optimize_scheme(self):
+        print(self.scheme)
+        plot_acquisition_parameters(self.scheme)
         plt.savefig("initial_scheme.png")
         plt.close()
-        optimal_scheme, _ = optimize_scheme(scheme, model, noise_variance=.02)
+        optimal_scheme, _ = optimize_scheme(self.scheme, self.model, noise_variance=.02, method="trust-constr",
+                                            solver_options={"verbose": 2})
         print(optimal_scheme)
         plot_acquisition_parameters(optimal_scheme)
         plt.savefig("optimal_scheme.png")
