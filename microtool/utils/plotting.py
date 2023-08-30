@@ -55,14 +55,14 @@ class LossInspector:
                 if pulse_id >= self.scheme.pulse_count or pulse_id < 0:
                     raise ValueError(f"Invalid pulse id provided for {key}.")
 
-        x_optimal = self.scheme.free_parameter_vector / self.scheme.free_parameter_scales
+        x_current = self.scheme.free_parameter_vector / self.scheme.free_parameter_scales
 
         # extracting the indices of the parameters we want to plot
         parameter_idx = []
         for parameter in parameters:
             parameter_idx.append(self.scheme.get_free_parameter_idx(*parameter.keys(), *parameter.values()))
 
-        parameters_optimal = [x_optimal[i] for i in parameter_idx]
+        parameters_current = [x_current[i] for i in parameter_idx]
         # make domains if not provided
         if domains:
             self._check_domains(parameters, domains)
@@ -84,7 +84,7 @@ class LossInspector:
         if len(parameters) == 2:
             def loss(x1, x2):
                 # return loss given two parameters we are changing and other parameters left constant
-                params = x_optimal
+                params = x_current
                 params[parameter_idx[0]] = x1
                 params[parameter_idx[1]] = x2
                 return self.compute_loss(params)
@@ -100,7 +100,7 @@ class LossInspector:
             Z = vloss(X1, X2)
 
             ax.plot_surface(X1 * scales[0], X2 * scales[1], Z, alpha=0.5, color='grey')
-            ax.plot(*[parameters_optimal[i] * scales[i] for i in range(2)], loss(*parameters_optimal), 'ro',
+            ax.plot(*[parameters_current[i] * scales[i] for i in range(2)], loss(*parameters_current), 'ro',
                     label="Optimal point")
             ax.legend()
             ax.set_zlabel("Loss")
@@ -112,7 +112,7 @@ class LossInspector:
             # Normal plot if investigating 1 parameter
             def loss(x1):
                 # return loss given x1
-                params = x_optimal
+                params = x_current
                 params[parameter_idx[0]] = x1
                 return self.compute_loss(params)
 
@@ -122,7 +122,8 @@ class LossInspector:
             # making the figure
             plt.figure()
             plt.plot(domains[:, 0] * scales[0], vloss(domains[:, 0]))
-            plt.plot(parameters_optimal[0] * scales[0], loss(parameters_optimal[0]), 'ro', label="Optimal point")
+            plt.plot(parameters_current[0] * scales[0], loss(parameters_current[0]), 'ro', label="Current point")
+
             plt.xlabel(list(parameters[0].keys())[0] + " [" + str(parameters[0].values()) + "]")
             plt.ylabel("Loss function")
             plt.legend()
