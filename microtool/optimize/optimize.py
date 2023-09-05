@@ -1,6 +1,6 @@
 import warnings
 from copy import deepcopy
-from typing import Optional, Union, Tuple, TypeVar, List
+from typing import Optional, Union, Tuple, TypeVar, List, Dict
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize, differential_evolution, Bounds
@@ -8,6 +8,7 @@ from scipy.optimize import OptimizeResult, minimize, differential_evolution, Bou
 from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
+from ..constants import ConstraintTypes
 from ..tissue_model import TissueModel
 
 # A way of type hinting all the derived classes of AcquisitionScheme
@@ -54,7 +55,7 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
 
     scaled_bounds = scheme_copy.free_parameter_bounds_scaled
     scipy_bounds = bounds_tuple2scipy(scaled_bounds)
-    constraints = list(scheme_copy.constraints.values())
+    constraints = scheme_copy.constraint_list
 
     # The parameters required to fully define the loss function.
     scipy_loss_args = (scheme_copy, model, noise_variance, loss, loss_scaling_factor)
@@ -67,7 +68,7 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
         result = differential_evolution(scipy_loss, bounds=scipy_bounds,
                                         args=scipy_loss_args,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
-                                        polish=True, **solver_options)
+                                        polish=False, **solver_options)
     else:
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scipy_bounds, constraints=constraints,
@@ -75,12 +76,17 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
 
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
+        x = result['x']
         scheme_copy.set_free_parameter_vector(result['x'] * scheme_copy.free_parameter_scales)
+    else:
+        raise RuntimeError("No suitable solution was found?")
 
     # check if the optimized scheme is better than the initial scheme
     current_loss = compute_loss(scheme_copy, model, noise_variance, loss)
     if current_loss > initial_loss:
         raise RuntimeError("Loss increased during optimization, try a different optimization method.")
+
+    check_constraints_satisfied(x, constraints)
 
     warn_early_termination(result)
 
@@ -131,3 +137,23 @@ def check_degrees_of_freedom(scheme: AcquisitionScheme, model: TissueModel):
     if M > N:
         raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
                          f"AcquisitionScheme parameters ({N}) with meaningful result.")
+
+
+def check_constraints_satisfied(x: np.ndarray, constraints: Dict[str, ConstraintTypes]):
+    """
+    :param x: The scipy parameter vector
+    :param constraints: The constraints dictionary
+    :raises: RunTimeError if any of the constraints are not satisfied for parameter vector x
+    """
+    error_msg = ""
+    for key, constraint in constraints.items():
+        value = constraint.fun(x)
+
+        lb_c = value < constraint.lb
+        ub_c = value > constraint.ub
+
+        if np.any(lb_c) or np.any(ub_c):
+            error_msg += f"The {key} constraint is not satisfied."
+
+    if error_msg != "":
+        raise RuntimeError(error_msg)
