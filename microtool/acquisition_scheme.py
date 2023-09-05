@@ -265,7 +265,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
     @property
     @abstractmethod
-    def constraints(self) -> ConstraintTypes:
+    def constraints(self) -> Dict[str, ConstraintTypes]:
         """
         Returns optimisation constraints on the scheme parameters. Implementation is child-class specific.
 
@@ -274,6 +274,10 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         A is the matrix defining the constraint relation between parameters.
         """
         raise NotImplementedError()
+
+    @property
+    def constraint_list(self) -> List[ConstraintTypes]:
+        return list(self.constraints.values())
 
     def _copy_and_update_parameter(self, parameter: str, x: np.ndarray):
         """
