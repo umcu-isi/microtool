@@ -4,7 +4,7 @@ Insert useful information
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from dmipy.signal_models.gaussian_models import G1Ball
+from dmipy.signal_models.sphere_models import S2SphereStejskalTannerApproximation
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.dmipy import make_microtool_tissue_model
@@ -38,7 +38,7 @@ class TestDiffusionAcquisitionSchemeConstruction:
 
 
 class TestDiffusionAcquisitionSchemeOptimization:
-    model = make_microtool_tissue_model(G1Ball(lambda_iso=1.7e-9))
+    model = make_microtool_tissue_model(S2SphereStejskalTannerApproximation(diameter=1e-6))
 
     directions = sample_uniform(5)
     gradient_magnitudes = np.array([0.0, .200, .200, .121, .200])
@@ -57,8 +57,10 @@ class TestDiffusionAcquisitionSchemeOptimization:
         plot_acquisition_parameters(self.scheme)
         plt.savefig("initial_scheme.png")
         plt.close()
-        optimal_scheme, _ = optimize_scheme(self.scheme, self.model, noise_variance=.02, method="trust-constr",
-                                            solver_options={"verbose": 2})
+
+        optimal_scheme, result = optimize_scheme(self.scheme, self.model, noise_variance=.02,
+                                                 method="differential_evolution", solver_options={})
+
         print(optimal_scheme)
         plot_acquisition_parameters(optimal_scheme)
         plt.savefig("optimal_scheme.png")
