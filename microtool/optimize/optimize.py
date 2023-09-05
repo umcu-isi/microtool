@@ -87,7 +87,7 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     if current_loss > initial_loss:
         raise RuntimeError("Loss increased during optimization, try a different optimization method.")
 
-    check_constraints_satisfied(x, constraints)
+    check_constraints_satisfied(x, scheme_copy.constraints)
 
     warn_early_termination(result)
 
