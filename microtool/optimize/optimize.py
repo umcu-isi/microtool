@@ -34,7 +34,8 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     :param loss: a function of type LossFunction.
     :param loss_scaling_factor: Can be used to scale the loss function to order 1.0 if you notice extreme values.
     :param method: Type of solver. See the documentation for scipy.optimize.minimize
-    :param solver_options: Options specific to the solver check the documentation of the solver to see what can be done.
+    :param solver_options: Options specific to the solver, provided as a dictionary with the options as keywords, see
+                            the documentation of the solver for the keywords.
     :return: A scipy.optimize.OptimizeResult object.
     """
     # setting to empty dict because unpack operation is required later
