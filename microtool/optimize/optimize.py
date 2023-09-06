@@ -154,7 +154,8 @@ def check_constraints_satisfied(x: np.ndarray, constraints: Dict[str, Constraint
         ub_c = value > constraint.ub
 
         if np.any(lb_c) or np.any(ub_c):
-            error_msg += f"The {key} constraint is not satisfied."
+            error_msg += f"The {key} constraint is not satisfied. With violation {value} not in " \
+                         f"[{constraint.lb},{constraint.ub}]"
 
     if error_msg != "":
         raise RuntimeError(error_msg)
