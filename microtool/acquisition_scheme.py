@@ -512,7 +512,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         constraints = {}
 
-        # Defining Δ > δ or equivalently 0 < Δ - δ < \infty
+        # Defining Δ > δ + epsilon + t180 or equivalently 0 < Δ - (δ + epsilon + t180) < \infty
         # We check in case both parameters are fixed we need not apply a constraint
         if not self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval']):
             # get non free parameter values and mask with the free parameter mask
@@ -521,7 +521,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 delta = self._copy_and_update_parameter('DiffusionPulseWidth', x)
                 # noinspection PyPep8Naming
                 Delta = self._copy_and_update_parameter('DiffusionPulseInterval', x)
-                return Delta - delta
+                t_rise = self.scan_parameters.t_rise
+                t180 = self.scan_parameters.t_180
+                return Delta - (delta + t_rise + t180)
 
             delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints["PulseIntervalLargerThanPulseWidth"] = delta_constraint
