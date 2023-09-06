@@ -282,7 +282,9 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     def _copy_and_update_parameter(self, parameter: str, x: np.ndarray):
         """
         Makes a copy from Acquisition parameter values and inserts the values suggested by the optimizer in
-        x.
+        x. This allows us to extract the parameter values for all pulses in a single array also if the parameter was
+        fixed for a particular pulse.
+
         :param parameter: The name of the parameter for which you want the update full value array
         :param x: The optimizer suggestion for ALL free parameters
         :return: The copy of all values and the updated free parameter values
