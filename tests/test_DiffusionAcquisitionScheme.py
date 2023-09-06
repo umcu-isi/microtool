@@ -59,7 +59,8 @@ class TestDiffusionAcquisitionSchemeOptimization:
         plt.close()
 
         optimal_scheme, result = optimize_scheme(self.scheme, self.model, noise_variance=.02,
-                                                 method="differential_evolution", solver_options={})
+                                                 method="differential_evolution",
+                                                 solver_options={"strategy": "best1exp"})
 
         print(optimal_scheme)
         plot_acquisition_parameters(optimal_scheme)
