@@ -537,6 +537,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         if not self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval', 'EchoTime']):
             def echo_constraint_fun(x: np.ndarray):
+                self.set_free_parameter_vector(x * self.free_parameter_scales)
                 echo_time = self._copy_and_update_parameter("EchoTime", x)
                 T_min = minimal_echo_time(self.b_values, self.scan_parameters)
 
