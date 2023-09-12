@@ -22,7 +22,7 @@ def main():
     # ------------- Setting up dmipy objects -----------
     noise_var = 0.02
     # -------------ACQUISITION-------------------
-    scheme = saved_schemes.alexander2008()
+    scheme = saved_schemes.alexander2008_frombvals()
     scheme_wrapped = convert_dmipy_scheme2diffusion_scheme(scheme)
 
     # ------MODEL-------------

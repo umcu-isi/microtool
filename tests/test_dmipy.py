@@ -126,7 +126,7 @@ class TestModelSchemeIntegration:
         Test fitting using cascaded decorator.
         """
         # -------- Acquisition
-        scheme_naked = saved_schemes.alexander2008()
+        scheme_naked = saved_schemes.alexander2008_frombvals()
         scheme_wrapped = convert_dmipy_scheme2diffusion_scheme(scheme_naked)
 
         # ---------- initialize expected result by manually sequentially fitting and setting initial values

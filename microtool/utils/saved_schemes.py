@@ -38,7 +38,7 @@ def alexander2008_optimized_directions(shells: List[int]) -> DmipyAcquisitionSch
     return acquisition_scheme_from_bvalues(bvalues, gradient_directions, delta, Delta)
 
 
-def alexander2008() -> DmipyAcquisitionScheme:
+def alexander2008_frombvals() -> DmipyAcquisitionScheme:
     """
     This function does the setup for the acquisition scheme as defined by alexander et al.
 
