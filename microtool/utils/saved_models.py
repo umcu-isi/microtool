@@ -62,7 +62,7 @@ def cylinder_zeppelin() -> DmipyTissueModel:
     mc_model = cylinder_zeppelin_naked()
 
     # Wrapping the model for compatibility
-    mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=[.5, .5])
+    mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=[.7, .3])
 
     return mc_model_wrapped
 
