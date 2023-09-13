@@ -1,11 +1,7 @@
-from typing import List
-
 import numpy as np
-from dmipy.core.acquisition_scheme import acquisition_scheme_from_bvalues, DmipyAcquisitionScheme
 
 from microtool.acquisition_scheme import InversionRecoveryAcquisitionScheme, DiffusionAcquisitionScheme
-from microtool.constants import PULSE_TIMING_LB
-from microtool.gradient_sampling import sample_shells_rotation
+from microtool.constants import PULSE_TIMING_LB, PULSE_TIMING_UB
 from microtool.gradient_sampling import sample_uniform
 from microtool.scanner_parameters import default_scanner
 
@@ -17,75 +13,24 @@ def alexander_initial_random() -> DiffusionAcquisitionScheme:
     G_max = 0.2  # T m^-1
     default_scanner.G_max = G_max
     gradient_magnitudes = np.random.uniform(0.0, G_max, N_pulses)
-    gradient_directions = np.repeat(sample_uniform(N), M, axis=0)
+    gradient_directions = np.tile(sample_uniform(N), (M, 1))
 
     pulse_intervals = np.linspace(PULSE_TIMING_LB, 0.02, N_pulses) + 0.01
     pulse_widths = np.linspace(PULSE_TIMING_LB, 0.01, N_pulses)
 
-    return DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
-                                      scan_parameters=default_scanner)
+    scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
+                                        scan_parameters=default_scanner)
 
+    # fix echo time to max values
+    scheme["EchoTime"].values = np.repeat(PULSE_TIMING_UB, N_pulses)
+    scheme["EchoTime"].set_fixed_mask(np.ones(N_pulses, dtype=bool))
 
-def alexander2008_optimized_directions(shells: List[int]) -> DmipyAcquisitionScheme:
-    # setting some random b0 measurements because alexander does not specify.
-    n_b0 = 18
-    b0 = np.zeros(n_b0)
-    zero_directions = sample_uniform(n_b0)
-    zero_delta = np.repeat(0.007, n_b0)
-    zero_Delta = np.repeat(0.012, n_b0)
+    # mark the repeated parameters
+    repeated_parameters = ['DiffusionPulseMagnitude', 'DiffusionPulseWidth', 'DiffusionPulseInterval']
+    for parameter in repeated_parameters:
+        scheme[parameter].set_repetition_period(N)
 
-    # Entered in reverse order so flipping to have better
-    unique_bvals = np.flip(np.array([17370, 3580, 1216]) * 1e6)
-    unique_delta = np.flip(np.array([0.019, 0.016, 0.007]))
-    unique_Delta = np.flip(np.array([0.024, 0.027, 0.012]))
-
-    # Extending b_values array for every direction in every shell
-    bvalues = np.repeat(unique_bvals, shells)
-    delta = np.repeat(unique_delta, shells)
-    Delta = np.repeat(unique_Delta, shells)
-
-    gradient_directions = sample_shells_rotation(shells)
-    gradient_directions = np.concatenate(gradient_directions)
-
-    # Prepending b0 measurements
-    bvalues = np.concatenate([b0, bvalues])
-    delta = np.concatenate([zero_delta, delta])
-    Delta = np.concatenate([zero_Delta, Delta])
-    gradient_directions = np.concatenate([zero_directions, gradient_directions], axis=0)
-
-    return acquisition_scheme_from_bvalues(bvalues, gradient_directions, delta, Delta)
-
-
-def alexander2008_frombvals() -> DmipyAcquisitionScheme:
-    """
-    This function does the setup for the acquisition scheme as defined by alexander et al.
-
-    :return: Acquisition scheme as defined by Alexander etal.
-    """
-
-    # setting some random b0 measurements because alexander does not specify.
-    n_b0 = 18
-    b0 = np.zeros(n_b0)
-    zero_directions = sample_uniform(n_b0)
-    zero_delta = np.repeat(0.007, n_b0)
-    zero_Delta = np.repeat(0.012, n_b0)
-
-    n_measurements = 4
-    n_directions = 30
-    # Extending b_values array for every direction
-
-    bvalues = np.repeat(np.array([17370, 3580, 1216, 1205]) * 1e6, n_directions)
-    delta = np.repeat(np.array([0.019, 0.016, 0.007, 0.007]), n_directions)
-    Delta = np.repeat(np.array([0.024, 0.027, 0.012, 0.012]), n_directions)
-    gradient_directions = np.tile(sample_uniform(n_directions), (n_measurements, 1))
-
-    # Prepending b0 measurements
-    bvalues = np.concatenate([b0, bvalues])
-    delta = np.concatenate([zero_delta, delta])
-    Delta = np.concatenate([zero_Delta, Delta])
-    gradient_directions = np.concatenate([zero_directions, gradient_directions], axis=0)
-
-    return acquisition_scheme_from_bvalues(bvalues, gradient_directions, delta, Delta)
+    return scheme
 
 
 def ir_scheme_repeated_parameters(n_pulses: int) -> InversionRecoveryAcquisitionScheme:
