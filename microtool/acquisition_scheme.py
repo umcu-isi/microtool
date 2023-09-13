@@ -49,6 +49,8 @@ class AcquisitionParameters:
         self.upper_bound = upper_bound
         self.fixed = fixed
         self._optimize_mask = np.tile(not self.fixed, self.values.shape)
+        self.has_repeated_measurements = False
+        self._repetition_period = 0
 
     def __str__(self):
         fixed = ' (fixed parameter)' if self.fixed else ''
@@ -87,6 +89,42 @@ class AcquisitionParameters:
     @property
     def optimize_mask(self):
         return self._optimize_mask
+
+    def set_repetition_period(self, repetition_period: int):
+        """
+        the free values for parameters will always be stored in the first n measurements where n is
+        the repetition period, other values will be fixed. To update the values in the fixed measurements call
+        update repeated values.
+
+        :param repetition_period: Number of measurements before parameter values are repeated
+        """
+        N_total = len(self.values)
+        if N_total % repetition_period != 0:
+            raise ValueError(
+                f"The repetition period {repetition_period} does not match with the amount of measurements {N_total}")
+        self._repetition_period = repetition_period
+
+        # Fix all but the first period of measurements
+
+        mask = np.ones(self.values.shape, dtype=bool)
+        mask[::self._repetition_period] = False
+
+        self.set_fixed_mask(mask)
+        self.has_repeated_measurements = True
+
+    def update_repeated_values(self):
+        """
+        Sets the parameter values from the first value after every repetition period.
+
+        :raises ValueError: If the parameter does not have repeated measurements
+        """
+        if not self.has_repeated_measurements:
+            raise ValueError(f"The parameter does not have repeated measurements")
+
+        # the free values for parameters
+        period = self._repetition_period
+        for i in range(0, len(self.values), period):
+            self.values[i + 1:i + period] = self.values[i]
 
     @staticmethod
     def _check_bounded(values, lower_bound, upper_bound):
@@ -181,6 +219,11 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
             stride = int(prod(shape))
             new_values = vector[i:(i + stride)]
             self[key].set_free_values(new_values.reshape(shape))
+
+            # Update repeated measurements
+            if self[key].has_repeated_measurements:
+                self[key].update_repeated_values()
+
             i += stride
 
     def get_free_parameter_idx(self, parameter: str, pulse_id: int) -> int:
