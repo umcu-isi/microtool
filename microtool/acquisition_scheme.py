@@ -121,16 +121,19 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     def __str__(self) -> str:
 
         table = {}
+        optimization_parameters = 0
         for key, value in self.items():
             if value.fixed:
                 entry = {f"{key} [{value.unit}] (fixed)": value.values}
             else:
                 entry = {f"{key} [{value.unit}] in {value.lower_bound, value.upper_bound}": value.values}
+                optimization_parameters += np.sum(self[key].optimize_mask)
 
             table.update(entry)
 
         table_str = tabulate(table, headers='keys')
-        return f'Acquisition scheme with {self.pulse_count} measurements and {len(self)} scalar parameters:\n{table_str}'
+        return f'Acquisition scheme with {self.pulse_count} measurements and {len(self)} scalar parameters. \n' \
+               f'total number of optimized parameters is {optimization_parameters}:\n{table_str}'
 
     @staticmethod
     def _check_parameter_lengths(parameters: Dict[str, AcquisitionParameters]):
