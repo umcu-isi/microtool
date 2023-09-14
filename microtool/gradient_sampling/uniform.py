@@ -22,10 +22,23 @@ def test_uniform():
     plot_vectors(vector_samples, "Using sample_sphere")
 
     # Optimizing the coulomb potential constraining the points to the sphere
-    samples = sample_uniform()
+    samples = sample_uniform_half_sphere(100)
     print(np.linalg.norm(samples, axis=1))
     plot_vectors(samples, "Electrostatic optimization")
     plt.show()
+
+
+def sample_uniform_half_sphere(N: int) -> np.ndarray:
+    """
+    Calculates uniformly spaced points on the positive (z>0) half-sphere by generating 2N vectors on the full sphere and
+    discarding vectors with z<0.
+
+    :param N: The number of sampled unit vectors required
+    :return: unit vectors in cartesian coordinates in shape (N,3) where all vectors are on the positive halfsphere
+    """
+    fullsphere = sample_uniform(2 * N)
+    half_sphere = fullsphere[fullsphere[:, 2] > 0]
+    return half_sphere
 
 
 def sample_uniform(ns: int = 100) -> np.ndarray:
