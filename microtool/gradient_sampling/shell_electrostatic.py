@@ -47,7 +47,6 @@ def cost_scipy(x: np.ndarray, n_shells: List[int], alpha: float = 0.5) -> float:
     return alpha * cost_inter_shell(vectors) + (1.0 - alpha) * cost_intra_shell(vectors)
 
 
-# TODO: just make the cost function use the flattened factor then you dont need to unpack and repack all the time
 def repack_shells(x: np.ndarray, n_shells: List[int]) -> List[np.ndarray]:
     """
     :param x: A flattened numpy ndarray that you wish to reorganize in shell structure
