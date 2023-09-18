@@ -17,11 +17,17 @@ def alexander_optimal_perturbed() -> DiffusionAcquisitionScheme:
 
     G_max = 0.2  # T m^-1
     default_scanner.G_max = G_max
+    # Alexander assumes zero rise time of infinite slewrate
+    default_scanner.S_max = np.inf
+    default_scanner.t_180 = 0.005
 
-    gradient_magnitudes = make_repeated_measurements([0.2, 0.2, 0.121, 0.2], N)
+    # offset for time quantity and gradient quantitiy respectively
+    eps_time = 1e-3
+    eps_gradient = 1e-2
+    gradient_magnitudes = make_repeated_measurements([0.2, 0.2, 0.121, 0.2], N) - eps_gradient
     gradient_directions = np.tile(sample_uniform_half_sphere(N), (M, 1))
-    pulse_intervals = make_repeated_measurements([0.025, 0.026, 0.029, 0.013], N)
-    pulse_widths = make_repeated_measurements([0.02, 0.018, 0.016, 0.008], N)
+    pulse_intervals = make_repeated_measurements([0.025, 0.026, 0.029, 0.013], N) + eps_time
+    pulse_widths = make_repeated_measurements([0.020, 0.018, 0.016, 0.0079999], N) - eps_time
     scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
                                         scan_parameters=default_scanner)
 
