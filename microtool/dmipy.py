@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from copy import copy, deepcopy
 from typing import Dict, List, Optional, Union, Tuple
 
@@ -14,6 +15,9 @@ from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.constants import BASE_SIGNAL_KEY
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
+
+# dmipy wants b0 measurements but we are happy to handle schemes without b0 measuerements
+warnings.filterwarnings('ignore', 'No b0 measurements were detected.*')
 
 
 # TODO: deal with fractional parameter relations!
