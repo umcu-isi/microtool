@@ -1,3 +1,4 @@
+import numpy as np
 from matplotlib import pyplot as plt
 
 from microtool.optimize import optimize_scheme
@@ -9,7 +10,7 @@ from microtool.utils.saved_schemes import alexander_optimal_perturbed
 
 def main():
     initial_scheme = alexander_optimal_perturbed()
-    model = cylinder_zeppelin()
+    model = cylinder_zeppelin(orientation=[np.pi / 2, 0.0])
     print(model)
     print(initial_scheme)
     loss_inspector = LossInspector(initial_scheme, model, noise_var=.02)
