@@ -17,7 +17,7 @@ def main():
     plt.savefig("loss_landscape.png")
 
     optimal_scheme, _ = optimize_scheme(initial_scheme, model, noise_variance=.02, method="trust-constr",
-                                        solver_options={"verbose": 2})
+                                        solver_options={"verbose": 2, "maxiter": 100})
 
     print(optimal_scheme)
     save_pickle(optimal_scheme, "alexander_optimized.pkl")
