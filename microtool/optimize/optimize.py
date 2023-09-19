@@ -134,7 +134,7 @@ def check_insensitive(scheme: AcquisitionScheme, model: TissueModel):
 
 def check_degrees_of_freedom(scheme: AcquisitionScheme, model: TissueModel):
     M = int(np.sum(np.array(model.include_optimize)))
-    N = len(scheme.pulse_count)
+    N = scheme.pulse_count
     if M > N:
         raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
                          f"AcquisitionScheme parameters ({N}) with meaningful result.")
