@@ -202,7 +202,7 @@ class Population:
 
         if values is None:
             # initializing a randomly distributed population over the provided domains
-            self._values = self.lower_bound + np.random.rand(sz, self.Nx) * (self.upper_bound - self.upper_bound)
+            self._values = self.lower_bound + np.random.rand(sz, self.Nx) * (self.upper_bound - self.lower_bound)
 
         # computing the starting fitness values
         self._set_fitness()
