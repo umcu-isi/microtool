@@ -1,7 +1,7 @@
 from typing import List, Tuple
 
 import numpy as np
-from scipy.optimize import OptimizeResult, Bounds
+from scipy.optimize import OptimizeResult, Bounds, NonlinearConstraint
 from tqdm.contrib.itertools import product
 
 
@@ -159,9 +159,6 @@ class SOMA(Optimizer):
         bounds = options["bounds"]
 
         constraints = options['constraints']
-        if isinstance(constraints, list):
-            raise NotImplementedError("SOMA currently does not support multiple constraints.")
-
         population = Population(self.population_sz, bounds, constraints, fun, args, self.max_fevals)
 
         migration = 0
@@ -188,7 +185,7 @@ class Population:
         """
         self.sz = sz
 
-        self.constraint = constraint
+        self.constraints = constraint
         self.lower_bound = bounds.lb
         self.upper_bound = bounds.ub
         self.Nx = len(bounds.lb)
@@ -202,13 +199,13 @@ class Population:
 
         if values is None:
             # initializing a randomly distributed population over the provided domains
-            self._values = self.lower_bound + np.random.rand(sz, self.Nx) * (self.upper_bound - self.upper_bound)
+            self._values = self.lower_bound + np.random.rand(sz, self.Nx) * (self.upper_bound - self.lower_bound)
 
         # computing the starting fitness values
         self._set_fitness()
 
     def cost_fun(self, x: np.ndarray):
-        if is_constrained(x, self.constraint):
+        if is_constrained(x, self.constraints):
             return np.inf
         else:
             return self.fun(x, *self.args)
@@ -268,7 +265,8 @@ class Population:
 
     def _putback(self, journey: np.ndarray) -> np.ndarray:
         """This function puts the travelling individuals that move out of the search space back in.
-        It does so by assigning a random value lying inside the searchspace along the parameters that violate the bounds.
+        It does so by assigning a random value lying inside the searchspace along the parameters
+        that violate the bounds.
 
         :param journey: A numpy array containing the travelling individuals parameters, shape (N_jumps, N_x)
         :return: corrected journey array s.t. all combinations of N_x lie in the search domain
@@ -291,22 +289,21 @@ class Population:
         self.fevals += self.sz
 
 
-def is_constrained(x: np.ndarray, constraint: dict) -> bool:
+def is_constrained(x: np.ndarray, constraints: List[NonlinearConstraint]) -> bool:
     """A function for checking if a given parameter combination breaks a given constraint.
 
-    :param constraint: A scipy compatible constraint dictionary
+    :param constraints: A scipy compatible constraint dictionary
     :param x: Parameter combination
     :return: boolean that is true if the parameter combination breaks the constraint
     """
-    if constraint is None:
-        return False
-    contraint_type = constraint['type']
-    constraint_function = constraint['fun']
+    for constraint in constraints:
 
-    if contraint_type == 'eq' and constraint_function(x) != 0:
-        # The constraint is broken if the constraint function is not zero (maybe need to introduce tolerance?)
-        return True
-    elif contraint_type == 'ineq' and (constraint_function(x) < 0).any():
-        return True
-    else:
-        return False
+        if constraints is None or constraints == ():
+            continue
+        else:
+            fun = constraint.fun
+            constraint_value = fun(x)
+            if np.any(constraint_value < constraint.lb) or np.any(constraint_value > constraint.ub):
+                return True
+
+    return False
