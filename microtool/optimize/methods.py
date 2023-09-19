@@ -298,7 +298,7 @@ def is_constrained(x: np.ndarray, constraint: dict) -> bool:
     :param x: Parameter combination
     :return: boolean that is true if the parameter combination breaks the constraint
     """
-    if constraint is None:
+    if constraint is None or constraint == ():
         return False
     contraint_type = constraint['type']
     constraint_function = constraint['fun']
