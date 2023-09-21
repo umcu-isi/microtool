@@ -1,3 +1,4 @@
+import numpy as np
 from matplotlib import pyplot as plt
 
 from microtool.optimize import optimize_scheme
@@ -9,7 +10,7 @@ from microtool.utils.saved_schemes import alexander_optimal_perturbed
 
 def main():
     initial_scheme = alexander_optimal_perturbed()
-    model = cylinder_zeppelin()
+    model = cylinder_zeppelin(orientation=[np.pi / 2, 0.0])
     print(model)
     print(initial_scheme)
     loss_inspector = LossInspector(initial_scheme, model, noise_var=.02)
@@ -17,7 +18,7 @@ def main():
     plt.savefig("loss_landscape.png")
 
     optimal_scheme, _ = optimize_scheme(initial_scheme, model, noise_variance=.02, method="trust-constr",
-                                        solver_options={"disp": True})
+                                        solver_options={"verbose": 2, "maxiter": 100})
 
     print(optimal_scheme)
     save_pickle(optimal_scheme, "alexander_optimized.pkl")

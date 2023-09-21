@@ -33,16 +33,29 @@ def make_expirement_directories(parent_directory: Union[Path, str], expirement_n
         parent_directory = Path(parent_directory)
 
     exp_dir = parent_directory / expirement_name
-    plotdir = exp_dir / "plots"
-    modeldir = exp_dir / "models"
-    schemedir = exp_dir / "schemes"
-    simdir = exp_dir / "simulations"
-    all_sub_dirs = plotdir, modeldir, simdir, schemedir
+    all_sub_dirs = get_experiment_subdirs(exp_dir)
     if exp_dir.is_dir():
         warnings.warn("There is already a folder with the name of the experiment. No new folders have been created.")
     else:
         exp_dir.mkdir()
-        for dir in all_sub_dirs:
-            dir.mkdir()
+        for sub_dir in all_sub_dirs:
+            sub_dir.mkdir()
 
     return all_sub_dirs
+
+
+def get_experiment_subdirs(exp_dir):
+    """
+    For extracting the subdirectories associated with an experiment directory
+
+    :param exp_dir: Path to an experiment directory
+    :return: paths to plots,models,schemes, simulations directories
+    """
+    if isinstance(exp_dir, str):
+        exp_dir = Path(exp_dir)
+
+    plotdir = exp_dir / "plots"
+    modeldir = exp_dir / "models"
+    schemedir = exp_dir / "schemes"
+    simdir = exp_dir / "simulations"
+    return plotdir, modeldir, simdir, schemedir
