@@ -3,12 +3,12 @@ import os
 import warnings
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional, Union, Tuple, TypeVar, List
+from typing import Optional, Union, Tuple, TypeVar, List, Dict
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize, differential_evolution, Bounds
 
-from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST
+from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST, compute_crlbs
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
 from ..tissue_model import TissueModel
@@ -82,9 +82,10 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
                                         polish=True, callback=progress_callback_DE, **solver_options)
     else:
+        callback = make_local_callback(scheme_copy, model, noise_variance)
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scipy_bounds, constraints=constraints,
-                          options=solver_options, callback=progress_callback_local)
+                          options=solver_options, callback=callback)
 
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
@@ -100,20 +101,32 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     return scheme_copy, result
 
 
-def log_callback(iteration, parameters, objective_function):
+def log_callback(iteration, parameters, objective_function, other_stuff: Dict[str, str] = None):
     logging.info("Iteration %d:", iteration)
-    logging.info("  Parameters: %s", parameters)
-    logging.info("  Objective Function Value: %f", objective_function)
+    logging.info("\t Parameters: %s", parameters)
+    logging.info("\t Objective Function Value: %f", objective_function)
+    if other_stuff is not None:
+        for key, val in other_stuff.items():
+            logging.info(f"\t {key}: {val}")
     logging.info("------------------------------")
 
 
-def progress_callback_local(x_current, intermediate_result: OptimizeResult):
-    fun = intermediate_result.fun
-    iteration = intermediate_result.nit
-    log_callback(iteration, x_current, fun)
+def make_local_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float) -> callable:
+    def callback(x_current, intermediate_result: OptimizeResult):
+        fun = intermediate_result.fun
+        iteration = intermediate_result.nit
+        jac = intermediate_result.jac
+
+        scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
+        crlbs = compute_crlbs(scheme, model, noise_var)
+        log_callback(iteration, x_current, fun, other_stuff={"Scaled CRLBs": f"{crlbs}", "Jacobian": f"{jac}"})
+
+    return callback
 
 
 def progress_callback_DE(x_current, convergence):
+    print("I am being called")
+
     logging.info(f"Current best solution: {x_current} | OF: NotImplemented | Convergence {convergence}")
 
 

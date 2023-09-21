@@ -136,6 +136,17 @@ class CrlbInversion(CrlbBase):
         crlb = diagonal(np.linalg.inv(information))
         return float(np.sum(crlb))
 
+    def compute_crlb_individual(self, jac: np.ndarray, signal: np.ndarray, noise_var: float) -> float:
+        """
+        Computes the crlb of the individual parameters
+        :param jac:
+        :param signal:
+        :param noise_var:
+        :return:
+        """
+        information = self.information_func(jac, signal, noise_var)
+        return diagonal(np.linalg.inv(information))
+
 
 class CrlbEigenvalues(CrlbBase):
     @staticmethod
@@ -150,6 +161,19 @@ class CrlbEigenvalues(CrlbBase):
         # Not actually the crlb but just the eigenvalues and sum does correspond to sum of crlb's
         crlb = (1 / np.linalg.eigvalsh(information))
         return crlb.sum()
+
+
+def compute_crlbs(scheme: AcquisitionScheme, model: TissueModel, noise_var: float) -> np.ndarray:
+    """
+    Function for computing the cramer rao lower bounds of the
+    :param scheme:
+    :param model:
+    :param noise_var:
+    :return:
+    """
+    jac = model.scaled_jacobian(scheme)
+    signal = model(scheme)
+    return inversion_gauss.compute_crlb_individual(jac, signal, noise_var)
 
 
 def compute_loss(scheme: AcquisitionScheme,
