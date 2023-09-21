@@ -1,5 +1,8 @@
+import logging
+import os
 import warnings
 from copy import deepcopy
+from datetime import datetime
 from typing import Optional, Union, Tuple, TypeVar, List
 
 import numpy as np
@@ -9,6 +12,16 @@ from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
 from ..tissue_model import TissueModel
+from ..utils.IO import initiate_logging_directory
+
+# Set up the logger
+log_dir = initiate_logging_directory()
+
+current_time = datetime.now().strftime('%y%m%d_%H%M')
+log_filename = f"optimization_{current_time}.log"
+logging.basicConfig(filename=os.path.join(log_dir, log_filename),
+                    level=logging.INFO,
+                    format='%(message)s')
 
 # A way of type hinting all the derived classes of AcquisitionScheme
 AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
@@ -67,11 +80,11 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
         result = differential_evolution(scipy_loss, bounds=scipy_bounds,
                                         args=scipy_loss_args,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
-                                        polish=True, **solver_options)
+                                        polish=True, callback=progress_callback_DE, **solver_options)
     else:
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scipy_bounds, constraints=constraints,
-                          options=solver_options)
+                          options=solver_options, callback=progress_callback_local)
 
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
@@ -85,6 +98,23 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     warn_early_termination(result)
 
     return scheme_copy, result
+
+
+def log_callback(iteration, parameters, objective_function):
+    logging.info("Iteration %d:", iteration)
+    logging.info("  Parameters: %s", parameters)
+    logging.info("  Objective Function Value: %f", objective_function)
+    logging.info("------------------------------")
+
+
+def progress_callback_local(x_current, intermediate_result: OptimizeResult):
+    fun = intermediate_result.fun
+    iteration = intermediate_result.nit
+    log_callback(iteration, x_current, fun)
+
+
+def progress_callback_DE(x_current, convergence):
+    logging.info(f"Current best solution: {x_current} | OF: NotImplemented | Convergence {convergence}")
 
 
 def bounds_tuple2scipy(microtool_bounds: List[Tuple[float, float]]) -> Bounds:
