@@ -1,3 +1,8 @@
+## Prerequisites
+
+The documentation building is done using sphinx. You can find installation instructions
+at https://www.sphinx-doc.org/en/master/usage/installation.html
+
 ## Building docs
 
 To generate the documentation run `make html` from this directory. The resulting documentation will be in
