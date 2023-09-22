@@ -1,15 +1,28 @@
+import logging
+import os
 import warnings
 from copy import deepcopy
+from datetime import datetime
 from typing import Optional, Union, Tuple, TypeVar, List, Dict
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize, differential_evolution, Bounds
 
-from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST
+from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST, compute_crlbs
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
 from ..constants import ConstraintTypes
 from ..tissue_model import TissueModel
+from ..utils.IO import initiate_logging_directory
+
+# Set up the logger
+log_dir = initiate_logging_directory()
+
+current_time = datetime.now().strftime('%y%m%d_%H%M')
+log_filename = f"optimization_{current_time}.log"
+logging.basicConfig(filename=os.path.join(log_dir, log_filename),
+                    level=logging.INFO,
+                    format='%(message)s')
 
 # A way of type hinting all the derived classes of AcquisitionScheme
 AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
@@ -66,14 +79,19 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
         if constraints is None:
             constraints = ()
 
+        callback = make_DE_callback(scheme_copy, model, noise_variance, loss)
+
+        logging.info("Optimizing with differential evolution optimizer.")
         result = differential_evolution(scipy_loss, bounds=scipy_bounds,
                                         args=scipy_loss_args,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
-                                        polish=True, **solver_options)
+                                        polish=True, callback=callback, **solver_options)
     else:
+        logging.info(f"Optimizing with {method}.")
+        callback = make_local_callback(scheme_copy, model, noise_variance)
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scipy_bounds, constraints=constraints,
-                          options=solver_options)
+                          options=solver_options, callback=callback)
 
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
@@ -92,6 +110,70 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     warn_early_termination(result)
 
     return scheme_copy, result
+
+
+def log_callback(iteration: int, parameters: np.ndarray, objective_function: float, more_info: Dict[str, str] = None):
+    """
+    This function is for formatting the log output of callback functions
+
+    :param iteration: The iteration count
+    :param parameters: The current best solution the optimizer found
+    :param objective_function: The value of the objective function for these parameters
+    :param more_info: A dictionary containing more info to print to the log
+    """
+    logging.info("Iteration %d:", iteration)
+    logging.info("\t Parameters: %s", parameters)
+    logging.info("\t Objective Function Value: %f", objective_function)
+    if more_info is not None:
+        for key, val in more_info.items():
+            logging.info(f"\t {key}: {val}")
+    logging.info("------------------------------")
+
+
+def make_local_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float) -> callable:
+    """
+    A maker function for the callback currently only tested with trust-constr method.
+
+    :param scheme: Acquisition scheme used in optimization
+    :param model: Tissuemodel used in optimization
+    :param noise_var: The chosen noise variance
+    :return: A callback function for use with scipy.optimize.minimize methods that support intermediate results
+    """
+
+    def callback(x_current, intermediate_result: OptimizeResult):
+        fun = intermediate_result.fun
+        iteration = intermediate_result.nit
+        jac = intermediate_result.jac
+
+        scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
+        crlbs = compute_crlbs(scheme, model, noise_var)
+        log_callback(iteration, x_current, fun, more_info={"Scaled CRLBs": f"{crlbs}", "Jacobian": f"{jac}"})
+
+    return callback
+
+
+def make_DE_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float, loss: LossFunction) -> callable:
+    """
+    A maker function for the callback function used with differential evolution optimizer.
+    Might be applicable to other methods but used here only with differential evolution.
+
+    :param scheme: Acquisition scheme used in optimization
+    :param model: Tissuemodel used in optimization
+    :param noise_var: The chosen noise variance
+    :param loss: The used loss function
+    :return: a callback function for differential evolution optimization method.
+    """
+    # Using mutable object to track iterations
+    iteration_tracker = [0]
+
+    def callback(x_current, convergence):
+        iteration_tracker[0] += 1
+        scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
+        fun = compute_loss(scheme, model, noise_var, loss)
+        crlbs = compute_crlbs(scheme, model, noise_var)
+        log_callback(iteration_tracker[0], x_current, fun, {"Scaled CRLBs": f"{crlbs}"})
+
+    return callback
 
 
 def bounds_tuple2scipy(microtool_bounds: List[Tuple[float, float]]) -> Bounds:

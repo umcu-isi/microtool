@@ -151,6 +151,19 @@ def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], Sing
     return DmipyTissueModel(multi_comp_model)
 
 
+def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel]):
+    """
+
+    :param dmipy_models:
+    :return:
+    """
+    if not isinstance(dmipy_models, list):
+        dmipy_models = [dmipy_models]
+
+    multi_comp_model = MultiCompartmentModel(dmipy_models)
+    return DmipyTissueModel(multi_comp_model)
+
+
 class DmipyTissueModel(TissueModel):
     """
     Wrapper for the MultiCompartment models used by dmipy. Note that the parameters need to be initialized in the
