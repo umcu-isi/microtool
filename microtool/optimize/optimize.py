@@ -105,17 +105,34 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     return scheme_copy, result
 
 
-def log_callback(iteration, parameters, objective_function, other_stuff: Dict[str, str] = None):
+def log_callback(iteration: int, parameters: np.ndarray, objective_function: float, more_info: Dict[str, str] = None):
+    """
+    This function is for formatting the log output of callback functions
+
+    :param iteration: The iteration count
+    :param parameters: The current best solution the optimizer found
+    :param objective_function: The value of the objective function for these parameters
+    :param more_info: A dictionary containing more info to print to the log
+    """
     logging.info("Iteration %d:", iteration)
     logging.info("\t Parameters: %s", parameters)
     logging.info("\t Objective Function Value: %f", objective_function)
-    if other_stuff is not None:
-        for key, val in other_stuff.items():
+    if more_info is not None:
+        for key, val in more_info.items():
             logging.info(f"\t {key}: {val}")
     logging.info("------------------------------")
 
 
 def make_local_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float) -> callable:
+    """
+    A maker function for the callback currently only tested with trust-constr method.
+
+    :param scheme: Acquisition scheme used in optimization
+    :param model: Tissuemodel used in optimization
+    :param noise_var: The chosen noise variance
+    :return: A callback function for use with scipy.optimize.minimize methods that support intermediate results
+    """
+
     def callback(x_current, intermediate_result: OptimizeResult):
         fun = intermediate_result.fun
         iteration = intermediate_result.nit
@@ -123,17 +140,31 @@ def make_local_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var
 
         scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
         crlbs = compute_crlbs(scheme, model, noise_var)
-        log_callback(iteration, x_current, fun, other_stuff={"Scaled CRLBs": f"{crlbs}", "Jacobian": f"{jac}"})
+        log_callback(iteration, x_current, fun, more_info={"Scaled CRLBs": f"{crlbs}", "Jacobian": f"{jac}"})
 
     return callback
 
 
 def make_DE_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float, loss: LossFunction) -> callable:
+    """
+    A maker function for the callback function used with differential evolution optimizer.
+    Might be applicable to other methods but used here only with differential evolution.
+
+    :param scheme: Acquisition scheme used in optimization
+    :param model: Tissuemodel used in optimization
+    :param noise_var: The chosen noise variance
+    :param loss: The used loss function
+    :return: a callback function for differential evolution optimization method.
+    """
+    # Using mutable object to track iterations
+    iteration_tracker = [0]
+
     def callback(x_current, convergence):
+        iteration_tracker[0] += 1
         scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
         fun = compute_loss(scheme, model, noise_var, loss)
         crlbs = compute_crlbs(scheme, model, noise_var)
-        log_callback(0, x_current, fun, {"Scaled CRLBs": f"{crlbs}"})
+        log_callback(iteration_tracker[0], x_current, fun, {"Scaled CRLBs": f"{crlbs}"})
 
     return callback
 
