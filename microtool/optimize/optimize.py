@@ -77,11 +77,15 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
         if constraints is None:
             constraints = ()
 
+        callback = make_DE_callback(scheme_copy, model, noise_variance, loss)
+
+        logging.info("Optimizing with differential evolution optimizer.")
         result = differential_evolution(scipy_loss, bounds=scipy_bounds,
                                         args=scipy_loss_args,
                                         x0=x0, workers=-1, disp=True, updating='deferred', constraints=constraints,
-                                        polish=True, callback=progress_callback_DE, **solver_options)
+                                        polish=True, callback=callback, **solver_options)
     else:
+        logging.info(f"Optimizing with {method}.")
         callback = make_local_callback(scheme_copy, model, noise_variance)
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scipy_bounds, constraints=constraints,
@@ -124,10 +128,14 @@ def make_local_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var
     return callback
 
 
-def progress_callback_DE(x_current, convergence):
-    print("I am being called")
+def make_DE_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float, loss: LossFunction) -> callable:
+    def callback(x_current, convergence):
+        scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
+        fun = compute_loss(scheme, model, noise_var, loss)
+        crlbs = compute_crlbs(scheme, model, noise_var)
+        log_callback(0, x_current, fun, {"Scaled CRLBs": f"{crlbs}"})
 
-    logging.info(f"Current best solution: {x_current} | OF: NotImplemented | Convergence {convergence}")
+    return callback
 
 
 def bounds_tuple2scipy(microtool_bounds: List[Tuple[float, float]]) -> Bounds:
