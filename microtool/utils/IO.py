@@ -37,3 +37,18 @@ def save_pickle(obj: Any, path: Union[Path, str]) -> None:
     # shorthand for pickling
     with open(path, "wb") as f:
         pickle.dump(obj, f)
+
+
+def initiate_logging_directory(root=None):
+    """
+    Creates a directory for log files in the current working directory, or in the optionally provided root directory.
+
+    :return: Path to log file directory
+    """
+    if root is None:
+        root = os.getcwd()
+
+    log_dir = os.path.join(root, 'logs')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    return log_dir

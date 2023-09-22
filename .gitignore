@@ -28,3 +28,6 @@
 
 # not sure why this directory is even here?
 /build/
+
+# dont push log files
+*.log
