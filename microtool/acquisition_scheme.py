@@ -21,7 +21,9 @@ from .pulse_relations import get_b_value_complete, get_gradients
 
 class AcquisitionParameters:
     """
-    Defines a series of N MR acquisition parameter values, such as a series of b-values.
+    Defines a series of N MR acquisition parameter values, such as a series of b-values. Set fixed values before
+    introducing repeated values through the set_repetition period method to include fixed measurements before the
+    repeated measurements.
 
     :param values: A numpy array with N parameter values.
     :param unit: The parameter unit as a string, e.g. 's/mm²'.s
@@ -98,32 +100,38 @@ class AcquisitionParameters:
 
         :param repetition_period: Number of measurements before parameter values are repeated
         """
-        N_total = len(self.values)
+        N_total = len(self.values[self.optimize_mask])
         if N_total % repetition_period != 0:
             raise ValueError(
-                f"The repetition period {repetition_period} does not match with the amount of measurements {N_total}")
+                f"The repetition period {repetition_period} does not match with the amount of measurements marked for optimization {N_total}")
         self._repetition_period = repetition_period
 
         # Fix all but the first period of measurements
 
-        mask = np.ones(self.values.shape, dtype=bool)
-        mask[::self._repetition_period] = False
+        # Make a mask for the non fixed measurements
+        mask = np.ones(shape=np.sum(self.optimize_mask))
 
-        self.set_fixed_mask(mask)
+        mask[::self._repetition_period] = False
+        optimize_mask = self.optimize_mask
+        optimize_mask[self.optimize_mask] = np.logical_not(mask)
+
+        self.set_fixed_mask(np.logical_not(optimize_mask))
         self.has_repeated_measurements = True
 
     def update_repeated_values(self):
         """
-        Sets the parameter values from the first value after every repetition period.
+        Sets the parameter values from the first value after every repetition period, starting from the first non
+        fixed measurement.
 
         :raises ValueError: If the parameter does not have repeated measurements
         """
         if not self.has_repeated_measurements:
             raise ValueError(f"The parameter does not have repeated measurements")
 
-        # the free values for parameters
         period = self._repetition_period
-        for i in range(0, len(self.values), period):
+
+        first_free_measurement = np.argmax(self.optimize_mask)
+        for i in range(first_free_measurement, len(self.values), period):
             self.values[i + 1:i + period] = self.values[i]
 
     @staticmethod
