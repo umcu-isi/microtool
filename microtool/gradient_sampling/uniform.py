@@ -5,27 +5,14 @@ Module for uniform electrostatic sampling on the sphere.
 import pathlib
 
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy.optimize import minimize
 
-from microtool.gradient_sampling.utils import sample_sphere_vectors, get_constraints, normalize, total_potential, \
-    plot_vectors
+from microtool.gradient_sampling.utils import sample_sphere_vectors, get_unit_vec_constraint, normalize, \
+    total_potential, get_positive_half_spere_constraint
 
 module_folder = pathlib.Path(__file__).resolve().parent
 folder = module_folder / 'gradient_directions'
 folder.mkdir(exist_ok=True)
-
-
-def test_uniform():
-    # Random samples on the sphere
-    vector_samples = sample_sphere_vectors()
-    plot_vectors(vector_samples, "Using sample_sphere")
-
-    # Optimizing the coulomb potential constraining the points to the sphere
-    samples = sample_uniform_half_sphere(100)
-    print(np.linalg.norm(samples, axis=1))
-    plot_vectors(samples, "Electrostatic optimization")
-    plt.show()
 
 
 def sample_uniform_half_sphere(N: int) -> np.ndarray:
@@ -36,9 +23,12 @@ def sample_uniform_half_sphere(N: int) -> np.ndarray:
     :param N: The number of sampled unit vectors required
     :return: unit vectors in cartesian coordinates in shape (N,3) where all vectors are on the positive halfsphere
     """
-    fullsphere = sample_uniform(2 * N)
-    half_sphere = fullsphere[fullsphere[:, 2] > 0]
-    return half_sphere
+    check_requested_vectors(N)
+    base_name = "half_sphere_samples_"
+
+    constraints = [get_unit_vec_constraint(), get_positive_half_spere_constraint()]
+
+    return find_or_optimize(N, base_name, constraints)
 
 
 def sample_uniform(ns: int = 100) -> np.ndarray:
@@ -49,8 +39,21 @@ def sample_uniform(ns: int = 100) -> np.ndarray:
     :param ns: Number of samples on the sphere
     :return: the unit vectors uniform on sphere in shape (ns,3)
     """
-    # Performing a look up
+    check_requested_vectors(ns)
     base_name = "uniform_samples_"
+
+    return find_or_optimize(ns, base_name, get_unit_vec_constraint())
+
+
+def check_requested_vectors(ns):
+    if ns == 0:
+        raise ValueError("Requested number of vectors is 0?")
+
+
+def find_or_optimize(ns: int, base_name, constraints):
+    """
+    Looks up if a vector collection was already optimzed, if not optimizes.
+    """
     stored_samples = [sample_path.name for sample_path in list(folder.glob(base_name + '*'))]
 
     sample_name = base_name + str(ns) + '.npy'
@@ -61,10 +64,9 @@ def sample_uniform(ns: int = 100) -> np.ndarray:
 
         vec_init = sample_sphere_vectors(ns)
         x0 = vec_init.flatten()
-        result = minimize(cost_fun, x0, constraints=get_constraints())
+        result = minimize(cost_fun, x0, constraints=constraints)
         vectors = normalize(result['x'].reshape((-1, 3)))
         np.save(str(folder / sample_name), vectors)
-
     return vectors
 
 
