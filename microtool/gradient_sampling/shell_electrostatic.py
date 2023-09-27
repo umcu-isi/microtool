@@ -10,7 +10,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.optimize import minimize
 
-from microtool.gradient_sampling.utils import sample_sphere_vectors, get_constraints, normalize, total_potential, \
+from microtool.gradient_sampling.utils import sample_sphere_vectors, get_unit_vec_constraint, normalize, \
+    total_potential, \
     plot_shells
 
 
@@ -30,7 +31,7 @@ def sample_shells_electrostatic(n_shells: List[int]) -> List[np.ndarray]:
     vec_init = list(map(sample_sphere_vectors, n_shells))
     x0 = np.concatenate(list(map(np.ravel, vec_init)))
 
-    result = minimize(cost_scipy, x0, args=(n_shells, 0.5), constraints=get_constraints())
+    result = minimize(cost_scipy, x0, args=(n_shells, 0.5), constraints=get_unit_vec_constraint())
     return list(map(normalize, repack_shells(result['x'], n_shells)))
 
 

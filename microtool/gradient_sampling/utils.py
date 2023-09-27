@@ -33,14 +33,28 @@ def normalize(vecs: np.ndarray) -> np.ndarray:
     return result
 
 
-def get_constraints() -> dict:
+def get_unit_vec_constraint() -> dict:
     """
     :return: Constraints for keeping vectors of length unity
     """
-    return {'type': 'eq', 'fun': constraint_function}
+    return {'type': 'eq', 'fun': deviation_from_unit_vec}
 
 
-def constraint_function(x: np.ndarray) -> np.ndarray:
+def get_positive_half_spere_constraint() -> dict:
+    return {"type": "ineq", "fun": distance_from_xy_plane}
+
+
+def distance_from_xy_plane(x: np.ndarray) -> np.ndarray:
+    """
+    Simply return the z coordinates of the vectors
+    :param x: The scipy array used during optimization
+    :return: the array of z coordinates
+    """
+    vecs = get_vecs_from_scipy_array(x)
+    return vecs[:, 2]
+
+
+def deviation_from_unit_vec(x: np.ndarray) -> np.ndarray:
     """
     Computes the difference of the vector lengths from unity.
 
@@ -50,9 +64,14 @@ def constraint_function(x: np.ndarray) -> np.ndarray:
     :param x: Parameter vector
     :return: array with difference from unit length for every vector
     """
-    vecs = np.reshape(x, (-1, 3))
+    vecs = get_vecs_from_scipy_array(x)
     norms = np.linalg.norm(vecs, axis=1)
     return np.abs(norms - np.ones(norms.shape))
+
+
+def get_vecs_from_scipy_array(x):
+    vecs = np.reshape(x, (-1, 3))
+    return vecs
 
 
 def make_sphere(r):
