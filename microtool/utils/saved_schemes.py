@@ -10,6 +10,10 @@ def make_repeated_measurements(val_list, N_rep):
     return np.concatenate([np.repeat(val, N_rep) for val in val_list])
 
 
+def duplicate_first_meaurement(array):
+    return np.insert(array, 0, array[0],axis=0)
+
+
 def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e-2) -> DiffusionAcquisitionScheme:
     N = 30  # Number of measurement directions
     M = 4  # "measurements" i.e. unique acquisition parameter combinations
@@ -22,15 +26,26 @@ def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e
     default_scanner.t_180 = 0.005
 
     gradient_magnitudes = make_repeated_measurements([0.2, 0.2, 0.121, 0.2], N) - eps_gradient
+
+    # prepending a b0 measurement
+    gradient_magnitudes = np.insert(gradient_magnitudes, 0, 0.0)
+
     gradient_directions = np.tile(sample_uniform_half_sphere(N), (M, 1))
+    gradient_directions = duplicate_first_meaurement(gradient_directions)
     pulse_intervals = make_repeated_measurements([0.025, 0.026, 0.029, 0.013], N) + eps_time
+    pulse_intervals = duplicate_first_meaurement(pulse_intervals)
     pulse_widths = make_repeated_measurements([0.020, 0.018, 0.016, 0.0079999], N) - eps_time
+    pulse_widths = duplicate_first_meaurement(pulse_widths)
+
     scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
                                         scan_parameters=default_scanner)
 
     # fix echo time to max values
     scheme["EchoTime"].values = np.repeat(PULSE_TIMING_UB, N_pulses)
     scheme["EchoTime"].set_fixed_mask(np.ones(N_pulses, dtype=bool))
+
+    # fixing the b0 measurement
+    scheme.fix_b0_measurements()
 
     # mark the repeated parameters
     repeated_parameters = ['DiffusionPulseMagnitude', 'DiffusionPulseWidth', 'DiffusionPulseInterval']
