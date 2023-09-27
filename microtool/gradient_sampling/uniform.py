@@ -5,27 +5,13 @@ Module for uniform electrostatic sampling on the sphere.
 import pathlib
 
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy.optimize import minimize
 
-from microtool.gradient_sampling.utils import sample_sphere_vectors, get_constraints, normalize, total_potential, \
-    plot_vectors
+from microtool.gradient_sampling.utils import sample_sphere_vectors, get_constraints, normalize, total_potential
 
 module_folder = pathlib.Path(__file__).resolve().parent
 folder = module_folder / 'gradient_directions'
 folder.mkdir(exist_ok=True)
-
-
-def test_uniform():
-    # Random samples on the sphere
-    vector_samples = sample_sphere_vectors()
-    plot_vectors(vector_samples, "Using sample_sphere")
-
-    # Optimizing the coulomb potential constraining the points to the sphere
-    samples = sample_uniform_half_sphere(100)
-    print(np.linalg.norm(samples, axis=1))
-    plot_vectors(samples, "Electrostatic optimization")
-    plt.show()
 
 
 def sample_uniform_half_sphere(N: int) -> np.ndarray:
