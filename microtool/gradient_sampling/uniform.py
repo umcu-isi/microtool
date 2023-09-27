@@ -35,7 +35,10 @@ def sample_uniform(ns: int = 100) -> np.ndarray:
     :param ns: Number of samples on the sphere
     :return: the unit vectors uniform on sphere in shape (ns,3)
     """
-    # Performing a look up
+    if ns == 0:
+        raise ValueError("Requested number of vectors is 0?")
+
+        # Performing a look up
     base_name = "uniform_samples_"
     stored_samples = [sample_path.name for sample_path in list(folder.glob(base_name + '*'))]
 
