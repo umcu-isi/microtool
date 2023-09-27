@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from microtool.gradient_sampling import sample_uniform_half_sphere
+from microtool.gradient_sampling import sample_uniform_half_sphere, sample_uniform
 from microtool.gradient_sampling.utils import sample_sphere_vectors, plot_vectors
 
 
@@ -20,7 +20,7 @@ def test_uniform():
     plot_vectors(vector_samples, "Using sample_sphere")
 
     # Optimizing the coulomb potential constraining the points to the sphere
-    samples = sample_uniform_half_sphere(100)
+    samples = sample_uniform(100)
     print(np.linalg.norm(samples, axis=1))
     plot_vectors(samples, "Electrostatic optimization")
     plt.show()
