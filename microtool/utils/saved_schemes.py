@@ -41,8 +41,8 @@ def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e
                                         scan_parameters=default_scanner)
 
     # fix echo time to max values
-    scheme["EchoTime"].values = np.repeat(PULSE_TIMING_UB, N_pulses)
-    scheme["EchoTime"].set_fixed_mask(np.ones(N_pulses, dtype=bool))
+    scheme["EchoTime"].values = np.repeat(PULSE_TIMING_UB, (N_pulses+1))
+    scheme["EchoTime"].set_fixed_mask(np.ones((N_pulses+1), dtype=bool))
 
     # fixing the b0 measurement
     scheme.fix_b0_measurements()
