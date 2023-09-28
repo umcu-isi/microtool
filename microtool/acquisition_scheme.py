@@ -177,6 +177,10 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         :param vector: The parameter vector you wish to assign to the scheme
         :return: None, changes parameter attributes
         """
+        if self.free_parameter_vector.shape != vector.shape:
+            raise ValueError(
+                "New free parameter vector does not contain the same number of values as there are free parameters.")
+
         # Reshape the flattened vector based on parameter value shapes
         i = 0
         for key in self.free_parameter_keys:
