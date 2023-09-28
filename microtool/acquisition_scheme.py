@@ -49,8 +49,8 @@ class AcquisitionParameters:
         self.symbol = symbol
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
-        self.fixed = fixed
-        self._optimize_mask = np.tile(not self.fixed, self.values.shape)
+        self._fixed = fixed
+        self._optimize_mask = np.tile(not self._fixed, self.values.shape)
         self.has_repeated_measurements = False
         self._repetition_period = 0
 
@@ -72,7 +72,7 @@ class AcquisitionParameters:
             raise ValueError(f"Value_mask shape {fixed_mask.shape} does not match value shape {self.values.shape}")
 
         # update parameter fixed if all measurements are fixed
-        self.fixed = np.all(fixed_mask)
+        self._fixed = np.all(fixed_mask)
         # the optimization mask is the negation of the fixed mask
         self._optimize_mask = np.logical_not(fixed_mask)
 
@@ -133,6 +133,16 @@ class AcquisitionParameters:
         first_free_measurement = np.argmax(self.optimize_mask)
         for i in range(first_free_measurement, len(self.values), period):
             self.values[i + 1:i + period] = self.values[i]
+
+    @property
+    def fixed(self):
+        return self._fixed
+
+    @fixed.setter
+    def fixed(self, new_val: bool):
+        self._fixed = new_val
+        # we should also update the mask if we change the fixed property
+        self._optimize_mask = np.zeros(self._optimize_mask.shape, dtype=bool)
 
     @staticmethod
     def _check_bounded(values, lower_bound, upper_bound):
@@ -214,10 +224,15 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
     def set_free_parameter_vector(self, vector: np.ndarray) -> None:
         """
-        A setter function for the free parameters. Infers the desired parameter by shape information
+        A setter function for the free parameters. Infers the desired parameter by shape information.
+
         :param vector: The parameter vector you wish to assign to the scheme
         :return: None, changes parameter attributes
         """
+        if self.free_parameter_vector.shape != vector.shape:
+            raise ValueError(
+                "New free parameter vector does not contain the same number of values as there are free parameters.")
+
         # Reshape the flattened vector based on parameter value shapes
         i = 0
         for key in self.free_parameter_keys:
@@ -236,7 +251,8 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
     def get_free_parameter_idx(self, parameter: str, pulse_id: int) -> int:
         """
-        Allows you to get the index in the free parameter vector of a parameter pulse number combination
+        Allows you to get the index in the free parameter vector of a parameter pulse number combination.
+
         :param parameter: The name of free acquisition parameter
         :param pulse_id: The pulse for which you need the index
         :return: The index
@@ -251,7 +267,8 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
     def set_free_parameter_bounds(self, bounds: List[Tuple[float, float]]) -> None:
         """
-        Setter function for the parameter bounds, requires you to provide bounds for all parameters in sequence
+        Setter function for the parameter bounds, requires you to provide bounds for all parameters in sequence.
+
         :param bounds: The bounds
         :return: None, changes parameter attributes
         """
@@ -297,7 +314,13 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
     @property
     def pulse_count(self) -> int:
-        return len(self["DiffusionPulseMagnitude"])
+        max_parameter_length = 0
+        for parameter in self.free_parameters:
+            par_length = len(self.free_parameters[parameter])
+            if par_length > max_parameter_length:
+                max_parameter_length = par_length
+
+        return max_parameter_length
 
     def get_parameter_from_parameter_vector(self, parameter: str, x: np.ndarray) -> np.ndarray:
         """
