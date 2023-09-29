@@ -6,14 +6,14 @@ from microtool.monte_carlo.IO import make_expirement_directories
 from microtool.optimize import optimize_scheme
 from microtool.utils.IO import save_pickle
 from microtool.utils.saved_models import cylinder_zeppelin
-from microtool.utils.saved_schemes import alexander_optimal_perturbed
+from microtool.utils.saved_schemes import alexander_optimal_perturbed,alexander_b0_measurement
 
 # Making experiment file structure
-experiment_name = "exp1_alexander_local_optimization"
+experiment_name = "exp2_alexander_local_optimization"
 _, modeldir, _, schemedir = make_expirement_directories('.', experiment_name)
 
 # making initial scheme
-initial_scheme = alexander_optimal_perturbed()
+initial_scheme = alexander_b0_measurement()
 save_pickle(initial_scheme, schemedir / "initial_scheme.pkl")
 
 # making the model

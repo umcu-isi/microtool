@@ -6,28 +6,10 @@ from microtool.gradient_sampling import sample_uniform_half_sphere
 from microtool.scanner_parameters import default_scanner
 
 
-def alexander_no_b0_measurement(eps_time: float = 1e-3, eps_gradient: float = 1e-2):
+def alexander_b0_measurement(eps_time: float = 1e-3, eps_gradient: float = 1e-2):
     N = 30  # Number of measurement directions
     M = 4  # "measurements" i.e. unique acquisition parameter combinations
-    N_pulses = (N * M)
-    default_scanner = get_scanner_parameters()
-    gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths = get_scheme_parameters_perturbed(M, N,
-                                                                                                              eps_gradient,
-                                                                                                              eps_time)
-
-    scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
-                                        scan_parameters=default_scanner)
-    fix_echo_times(N_pulses, scheme)
-    handle_repeated_parameters(N, scheme)
-    return scheme
-
-
-def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e-2) -> DiffusionAcquisitionScheme:
-    N = 30  # Number of measurement directions
-    M = 4  # "measurements" i.e. unique acquisition parameter combinations
-    # Total number of measurements including the added b0 measurement
     N_pulses = (N * M + 1)
-
     default_scanner = get_scanner_parameters()
     gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths = get_scheme_parameters_perturbed(M, N,
                                                                                                               eps_gradient,
@@ -37,11 +19,30 @@ def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e
                                                                                                     gradient_magnitudes,
                                                                                                     pulse_intervals,
                                                                                                     pulse_widths)
+
+    scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
+                                        scan_parameters=default_scanner)
+
+    scheme.fix_b0_measurements()
+    fix_echo_times(N_pulses, scheme)
+    handle_repeated_parameters(N, scheme)
+    return scheme
+
+
+def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e-2) -> DiffusionAcquisitionScheme:
+    N = 30  # Number of measurement directions
+    M = 4  # "measurements" i.e. unique acquisition parameter combinations
+    # Total number of measurements including the added b0 measurement
+    N_pulses = (N * M)
+
+    default_scanner = get_scanner_parameters()
+    gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths = get_scheme_parameters_perturbed(M, N,
+                                                                                                              eps_gradient,
+                                                                                                              eps_time)
+
     scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
                                         scan_parameters=default_scanner)
     fix_echo_times(N_pulses, scheme)
-    # fixing the b0 measurement
-    scheme.fix_b0_measurements()
 
     # mark the repeated parameters
     handle_repeated_parameters(N, scheme)
@@ -132,7 +133,7 @@ def get_scheme_parameters_random(M, N, N_pulses):
 def fix_echo_times(N_pulses, scheme):
     # fix echo time to max values
     scheme["EchoTime"].values = np.repeat(PULSE_TIMING_UB, N_pulses)
-    scheme["EchoTime"].set_fixed_mask(np.ones(N_pulses, dtype=bool))
+    scheme["EchoTime"].set_fixed_mask(np.array([True]*N_pulses))
 
 
 def handle_repeated_parameters(N, scheme):
