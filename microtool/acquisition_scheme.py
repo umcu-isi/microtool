@@ -629,9 +629,13 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         :return:
         """
-        mask = self.b_values == 0
+        b0_mask = self.b_values == 0
+
         for par in ["DiffusionPulseMagnitude", "DiffusionPulseWidth", "DiffusionPulseInterval", "EchoTime"]:
-            self[par].set_fixed_mask(mask)
+            # we should get the old fixed measurements and make sure that the new mask includes them
+            old_mask = np.logical_not(self[par].optimize_mask)
+            new_mask = np.logical_or(b0_mask,old_mask)
+            self[par].set_fixed_mask(new_mask)
 
     @property
     def x0(self):

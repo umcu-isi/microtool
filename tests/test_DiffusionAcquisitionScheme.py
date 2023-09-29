@@ -37,31 +37,27 @@ class TestDiffusionAcquisitionSchemeConstruction:
         assert scheme.pulse_magnitude == pytest.approx(self.gradient_magnitudes, rel=.1)
 
 
-class TestDiffusionAcquisitionSchemeOptimization:
-    model = make_microtool_tissue_model(S2SphereStejskalTannerApproximation(diameter=1e-6))
+class TestDiffusionAcquisitionSchemeMethods:
+    magnitudes = np.array([0, 0.2])
+    directions = np.array([[0, 0, 1], [0, 1, 0]])
+    pulse_widths = np.array([0.007, 0.007])
+    pulse_intervals = np.array([0.035, 0.035])
+    scheme = DiffusionAcquisitionScheme(magnitudes, directions, pulse_widths=pulse_widths,
+                                        pulse_intervals=pulse_intervals)
 
-    directions = sample_uniform(5)
-    gradient_magnitudes = np.array([0.0, .200, .200, .121, .200])
-    Delta = np.array([25.0, 25.0, 26.0, 29.0, 13.0]) * 1e-3
-    delta = np.array([20.0, 20.0, 5.0, 16.0, 8.0]) * 1e-3
-    scheme = DiffusionAcquisitionScheme(gradient_magnitudes, directions, delta, Delta)
-    scheme.fix_b0_measurements()
+    def test_fix_b0_measurements(self):
+        """
+        We test if using the fix b0 measurement method correctly supplements the existing fixed masks
+        """
+        first_fix_mask = np.array([False, True])
+        self.scheme["DiffusionPulseWidth"].set_fixed_mask(first_fix_mask)
 
-    def test_loss_landscape(self):
-        loss_inspector = LossInspector(self.scheme, self.model, noise_var=.02)
-        loss_inspector.plot([{"DiffusionPulseWidth": 1}])
-        plt.savefig("loss_landscape.png")
+        self.scheme.fix_b0_measurements()
+        where_b0 = self.scheme.b_values == 0
 
-    def test_optimize_scheme(self):
-        print(self.scheme)
-        plot_acquisition_parameters(self.scheme)
-        plt.savefig("initial_scheme.png")
-        plt.close()
+        # The expected fixed mask for diffusion pulse width is now determined by both the fixation we did earlier and
+        # the b0 measurements that need to be fixed
+        expected_mask = np.logical_or(where_b0, first_fix_mask)
 
-        optimal_scheme, result = optimize_scheme(self.scheme, self.model, noise_variance=.02,
-                                                 method="differential_evolution",
-                                                 solver_options={"strategy": "best1exp"})
-
-        print(optimal_scheme)
-        plot_acquisition_parameters(optimal_scheme)
-        plt.savefig("optimal_scheme.png")
+        actual_mask = np.logical_not(self.scheme["DiffusionPulseWidth"].optimize_mask)
+        np.testing.assert_equal(expected_mask, actual_mask)
