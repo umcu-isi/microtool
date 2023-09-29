@@ -10,4 +10,4 @@ scipy
 setuptools
 tabulate
 tqdm
-
+pint

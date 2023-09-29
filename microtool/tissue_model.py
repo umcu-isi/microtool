@@ -52,7 +52,7 @@ class TissueParameter:
 
 
 class TissueModel(Dict[str, TissueParameter], ABC):
-    # step size for the finite difference method.
+    # TODO write docstring
 
     @abstractmethod
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
@@ -777,6 +777,7 @@ def insert_relaxation_times(relaxation_times, tissue_model, N_models):
                                                       fit_bounds=RELAXATION_BOUNDS)})
 
 
+# TODO add docstrings
 def fit_cost(fit_parameter_vector, signal, scheme, model: TissueModel):
     model.set_fit_parameters(fit_parameter_vector * model.scales[model.include_fit])
     predicted_signal = model(scheme)

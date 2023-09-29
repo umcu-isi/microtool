@@ -11,6 +11,7 @@ from scipy.optimize import OptimizeResult, minimize, differential_evolution, Bou
 from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST, compute_crlbs
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
+from ..constants import ConstraintTypes
 from ..tissue_model import TissueModel
 from ..utils.IO import initiate_logging_directory
 
@@ -46,7 +47,8 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     :param loss: a function of type LossFunction.
     :param loss_scaling_factor: Can be used to scale the loss function to order 1.0 if you notice extreme values.
     :param method: Type of solver. See the documentation for scipy.optimize.minimize
-    :param solver_options: Options specific to the solver check the documentation of the solver to see what can be done.
+    :param solver_options: Options specific to the solver, provided as a dictionary with the options as keywords, see
+                            the documentation of the solver for the keywords.
     :return: A scipy.optimize.OptimizeResult object.
     """
     # setting to empty dict because unpack operation is required later
@@ -63,12 +65,12 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     scheme_copy = deepcopy(scheme)
 
     # getting all the parameters needed for scipy optimization
-    acquisition_parameter_scales = scheme_copy.free_parameter_scales
-    x0 = scheme_copy.free_parameter_vector / acquisition_parameter_scales
+    x0 = scheme_copy.x0
+
     scaled_bounds = scheme_copy.free_parameter_bounds_scaled
     scipy_bounds = bounds_tuple2scipy(scaled_bounds)
-    constraints = scheme_copy.constraints
-
+    constraints = scheme_copy.constraint_list
+    check_constraints_satisfied(x0, scheme_copy.constraints)
     # The parameters required to fully define the loss function.
     scipy_loss_args = (scheme_copy, model, noise_variance, loss, loss_scaling_factor)
 
@@ -93,12 +95,17 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
 
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
-        scheme_copy.set_free_parameter_vector(result['x'] * acquisition_parameter_scales)
+        x = result['x']
+        scheme_copy.set_free_parameter_vector(result['x'] * scheme_copy.free_parameter_scales)
+    else:
+        raise RuntimeError("No suitable solution was found?")
 
     # check if the optimized scheme is better than the initial scheme
     current_loss = compute_loss(scheme_copy, model, noise_variance, loss)
     if current_loss > initial_loss:
         raise RuntimeError("Loss increased during optimization, try a different optimization method.")
+
+    check_constraints_satisfied(x, scheme_copy.constraints)
 
     warn_early_termination(result)
 
@@ -209,7 +216,28 @@ def check_insensitive(scheme: AcquisitionScheme, model: TissueModel):
 
 def check_degrees_of_freedom(scheme: AcquisitionScheme, model: TissueModel):
     M = int(np.sum(np.array(model.include_optimize)))
-    N = len(scheme.free_parameter_vector)
+    N = scheme.pulse_count
     if M > N:
         raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
                          f"AcquisitionScheme parameters ({N}) with meaningful result.")
+
+
+def check_constraints_satisfied(x: np.ndarray, constraints: Dict[str, ConstraintTypes]):
+    """
+    :param x: The scipy parameter vector
+    :param constraints: The constraints dictionary
+    :raises: RunTimeError if any of the constraints are not satisfied for parameter vector x
+    """
+    error_msg = ""
+    for key, constraint in constraints.items():
+        value = constraint.fun(x)
+
+        lb_c = value < constraint.lb
+        ub_c = value > constraint.ub
+
+        if np.any(lb_c) or np.any(ub_c):
+            error_msg += f"The {key} constraint is not satisfied. With violation {value} not in " \
+                         f"[{constraint.lb},{constraint.ub}]"
+
+    if error_msg != "":
+        raise RuntimeError(error_msg)

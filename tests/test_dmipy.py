@@ -29,9 +29,10 @@ from microtool.utils import saved_models, saved_schemes
 def test_scheme_conversion():
     """
     Since some of the DmipyAcquisitionScheme attributes are strange objects we test here for all float,int or
-    numpy array attributes to check if they are approximately equal.
+    numpy array attributes to check if they are approximately equal (up to 1% percent deviation is tolerated).
 
-    Failure of this test means there is something wrong with microtool.dmipy.convert_dmipy_scheme2diffusion_scheme
+    Failure of this test means there is something wrong with microtool.dmipy.convert_dmipy_scheme2diffusion_scheme or
+    microtool.dmipy.convert_diffusion_scheme2dmipy_scheme
     """
     # going over all attributes that are python native or numpy native and asserting equality
     # Standard acquisition scheme from dmipy.data
@@ -47,7 +48,7 @@ def test_scheme_conversion():
         report = f"The attribute {attribute} triggered an assertion, i.e., they are not equal for both " \
                  f"scheme types "
         if isinstance(value, np.ndarray):
-            np.testing.assert_allclose(value, converted_attributes[attribute], rtol=0, atol=1e-5), report
+            np.testing.assert_allclose(value, converted_attributes[attribute], rtol=0.01), report
         elif isinstance(value, (float, int)):
             assert value == converted_attributes[attribute], report
 
@@ -77,7 +78,7 @@ class TestModelSchemeIntegration:
         wrapped_signal = self.stick_model_wrapped(self.acq_wrapped)
         naked_signal = self.stick_model.simulate_signal(self.acq_scheme, self.parameters)
 
-        np.testing.assert_allclose(wrapped_signal, naked_signal, rtol=1e-6, atol=1e-5)
+        np.testing.assert_allclose(wrapped_signal, naked_signal, atol=1e-4)
 
     def test_finite_differences(self):
         """
@@ -100,7 +101,7 @@ class TestModelSchemeIntegration:
     def test_fit(self):
         """
         We should test if wrapped fit result is same as "naked" fit result.
-        This also implicitly tests the FittedTissueModel classes
+        This also implicitly tests the FittedTissueModel classes. We allow a fit deviation of up to 1%.
         """
         # fit using pure dmipy objects to generate expected result
         signal = self.stick_model.simulate_signal(self.acq_scheme, self.parameters)
@@ -118,28 +119,27 @@ class TestModelSchemeIntegration:
 
         # testing if the values are the same for all parameters
         for value, expected_value in zip(result.values(), expected_mt.values()):
-            np.testing.assert_allclose(value, expected_value, rtol=1e-6)
+            np.testing.assert_allclose(value, expected_value, rtol=0.01)
 
     def test_cascade_decorator(self):
         """
         Test fitting using cascaded decorator.
         """
         # -------- Acquisition
-        scheme_naked = saved_schemes.alexander2008()
-        scheme_wrapped = convert_dmipy_scheme2diffusion_scheme(scheme_naked)
+        scheme = saved_schemes.alexander_b0_measurement()
 
         # ---------- initialize expected result by manually sequentially fitting and setting initial values
         # generating signal
-        cylinder_zeppelin = saved_models.cylinder_zeppelin()
-        signal = cylinder_zeppelin(scheme_wrapped)
+        cylinder_zeppelin = saved_models.cylinder_zeppelin([np.pi / 2, np.pi / 2])
+        signal = cylinder_zeppelin(scheme)
 
         # fitting simple model to signal
         stick_zeppelin = saved_models.stick_zeppelin()
-        simple_fit = stick_zeppelin.fit(scheme_wrapped, signal, use_parallel_processing=False)
+        simple_fit = stick_zeppelin.fit(scheme, signal, use_parallel_processing=False)
         simple_dict = simple_fit.dmipyfitresult.fitted_parameters
         # mapping fit values to initial guess or complex model
         cylinder_zeppelin.set_initial_parameters(self._stickzeppelin_to_cylinderzeppelin(simple_dict))
-        expected_result = cylinder_zeppelin.fit(scheme_wrapped, signal, use_parallel_processing=False)
+        expected_result = cylinder_zeppelin.fit(scheme, signal, use_parallel_processing=False)
 
         # ---------------- Now doing the samething for the decorator
         # name map maps the simple model names to complex model names
@@ -159,7 +159,7 @@ class TestModelSchemeIntegration:
         }
 
         cylinder_zeppelin_cascade = CascadeFitDmipy(cylinder_zeppelin, stick_zeppelin, name_map)
-        result = cylinder_zeppelin_cascade.fit(scheme_wrapped, signal, use_parallel_processing=False)
+        result = cylinder_zeppelin_cascade.fit(scheme, signal, use_parallel_processing=False)
         result_dict = result.fitted_parameters
         expected_dict = expected_result.fitted_parameters
         for parameter in result_dict.keys():

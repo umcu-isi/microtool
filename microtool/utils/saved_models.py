@@ -1,8 +1,12 @@
+from typing import List, Union
+
 import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import cylinder_models, gaussian_models, sphere_models
 
 from microtool.dmipy import DmipyTissueModel
+
+Orientation = Union[List[float], np.ndarray]
 
 
 def verdict() -> DmipyTissueModel:
@@ -26,14 +30,16 @@ def verdict() -> DmipyTissueModel:
     return verdict_model
 
 
-def cylinder_zeppelin_naked() -> MultiCompartmentModel:
+def cylinder_zeppelin_naked(orientation: Orientation) -> MultiCompartmentModel:
     """
      A function to build the tissuemodel used in Alexander 2008.
+
+    :param orientation: The orientation of the cylinder zeppelin combination
     :return:
     """
     # ------INTRA AXONAL MODEL-------------
     # Cylinder orientation angles theta, phi := mu
-    mu = np.array([np.pi / 2, 0.])
+    mu = np.array(orientation)
     # Parralel diffusivity lambda_par in E-9 m^2/s (in the paper d_par)
     lambda_par = 1.7e-9
     lambda_perp = 0.2e-9
@@ -54,15 +60,15 @@ def cylinder_zeppelin_naked() -> MultiCompartmentModel:
     return mc_model
 
 
-def cylinder_zeppelin() -> DmipyTissueModel:
+def cylinder_zeppelin(orientation: Orientation) -> DmipyTissueModel:
     """
      A function to build the tissuemodel used in Alexander 2008.
     :return:
     """
-    mc_model = cylinder_zeppelin_naked()
+    mc_model = cylinder_zeppelin_naked(orientation)
 
     # Wrapping the model for compatibility
-    mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=[.5, .5])
+    mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=[.7, .3])
 
     return mc_model_wrapped
 
