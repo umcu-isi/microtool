@@ -695,7 +695,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         return self['InversionTime'].values
 
     @property
-    def constraints(self) -> Optional[NonlinearConstraint]:
+    def constraints(self) -> Dict[str, ConstraintTypes]:
         involved_parameters = ['InversionTime', 'EchoTime', 'RepetitionTimeExcitation']
         if self._are_fixed(involved_parameters):
             return None
@@ -707,7 +707,8 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
             tr = self._copy_and_update_parameter('RepetitionTimeExcitation', x)
             return tr - te - ti
 
-        return NonlinearConstraint(time_constraint_fun, 0.0, np.inf)
+        return {"RepetitionTime_larger_than_Echotime_plus_InversionTime": NonlinearConstraint(time_constraint_fun, 0.0,
+                                                                                              np.inf)}
 
 
 class EchoScheme(AcquisitionScheme):
