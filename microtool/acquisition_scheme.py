@@ -351,6 +351,12 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     def constraint_list(self) -> List[ConstraintTypes]:
         return list(self.constraints.values())
 
+    @property
+    def x0(self):
+        scales = self.free_parameter_scales
+        vector = self.free_parameter_vector
+        return vector / scales
+
     def _copy_and_update_parameter(self, parameter: str, x: np.ndarray):
         """
         Makes a copy from Acquisition parameter values and inserts the values suggested by the optimizer in
@@ -632,12 +638,6 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         mask = self.b_values == 0
         for par in ["DiffusionPulseMagnitude", "DiffusionPulseWidth", "DiffusionPulseInterval", "EchoTime"]:
             self[par].set_fixed_mask(mask)
-
-    @property
-    def x0(self):
-        scales = self.free_parameter_scales
-        vector = self.free_parameter_vector
-        return vector / scales
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
