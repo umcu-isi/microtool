@@ -367,6 +367,9 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         :param x: The optimizer suggestion for ALL free parameters
         :return: The copy of all values and the updated free parameter values
         """
+        if self[parameter].fixed:
+            return copy(self[parameter].values)
+
         update_values = self.get_parameter_from_parameter_vector(parameter, x)
         value_array = copy(self[parameter].values)
         value_array[self[parameter].optimize_mask] = update_values
