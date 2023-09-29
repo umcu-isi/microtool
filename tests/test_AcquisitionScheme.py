@@ -18,7 +18,41 @@ class SimpleScheme(AcquisitionScheme):
         return None
 
 
-class TestAcquisitionScheme:
+class LessSimpleScheme(AcquisitionScheme):
+    def __init__(self, t, s):
+        super().__init__({
+            "Time": AcquisitionParameters(
+                values=t, unit="s", scale=1.0
+            ),
+            "Space": AcquisitionParameters(
+                values=s, unit="m", scale=1.0
+            )
+        })
+
+    @property
+    def constraints(self) -> ConstraintTypes:
+        return None
+
+
+class TestLessSimpleScheme:
+    scheme = LessSimpleScheme(np.array([1, 2, 3]), np.array([4, 5, 6]))
+    scheme["Time"].fixed = True
+    scheme["Space"].set_fixed_mask(np.array([True, False, False]))
+
+    def test_set_free_parameter_vector(self):
+        new_free_vector = np.array([7, 8])
+
+        expected_values_space = np.array([4, 7, 8
+                                         ])
+
+        self.scheme.set_free_parameter_vector(new_free_vector)
+        np.testing.assert_equal(self.scheme.free_parameter_vector,new_free_vector)
+
+        np.testing.assert_equal(self.scheme["Space"].values, expected_values_space)
+
+
+
+class TestSimpleAcquisitionScheme:
     scheme = SimpleScheme(np.array([1., 2., 3.]))
     # so we have only first measurement free
     scheme["Time"].set_fixed_mask(np.array([True, False, False]))
