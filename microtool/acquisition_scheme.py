@@ -351,6 +351,12 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     def constraint_list(self) -> List[ConstraintTypes]:
         return list(self.constraints.values())
 
+    @property
+    def x0(self):
+        scales = self.free_parameter_scales
+        vector = self.free_parameter_vector
+        return vector / scales
+
     def _copy_and_update_parameter(self, parameter: str, x: np.ndarray):
         """
         Makes a copy from Acquisition parameter values and inserts the values suggested by the optimizer in
@@ -361,6 +367,9 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         :param x: The optimizer suggestion for ALL free parameters
         :return: The copy of all values and the updated free parameter values
         """
+        if self[parameter].fixed:
+            return copy(self[parameter].values)
+
         update_values = self.get_parameter_from_parameter_vector(parameter, x)
         value_array = copy(self[parameter].values)
         value_array[self[parameter].optimize_mask] = update_values
@@ -637,12 +646,6 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             new_mask = np.logical_or(b0_mask,old_mask)
             self[par].set_fixed_mask(new_mask)
 
-    @property
-    def x0(self):
-        scales = self.free_parameter_scales
-        vector = self.free_parameter_vector
-        return vector / scales
-
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
@@ -696,7 +699,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         return self['InversionTime'].values
 
     @property
-    def constraints(self) -> Optional[NonlinearConstraint]:
+    def constraints(self) -> Dict[str, ConstraintTypes]:
         involved_parameters = ['InversionTime', 'EchoTime', 'RepetitionTimeExcitation']
         if self._are_fixed(involved_parameters):
             return None
@@ -708,7 +711,8 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
             tr = self._copy_and_update_parameter('RepetitionTimeExcitation', x)
             return tr - te - ti
 
-        return NonlinearConstraint(time_constraint_fun, 0.0, np.inf)
+        return {"RepetitionTime_larger_than_Echotime_plus_InversionTime": NonlinearConstraint(time_constraint_fun, 0.0,
+                                                                                              np.inf)}
 
 
 class EchoScheme(AcquisitionScheme):
