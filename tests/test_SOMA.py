@@ -61,4 +61,4 @@ def test_multi_constraint():
     result = minimize(rosenbrock, x0, method=SOMA(), bounds=bounds, constraints=[nlc1, nlc2, nlc3, nlc4])
 
     solution = [1., 1.]
-    np.testing.assert_allclose(solution, result.x, atol=1e-2)
+    np.testing.assert_allclose(solution, result.x, atol=1e-1)

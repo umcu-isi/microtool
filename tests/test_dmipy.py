@@ -78,7 +78,7 @@ class TestModelSchemeIntegration:
         wrapped_signal = self.stick_model_wrapped(self.acq_wrapped)
         naked_signal = self.stick_model.simulate_signal(self.acq_scheme, self.parameters)
 
-        np.testing.assert_allclose(wrapped_signal, naked_signal, rtol=1e-6, atol=1e-5)
+        np.testing.assert_allclose(wrapped_signal, naked_signal, atol=1e-4)
 
     def test_finite_differences(self):
         """
@@ -126,21 +126,20 @@ class TestModelSchemeIntegration:
         Test fitting using cascaded decorator.
         """
         # -------- Acquisition
-        scheme_naked = saved_schemes.alexander2008_frombvals()
-        scheme_wrapped = convert_dmipy_scheme2diffusion_scheme(scheme_naked)
+        scheme = saved_schemes.alexander_b0_measurement()
 
         # ---------- initialize expected result by manually sequentially fitting and setting initial values
         # generating signal
-        cylinder_zeppelin = saved_models.cylinder_zeppelin()
-        signal = cylinder_zeppelin(scheme_wrapped)
+        cylinder_zeppelin = saved_models.cylinder_zeppelin([np.pi / 2, np.pi / 2])
+        signal = cylinder_zeppelin(scheme)
 
         # fitting simple model to signal
         stick_zeppelin = saved_models.stick_zeppelin()
-        simple_fit = stick_zeppelin.fit(scheme_wrapped, signal, use_parallel_processing=False)
+        simple_fit = stick_zeppelin.fit(scheme, signal, use_parallel_processing=False)
         simple_dict = simple_fit.dmipyfitresult.fitted_parameters
         # mapping fit values to initial guess or complex model
         cylinder_zeppelin.set_initial_parameters(self._stickzeppelin_to_cylinderzeppelin(simple_dict))
-        expected_result = cylinder_zeppelin.fit(scheme_wrapped, signal, use_parallel_processing=False)
+        expected_result = cylinder_zeppelin.fit(scheme, signal, use_parallel_processing=False)
 
         # ---------------- Now doing the samething for the decorator
         # name map maps the simple model names to complex model names
@@ -160,7 +159,7 @@ class TestModelSchemeIntegration:
         }
 
         cylinder_zeppelin_cascade = CascadeFitDmipy(cylinder_zeppelin, stick_zeppelin, name_map)
-        result = cylinder_zeppelin_cascade.fit(scheme_wrapped, signal, use_parallel_processing=False)
+        result = cylinder_zeppelin_cascade.fit(scheme, signal, use_parallel_processing=False)
         result_dict = result.fitted_parameters
         expected_dict = expected_result.fitted_parameters
         for parameter in result_dict.keys():

@@ -1,16 +1,12 @@
 """
 Insert useful information
 """
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from dmipy.signal_models.sphere_models import S2SphereStejskalTannerApproximation
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
-from microtool.dmipy import make_microtool_tissue_model
 from microtool.gradient_sampling import sample_uniform
-from microtool.optimize import optimize_scheme
-from microtool.utils.plotting import plot_acquisition_parameters, LossInspector
+from microtool.scanner_parameters import ScannerParameters
 
 
 class TestDiffusionAcquisitionSchemeConstruction:
@@ -22,18 +18,20 @@ class TestDiffusionAcquisitionSchemeConstruction:
     gradient_magnitudes = np.array([.200, .200, .121, .200])
     Delta = np.array([25.0, 26.0, 29.0, 13.0]) * 1e-3
     delta = np.array([20.0, 18.0, 16.0, 8.0]) * 1e-3
+    scan_parameters = ScannerParameters(4.e-3, 4.e-3, 14.e-3, 400e-3, np.inf)
 
     def test_default_constructor(self):
         """
         Checking if we come up with the same b_values as alexander given the other pulse parameters
         """
 
-        scheme = DiffusionAcquisitionScheme(self.gradient_magnitudes, self.gradient_vectors, self.delta, self.Delta)
+        scheme = DiffusionAcquisitionScheme(self.gradient_magnitudes, self.gradient_vectors, self.delta, self.Delta,
+                                            scan_parameters=self.scan_parameters)
         assert scheme.b_values == pytest.approx(self.expected_b_values, rel=0.1)
 
     def test_b_value_constructor(self):
         scheme = DiffusionAcquisitionScheme.from_bvals(self.expected_b_values, self.gradient_vectors, self.delta,
-                                                       self.Delta)
+                                                       self.Delta, scan_parameters=self.scan_parameters)
         assert scheme.pulse_magnitude == pytest.approx(self.gradient_magnitudes, rel=.1)
 
 
