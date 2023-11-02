@@ -6,11 +6,18 @@ MICROtool stands for Microstructural Imaging experiment Cramer-Rao lower bound O
 
 ## Installation
 
-To install microtool clone this repository to your machine. Make a python environment using either conda or virtual env
-and ensure the python version is 3.8.
-Then run the following commands from the repositories directory
+MICROtool requires Python 3.8.
+To install MICROtool in development-mode, run the following commands from this directory:
 
-```
+```shell
 pip install -r requirements.txt
-pip install .
+pip install -e .
+```
+
+## Testing
+
+To run all tests, simply call pytest from this directory:
+
+```shell
+pytest
 ```

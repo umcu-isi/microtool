@@ -20,11 +20,12 @@ def test_repeated_parameters():
     parameter.set_fixed_mask(fixed)
 
     # testing the setter
+    assert parameter._repetition_period == 0
     parameter.set_repetition_period(P)
-    assert parameter.has_repeated_measurements
+    assert parameter._repetition_period == P
 
     # testing the update
-    parameter.set_free_values(np.array([0.5, 0.25]))
+    parameter.free_values = np.array([0.5, 0.25])
     expected_before_update = np.array([0, 0.5, 1, 0.25, 1])
     np.testing.assert_allclose(parameter.values, expected_before_update)
 

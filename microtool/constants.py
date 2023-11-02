@@ -7,9 +7,9 @@ from scipy.optimize import LinearConstraint, NonlinearConstraint
 
 # Base units that results in numeric values of order magnitude 1.
 GAMMA = 42.57747892 * 2 * np.pi * 1e3
-GAMMA_UNIT = '1/mT . 1/s'
+GAMMA_UNIT = '1/mT/s'
 
-B_UNIT = 's/mm^2'
+B_UNIT = 's/mm²'
 
 GRADIENT_UNIT = 'mT/mm'
 PULSE_TIMING_UNIT = 's'
