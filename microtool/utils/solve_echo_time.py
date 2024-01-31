@@ -58,7 +58,7 @@ def echo_time(delta, b, scanner_parameters: ScannerParameters):
     # surrogate parameter for readability
     B = b / (gamma_different_unit ** 2 * G_max ** 2)
 
-    Delta = (1 / delta ** 2) * (B + (1 / 30) * t_rise ** 3) + delta / 3 - (1 / (6 * delta)) * t_rise ** 2
+    Delta = (1 / delta ** 2) * (B - (1 / 30) * t_rise ** 3) + delta / 3 + (1 / (6 * delta)) * t_rise ** 2
     return 0.5 * t90 + Delta + delta + t_rise + t_half
 
 
