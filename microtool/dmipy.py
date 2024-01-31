@@ -138,32 +138,6 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme,
                                                      scan_parameters=scanner_parameters)
 
 
-def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel]):
-    """
-
-    :param dmipy_models:
-    :return:
-    """
-    if not isinstance(dmipy_models, list):
-        dmipy_models = [dmipy_models]
-
-    multi_comp_model = MultiCompartmentModel(dmipy_models)
-    return DmipyTissueModel(multi_comp_model)
-
-
-def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel]):
-    """
-
-    :param dmipy_models:
-    :return:
-    """
-    if not isinstance(dmipy_models, list):
-        dmipy_models = [dmipy_models]
-
-    multi_comp_model = MultiCompartmentModel(dmipy_models)
-    return DmipyTissueModel(multi_comp_model)
-
-
 class DmipyTissueModel(TissueModel):
     """
     Wrapper for the MultiCompartment models used by dmipy. Note that the parameters need to be initialized in the
@@ -171,13 +145,18 @@ class DmipyTissueModel(TissueModel):
     """
     _model: MultiCompartmentModel  # Reminder that we store the dmipy multicompartment model in this attribute
 
-    def __init__(self, model: MultiCompartmentModel, volume_fractions: Union[List[float], float] = None):
+    def __init__(self, dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel], volume_fractions: Union[List[float], float] = None):
         """
 
         :param model: MultiCompartment model
         :param volume_fractions: The relative volume fractions of the models (order in the same way you initialized the
                                  multicompartment model)
         """
+
+        if not isinstance(dmipy_models, list):
+            dmipy_models = [dmipy_models]
+
+        model = MultiCompartmentModel(dmipy_models)
 
         # Extract the tissue parameters from individual models and convert to 'scalars'. (makes parameter dict)
         parameters = get_parameters(model)
