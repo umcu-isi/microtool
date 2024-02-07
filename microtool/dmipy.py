@@ -247,6 +247,20 @@ class DmipyTissueModel(TissueModel):
                 setattr(model, parameter_name, vector[k:(k + par_size)])
                 k += par_size
 
+    def _dmipy_fix_parameters(self, fix_parameter: str, fix_value: float) -> None:
+        """
+        Sets as fixed desired dmipy model parameters 
+
+        :fix parameter: string of parameter to fix
+        :fix_value: value to fix the paramter to
+        :return: nothing
+        """
+        dmipy_models = self.dmipy_model
+        dmipy_models.set_fixed_parameter(fix_parameter, fix_value)
+        
+        parameters = get_parameters(dmipy_models)
+        super().__init__(parameters)
+        
     @property
     def _dmipy_parameters(self) -> dict:
         """
