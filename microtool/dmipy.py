@@ -149,6 +149,8 @@ class DmipyTissueModel(TissueModel):
         """
 
         :param model: MultiCompartment model
+            Models created from Dmipy toolbox are to be stored as MultiCompartment instances as to utilize
+            the associated functionalities for signal generation, fitting and more, which are absent in Model classes.
         :param volume_fractions: The relative volume fractions of the models (order in the same way you initialized the
                                  multicompartment model)
         """
