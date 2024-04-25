@@ -145,7 +145,7 @@ class DmipyTissueModel(TissueModel):
     """
     _model: MultiCompartmentModel  # Reminder that we store the dmipy multicompartment model in this attribute
 
-    def __init__(self, dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel], volume_fractions: Union[List[float], float] = None):
+    def __init__(self, dmipy_models: Union[Sequence[SingleDmipyModel], SingleDmipyModel], volume_fractions: Union[Sequence[float], float] = None):
         """
 
         :param model: MultiCompartment model
