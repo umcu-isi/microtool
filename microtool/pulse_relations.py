@@ -8,12 +8,12 @@ from .scanner_parameters import ScannerParameters
 def get_gradients(gamma, b, Delta, delta, scanner_parameters: ScannerParameters):
     """
 
-    :param gamma:
-    :param b:
-    :param Delta:
-    :param delta:
-    :param scanner_parameters:
-    :return:
+    :param gamma: 1/mT/s
+    :param b: b-value in s/mm²
+    :param Delta: s
+    :param delta: s
+    :param scanner_parameters: scanner parameter definition
+    :return: numpy array with gradient magnitudes
     """
     t_r = scanner_parameters.t_rise
     d = gamma ** 2 * (delta ** 2 * (Delta - delta / 3) + (1 / 30) * t_r ** 3 - (delta * t_r ** 2) / 6)
@@ -23,8 +23,8 @@ def get_gradients(gamma, b, Delta, delta, scanner_parameters: ScannerParameters)
 def get_b_value_simplified(gamma, G, Delta, delta):
     """
     :param G: T/m
-    :param Delta: ms
-    :param delta: ms
+    :param Delta: s
+    :param delta: s
     :return: b value in s/mm^2
     """
     b_val = ((gamma * G * delta) ** 2) * (Delta - (delta / 3))
@@ -36,8 +36,8 @@ def get_b_value_complete(gamma, G: np.ndarray, Delta: np.ndarray, delta: np.ndar
     """
 
     :param G: mT/mm
-    :param Delta: ms
-    :param delta: ms
+    :param Delta: s
+    :param delta: s
     :return: b value in s/mm^2
     """
     t_rise = compute_t_rise(G, scanner_parameters)
@@ -52,7 +52,7 @@ def compute_t_rise(G: np.ndarray, scanner_parameters: ScannerParameters):
     """
 
     :param G: mT/mm
-    :param scanner_parameters:
+    :param scanner_parameters: scanner parameter definition
     :return: The rise time in s
     """
     s_max = scanner_parameters.S_max  # mT/mm/ms
