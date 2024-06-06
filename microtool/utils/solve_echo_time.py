@@ -52,7 +52,7 @@ def scan_parameter_to_ms(scanner_parameters: ScannerParameters):
 def echo_time(delta, b, scanner_parameters: ScannerParameters):
     # extracting the scan parameters
     G_max = scanner_parameters.G_max
-    t_rise = scanner_parameters.t_rise
+    t_rise = scanner_parameters._t_rise
     t90 = scanner_parameters.t_90
     t_half = scanner_parameters.t_half
     # surrogate parameter for readability
@@ -65,7 +65,7 @@ def echo_time(delta, b, scanner_parameters: ScannerParameters):
 def compute_delta_max(b, scanner_parameters: ScannerParameters):
     t180 = scanner_parameters.t_180
     t90 = scanner_parameters.t_90
-    t_rise = scanner_parameters.t_rise
+    t_rise = scanner_parameters._t_rise
     t_half = scanner_parameters.t_half
     G_max = scanner_parameters.G_max
 
