@@ -591,7 +591,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 """ Should be larger than zero """
                 pulse_width = self._copy_and_update_parameter('DiffusionPulseWidth', x)
                 pulse_interval = self._copy_and_update_parameter('DiffusionPulseInterval', x)
-                t_rise = self.scan_parameters.t_rise
+                t_rise = self.scan_parameters._t_rise
                 t_180 = self.scan_parameters.t_180
                 return pulse_interval - (pulse_width + t_rise + t_180)
 
