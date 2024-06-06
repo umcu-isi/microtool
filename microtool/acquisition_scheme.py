@@ -186,6 +186,10 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
     @staticmethod
     def _check_parameter_lengths(parameters: Dict[str, AcquisitionParameters]):
+        """
+        Checks lengths among all parameters to ensure consistency in acquisition scheme 
+        
+        """
         # making a dict with parameter lengths for more informative error message
         parameter_lengths = {}
         for key, parameter in parameters.items():
@@ -520,7 +524,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     @property
     def pulse_magnitude(self) -> np.ndarray:
         """
-        Array of pulse magnitudes in mT/m
+        Array of pulse magnitudes in mT/mm
         """
         return self['DiffusionPulseMagnitude'].values
 
