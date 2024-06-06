@@ -28,7 +28,7 @@ MODEL_PREFIX = "model_"
 
 # Relaxation stuff
 RELAXATION_PREFIX = "T2_relaxation_"
-RELAXATION_BOUNDS = (.1, 1e3)  # ms
+RELAXATION_BOUNDS = (.1e-3, 100e-3) #s
 
 # old model constants
 T2_KEY = 'T2'
