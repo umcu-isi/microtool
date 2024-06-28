@@ -26,18 +26,26 @@ class HiddenPrints:
         sys.stdout.close()
         sys.stdout = self._original_stdout
 
-
-def get_pickle(path) -> Any:
-    # shorthand for unpickling
-    with open(path, 'rb') as f:
-        return pickle.load(f)
-
-
 def save_pickle(obj: Any, path: Union[Path, str]) -> None:
+    """
+    Saves an object at a directory (used to save MonteCarlo simulations).
+
+    :param obj: what is to be saved at a directory
+    :param path: directory to be saved at
+    """
     # shorthand for pickling
     with open(path, "wb") as f:
         pickle.dump(obj, f)
 
+def get_pickle(path) -> Any:
+    """
+    Retrieves an object from a directory.
+
+    :param path: directory to retrieve obj from
+    """
+    # shorthand for unpickling
+    with open(path, 'rb') as f:
+        return pickle.load(f)
 
 def initiate_logging_directory(root=None):
     """
