@@ -71,6 +71,8 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     scipy_bounds = bounds_tuple2scipy(scaled_bounds)
     constraints = scheme_copy.constraint_list
     check_constraints_satisfied(x0, scheme_copy.constraints)
+    model.check_model_dependencies(scheme_copy)
+    
     # The parameters required to fully define the loss function.
     scipy_loss_args = (scheme_copy, model, noise_variance, loss, loss_scaling_factor)
 
