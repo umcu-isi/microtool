@@ -14,13 +14,6 @@ from microtool.gradient_sampling.utils import sample_sphere_vectors, get_unit_ve
     total_potential, \
     plot_shells
 
-
-def test_shells():
-    result = sample_shells_electrostatic([9, 9, 9])
-    plot_shells(result)
-    plt.show()
-
-
 def sample_shells_electrostatic(n_shells: List[int]) -> List[np.ndarray]:
     """
     Samples shells according to the cost functions as defined in DOI: 10.1002/mrm.24736
