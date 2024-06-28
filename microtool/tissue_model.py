@@ -21,7 +21,7 @@ from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
     ReducedDiffusionScheme
-from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY, RELAXATION_PREFIX, T2_KEY, T1_KEY, \
+from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY, T2_KEY, T1_KEY, \
     DIFFUSIVITY_KEY, RELAXATION_BOUNDS, ConstraintTypes
 
 
@@ -241,6 +241,13 @@ class TissueModel(Dict[str, TissueParameter], ABC):
     @property
     def fit_initial_guess(self) -> np.ndarray:
         return np.array([self[key].fit_guess for key in np.array(self.parameter_names)[self.include_fit]])
+
+    def check_model_dependencies(self, scheme: AcquisitionScheme):
+        """
+        Method for consistency check-up between model requirements and defined scheme parameters
+
+        """
+        return NotImplementedError()
 
     def print_comparison(self, other: TissueModel):
         """
