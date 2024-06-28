@@ -25,9 +25,9 @@ def fisher_information_gauss(jac: np.ndarray, signal: np.ndarray, noise_var: flo
     This is the sum of the matrices of squared gradients, for all samples, divided by the noise variance.
     See equation A2 in Alexander, 2008 (DOI 0.1002/mrm.21646)
 
-    :param signal:
     :param jac: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
-    :param noise_var: Noise variance.
+    :param signal: The signal 
+    :param noise_var: The noise variance
     :return: The M×M information matrix.
     """
     # TODO: Add Rician noise version, as explained in the appendix to Alexander, 2008 (DOI 0.1002/mrm.21646).
@@ -37,13 +37,13 @@ def fisher_information_gauss(jac: np.ndarray, signal: np.ndarray, noise_var: flo
 @njit
 def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
     """
-    Calculates the fisher information matrix assuming Rician noise.
+    Calculates the fisher information matrix assuming Rician noise.The integral term can be approximated up to 
+    4% as reported in https://doi.org/10.1109/TIT.1967.1054037
 
-    The integral term can be approximated up to 4% as reported in https://doi.org/10.1109/TIT.1967.1054037
-    :param signal:
-    :param jac:
-    :param noise_var:
-    :return:
+    :param jac: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
+    :param signal: The signal
+    :param noise_var: The noise variance
+    :return: The MxN information matrix
     """
 
     # Approximating the integral without closed form
@@ -139,10 +139,10 @@ class CrlbInversion(CrlbBase):
     def compute_crlb_individual(self, jac: np.ndarray, signal: np.ndarray, noise_var: float) -> float:
         """
         Computes the crlb of the individual parameters
-        :param jac:
-        :param signal:
-        :param noise_var:
-        :return:
+        :param jac: the jacobian of the signal w.r.t. the tissue parameters (should be preprocessed)
+        :param signal: the actual signal
+        :param noise_var: The noise variance
+        :return: crlb from matrix diagonal
         """
         information = self.information_func(jac, signal, noise_var)
         return diagonal(np.linalg.inv(information))
@@ -166,10 +166,10 @@ class CrlbEigenvalues(CrlbBase):
 def compute_crlbs(scheme: AcquisitionScheme, model: TissueModel, noise_var: float) -> np.ndarray:
     """
     Function for computing the cramer rao lower bounds of the
-    :param scheme:
-    :param model:
-    :param noise_var:
-    :return:
+    :param scheme: AcquisitionScheme instance utilized for crlbs computation
+    :param model: TissueModel instance utilized for crlbs computation
+    :param noise_var: The noise variance
+    :return: the crlb based loss computed from the acquisition scheme and tissue model characteristics
     """
     jac = model.scaled_jacobian(scheme)
     signal = model(scheme)
