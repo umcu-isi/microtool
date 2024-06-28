@@ -308,6 +308,27 @@ class DmipyTissueModel(TissueModel):
     def dmipy_model(self):
         return self._model
 
+    def check_model_dependecies(self, scheme: DiffusionAcquisitionScheme):
+        """
+        Method for consistency check-up between model requirements and defined scheme parameters
+    
+        """          
+        dmipy_model = self.dmipy_model
+        
+        for i, model in enumerate(dmipy_model.models):
+            #Obtain from dmipy model the required acquisition parameters
+            required = model._required_acquisition_parameters
+            
+            #If any of these parameters is not set for optimization, raise warning
+            for param in required:
+                #Translate dmipy acquisition parameter name to microtool nomenclature
+                param_name = dmipy2micotrool_dictionary_translation(param)
+
+                #B-values and b-vectors computed from established parameter relations.
+                if param_name in ['B-Values', 'b-vectors']:
+                    continue
+                elif scheme._are_fixed([param_name]):
+                    warnings.warn(f"Parameter {param} should be optimized for {model} model.")
 
 class FittedDmipyModel(FittedModel):
     def __init__(self, dmipymodel: DmipyTissueModel, dmipyfitresult: FittedMultiCompartmentModel):
@@ -436,3 +457,15 @@ def compute_compartment_signals(dmipy_model: MultiCompartmentModel,
         S_compartment[:, i] = single_compartment.simulate_signal(dmipy_scheme, parameters)
 
     return S_compartment
+
+def dmipy2micotrool_dictionary_translation(parameter: str) -> str:
+    
+    dmipy = ["bvalues", "delta", "Delta", "gradient_directions", "gradient_strengths"]
+    microtool = ["B-Values", "DiffusionPulseWidth", "DiffusionPulseInterval", "b-vectors",  "DiffusionPulseMagnitude"]
+
+    # Create the translation dictionary
+    dmipy_2_microtool = {dmipy[i]: microtool[i] for i in range(len(dmipy))}
+    
+    microtool_param = dmipy_2_microtool.get(parameter, None)
+    
+    return microtool_param
