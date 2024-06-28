@@ -46,13 +46,25 @@ def sample_uniform(ns: int = 100) -> np.ndarray:
 
 
 def check_requested_vectors(ns):
+    """ 
+    Checks for positive and higher than 0 number of sampled unit vectors
+
+    :param ns: Number of samples on the sphere
+    """
     if ns == 0:
-        raise ValueError("Requested number of vectors is 0?")
+        raise ValueError("Requested number of vectors is 0")
+    elif ns < 0:
+        raise ValueError("Requested number of vectors cannot be a negative value")
 
 
 def find_or_optimize(ns: int, base_name, constraints):
     """
     Looks up if a vector collection was already optimzed, if not optimizes.
+
+    :param ns: Number of samples on the sphere
+    :param base_name: vector collection naming
+    :param constraints: constraints for optimization
+    :return: optimized vectors
     """
     stored_samples = [sample_path.name for sample_path in list(folder.glob(base_name + '*'))]
 
