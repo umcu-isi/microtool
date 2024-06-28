@@ -83,6 +83,10 @@ class AcquisitionParameters:
         self._optimize_mask = np.logical_not(fixed_mask)
 
     @property
+    def optimize_mask(self) -> np.ndarray:
+        return self._optimize_mask
+
+    @property
     def free_values(self) -> np.ndarray:
         return self.values[self._optimize_mask]
 
@@ -96,8 +100,14 @@ class AcquisitionParameters:
         self.values[self._optimize_mask] = new_values
 
     @property
-    def optimize_mask(self) -> np.ndarray:
-        return self._optimize_mask
+    def fixed(self):
+        return self._fixed
+
+    @fixed.setter
+    def fixed(self, new_val: bool):
+        self._fixed = new_val
+        # we should also update the mask if we change the fixed property
+        self._optimize_mask = np.zeros(self._optimize_mask.size, dtype=bool)
 
     def set_repetition_period(self, n: int):
         """
@@ -142,17 +152,6 @@ class AcquisitionParameters:
         first_free_measurement = np.argmax(self.optimize_mask)
         for i in range(first_free_measurement, len(self.values), period):
             self.values[i + 1:i + period] = self.values[i]
-
-    @property
-    def fixed(self):
-        return self._fixed
-
-    @fixed.setter
-    def fixed(self, new_val: bool):
-        self._fixed = new_val
-        # we should also update the mask if we change the fixed property
-        self._optimize_mask = np.zeros(self._optimize_mask.size, dtype=bool)
-
 
 class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     """
@@ -201,6 +200,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         if any(n != first for n in all_lengths):
             raise ValueError(f"One or more parameters have unequal length: {parameter_lengths}")
 
+    #TODO: Only used in @plotting.plot
     @property
     def free_parameters(self) -> Dict[str, np.ndarray]:
         """
@@ -240,6 +240,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
             i += stride
 
+    #TODO: Only used for @plotting.plot
     def get_free_parameter_idx(self, parameter: str, pulse_id: int) -> int:
         """
         Allows you to get the index of a parameter pulse number combination in the free parameter vector.
@@ -520,7 +521,6 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         return self['DiffusionPulseInterval'].values
 
-    # TODO: verify results.
     @property
     def pulse_magnitude(self) -> np.ndarray:
         """
@@ -543,41 +543,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     @property
     def echo_times(self) -> np.ndarray:
         return self["EchoTime"].values
-
-    def write_bval(self, file: Union[str, bytes, PathLike]) -> None:
-        """
-        Writes b-values to an FSL [*_]dwi.bval file.
-        """
-        # An ASCII text file containing a list of b values applied during each volume acquisition. The b values are
-        # assumed to be in s/mm² units. The order of entries in this file must match the order of volumes in the input
-        # data and entries in the gradient directions text file. The format is: b_1 b_2 b_3 ... b_n
-        file = Path(file)
-        if not file.name.endswith('_dwi.bval') and not file.name == 'dwi.bval':
-            warnings.warn('BIDS specifies that FSL b-value files should be named like: [*_]dwi.bval')
-
-        with file.open('w', encoding='latin-1', newline='\n') as f:
-            f.write(' '.join(f'{x:.6e}' for x in self.b_values))
-
-    def write_bvec(self, file) -> None:
-        """
-        Writes b-vectors to an FSL [*_]dwi.bvec file.
-        """
-        # The [*_]dwi.bvec file contains 3 rows with N space-delimited floating-point numbers (corresponding to the N
-        # volumes in the corresponding NIfTI file.) The first row contains the x elements, the second row contains
-        # the y elements and the third row contains the z elements of a unit vector in the direction of the applied
-        # diffusion gradient, where the i-th elements in each row correspond together to the i-th volume, with [0,0,0]
-        # for non-diffusion-weighted (also called b=0 or low-b) volumes. Following the FSL format for the
-        # [*_]dwi.bvec specification, the coordinate system of the b vectors MUST be defined with respect to the
-        # coordinate system defined by the header of the corresponding _dwi NIfTI file and not the scanner's device
-        # coordinate system.
-        file = Path(file)
-        if not file.name.endswith('_dwi.bvec') and not file.name == 'dwi.bvec':
-            warnings.warn('BIDS specifies that FSL b-vector files should be named like: [*_]dwi.bvec')
-
-        with file.open('w', encoding='latin-1', newline='\n') as f:
-            for bvec in self.b_vectors:
-                f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
-
+    
     @property
     def constraints(self) -> Optional[Dict[str, NonlinearConstraint]]:
 
@@ -634,6 +600,40 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             old_mask = ~self[par].optimize_mask
             new_mask = np.logical_or(b0_mask, old_mask)
             self[par].set_fixed_mask(new_mask)
+
+    def write_bval(self, file: Union[str, bytes, PathLike]) -> None:
+        """
+        Writes b-values to an FSL [*_]dwi.bval file.
+        """
+        # An ASCII text file containing a list of b values applied during each volume acquisition. The b values are
+        # assumed to be in s/mm² units. The order of entries in this file must match the order of volumes in the input
+        # data and entries in the gradient directions text file. The format is: b_1 b_2 b_3 ... b_n
+        file = Path(file)
+        if not file.name.endswith('_dwi.bval') and not file.name == 'dwi.bval':
+            warnings.warn('BIDS specifies that FSL b-value files should be named like: [*_]dwi.bval')
+
+        with file.open('w', encoding='latin-1', newline='\n') as f:
+            f.write(' '.join(f'{x:.6e}' for x in self.b_values))
+
+    def write_bvec(self, file) -> None:
+        """
+        Writes b-vectors to an FSL [*_]dwi.bvec file.
+        """
+        # The [*_]dwi.bvec file contains 3 rows with N space-delimited floating-point numbers (corresponding to the N
+        # volumes in the corresponding NIfTI file.) The first row contains the x elements, the second row contains
+        # the y elements and the third row contains the z elements of a unit vector in the direction of the applied
+        # diffusion gradient, where the i-th elements in each row correspond together to the i-th volume, with [0,0,0]
+        # for non-diffusion-weighted (also called b=0 or low-b) volumes. Following the FSL format for the
+        # [*_]dwi.bvec specification, the coordinate system of the b vectors MUST be defined with respect to the
+        # coordinate system defined by the header of the corresponding _dwi NIfTI file and not the scanner's device
+        # coordinate system.
+        file = Path(file)
+        if not file.name.endswith('_dwi.bvec') and not file.name == 'dwi.bvec':
+            warnings.warn('BIDS specifies that FSL b-vector files should be named like: [*_]dwi.bvec')
+
+        with file.open('w', encoding='latin-1', newline='\n') as f:
+            for bvec in self.b_vectors:
+                f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
