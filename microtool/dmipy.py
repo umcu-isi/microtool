@@ -138,32 +138,6 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme,
                                                      scan_parameters=scanner_parameters)
 
 
-def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel]):
-    """
-
-    :param dmipy_models:
-    :return:
-    """
-    if not isinstance(dmipy_models, list):
-        dmipy_models = [dmipy_models]
-
-    multi_comp_model = MultiCompartmentModel(dmipy_models)
-    return DmipyTissueModel(multi_comp_model)
-
-
-def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel]):
-    """
-
-    :param dmipy_models:
-    :return:
-    """
-    if not isinstance(dmipy_models, list):
-        dmipy_models = [dmipy_models]
-
-    multi_comp_model = MultiCompartmentModel(dmipy_models)
-    return DmipyTissueModel(multi_comp_model)
-
-
 class DmipyTissueModel(TissueModel):
     """
     Wrapper for the MultiCompartment models used by dmipy. Note that the parameters need to be initialized in the
@@ -171,13 +145,20 @@ class DmipyTissueModel(TissueModel):
     """
     _model: MultiCompartmentModel  # Reminder that we store the dmipy multicompartment model in this attribute
 
-    def __init__(self, model: MultiCompartmentModel, volume_fractions: Union[List[float], float] = None):
+    def __init__(self, dmipy_models: Union[Sequence[SingleDmipyModel], SingleDmipyModel], volume_fractions: Union[Sequence[float], float] = None):
         """
 
         :param model: MultiCompartment model
+            Models created from Dmipy toolbox are to be stored as MultiCompartment instances as to utilize
+            the associated functionalities for signal generation, fitting and more, which are absent in Model classes.
         :param volume_fractions: The relative volume fractions of the models (order in the same way you initialized the
                                  multicompartment model)
         """
+
+        if not isinstance(dmipy_models, list):
+            dmipy_models = [dmipy_models]
+
+        model = MultiCompartmentModel(dmipy_models)
 
         # Extract the tissue parameters from individual models and convert to 'scalars'. (makes parameter dict)
         parameters = get_parameters(model)
@@ -268,6 +249,20 @@ class DmipyTissueModel(TissueModel):
                 setattr(model, parameter_name, vector[k:(k + par_size)])
                 k += par_size
 
+    def _dmipy_fix_parameters(self, fix_parameter: str, fix_value: float) -> None:
+        """
+        Sets as fixed desired dmipy model parameters 
+
+        :fix parameter: string of parameter to fix
+        :fix_value: value to fix the paramter to
+        :return: nothing
+        """
+        dmipy_models = self.dmipy_model
+        dmipy_models.set_fixed_parameter(fix_parameter, fix_value)
+        
+        parameters = get_parameters(dmipy_models)
+        super().__init__(parameters)
+        
     @property
     def _dmipy_parameters(self) -> dict:
         """
