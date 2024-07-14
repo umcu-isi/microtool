@@ -308,7 +308,7 @@ class DmipyTissueModel(TissueModel):
     def dmipy_model(self):
         return self._model
 
-    def check_dependecies(self, scheme: DiffusionAcquisitionScheme):
+    def check_dependencies(self, scheme: DiffusionAcquisitionScheme):
         """
         Method for consistency check-up between model requirements and defined scheme parameters
     
