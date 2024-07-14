@@ -308,14 +308,14 @@ class DmipyTissueModel(TissueModel):
     def dmipy_model(self):
         return self._model
 
-    def check_model_dependecies(self, scheme: DiffusionAcquisitionScheme):
+    def check_dependecies(self, scheme: DiffusionAcquisitionScheme):
         """
         Method for consistency check-up between model requirements and defined scheme parameters
     
         """          
         dmipy_model = self.dmipy_model
         
-        for i, model in enumerate(dmipy_model.models):
+        for model in enumerate(dmipy_model.models):
             #Obtain from dmipy model the required acquisition parameters
             required = model._required_acquisition_parameters
             
@@ -460,12 +460,14 @@ def compute_compartment_signals(dmipy_model: MultiCompartmentModel,
 
 def dmipy2micotrool_dictionary_translation(parameter: str) -> str:
     
-    dmipy = ["bvalues", "delta", "Delta", "gradient_directions", "gradient_strengths"]
-    microtool = ["B-Values", "DiffusionPulseWidth", "DiffusionPulseInterval", "b-vectors",  "DiffusionPulseMagnitude"]
+    to_microtool_name = {
+    "bvalues": "B-Values",
+    "delta": "DiffusionPulseWidth",
+    "Delta": "DiffusionPulseInterval",
+    "gradient_directions": "b-vectors",
+    "gradient_strengths": "DiffusionPulseMagnitude",
+    }
 
-    # Create the translation dictionary
-    dmipy_2_microtool = {dmipy[i]: microtool[i] for i in range(len(dmipy))}
-    
-    microtool_param = dmipy_2_microtool.get(parameter, None)
+    microtool_param = to_microtool_name[parameter]
     
     return microtool_param
