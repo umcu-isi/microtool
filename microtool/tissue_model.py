@@ -320,6 +320,7 @@ class MultiTissueModel(TissueModel):
                     parameter_update.append(new_parameter_values[index_param])                 
 
             #Check length of parameter update matches length of model
+            #Note: Error should never be reached as parameter check-up is performed in iterative process
             if len(parameter_update) != N_p:
                 raise ValueError("Missing parameters for model update")
             else:
