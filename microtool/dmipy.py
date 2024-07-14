@@ -315,7 +315,7 @@ class DmipyTissueModel(TissueModel):
         """          
         dmipy_model = self.dmipy_model
         
-        for model in enumerate(dmipy_model.models):
+        for model in dmipy_model.models:
             #Obtain from dmipy model the required acquisition parameters
             required = model._required_acquisition_parameters
             
