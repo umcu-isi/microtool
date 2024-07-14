@@ -29,7 +29,7 @@ MODEL_PREFIX = "model_"
 # Relaxation stuff
 T2_KEY = 'T2'
 T1_KEY = 'T1'
-RELAXATION_BOUNDS = (.1e-3, 100e-3) #s
+RELAXATION_BOUNDS = (.1, 1e-3) #s
 
 DIFFUSIVITY_KEY = 'Diffusivity'
 
