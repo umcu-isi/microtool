@@ -242,7 +242,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
     def fit_initial_guess(self) -> np.ndarray:
         return np.array([self[key].fit_guess for key in np.array(self.parameter_names)[self.include_fit]])
 
-    def check_model_dependencies(self, scheme: AcquisitionScheme):
+    def check_dependencies(self, scheme: AcquisitionScheme):
         """
         Method for consistency check-up between model requirements and defined scheme parameters
 
@@ -263,7 +263,6 @@ class MultiTissueModel(TissueModel):
     def __init__(self, models: List[TissueModel], volume_fractions: Optional[List[float]] = None):
 
         self._models = models
-        self.N_models = len(models)
         # making a parameter dictionary using parameters in the individual compartments
         parameters = {}
         param_location = {}
@@ -271,17 +270,17 @@ class MultiTissueModel(TissueModel):
         for i, model in enumerate(models):
             for key, value in model.items():
                 if key != BASE_SIGNAL_KEY:
-                    parameters.update({MODEL_PREFIX + f"{i}_" + key: value})
-                    param_location.update({MODEL_PREFIX + f"{i}_" + key: j})
+                    parameters.update({"{MODEL_PREFIX}_{i}_{key}": value})
+                    param_location.update({"{MODEL_PREFIX}_{i}_{key}": j})
                     j += 1
                 else:
-                    param_location.update({MODEL_PREFIX + f"{i}_" + key: None})
+                    param_location.update({"{MODEL_PREFIX}_{i}_{key}": None})
 
-        if self.N_models > 1:
+        if len(self._models) > 1:
             if volume_fractions is None:
                 raise ValueError("Please provide volume fractions if you include multiple models")
             # Inserting the partial volumes as model parameters
-            if len(volume_fractions) != self.N_models:
+            if len(volume_fractions) != len(self._models):
                 raise ValueError("Not enough volume fractions provided for number of models")
             if sum(volume_fractions) != 1.:
                 raise ValueError("Volume fractions dont sum to 1")
@@ -289,10 +288,10 @@ class MultiTissueModel(TissueModel):
             # The 0th volume fractions is defined as 1 - the others so we mark it to be excluded from fitting
             for i, vf in enumerate(volume_fractions):
                 parameters.update({
-                    VOLUME_FRACTION_PREFIX + f"{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0),
+                    f"{VOLUME_FRACTION_PREFIX}_{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0),
                                                                      fit_flag=False if i == 0 else True)
                 })
-                param_location.update({VOLUME_FRACTION_PREFIX + f"{i}": j})
+                param_location.update({f"{VOLUME_FRACTION_PREFIX}_{i}": j})
                 j += 1
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
@@ -311,12 +310,12 @@ class MultiTissueModel(TissueModel):
             
             #Obtain original parameters from new MultiTissue instance for each model
             for key in model: 
-                index_param = self._param_location.get(f"model_{j}_{key}")
+                index_param = self._param_location.get(f"{MODEL_PREFIX}_{j}_{key}")
                 if key == 'S0' and index_param == None:
                     # param_value = 1
                     parameter_update.append(1)
                 elif key != 'S0' and index_param == None:
-                    raise ValueError(f"Parameter {key} for model_{j} update is missing")
+                    raise ValueError(f"Parameter {key} for {MODEL_PREFIX}_{j} update is missing")
                 else:
                     parameter_update.append(new_parameter_values[index_param])                 
 
@@ -343,21 +342,21 @@ class MultiTissueModel(TissueModel):
                 if key == 'S0': 
                     index_param = self._param_location.get(("S0"))
                 else: 
-                    index_param = self._param_location.get((f"model_{j}_{key}"))
+                    index_param = self._param_location.get((f"{MODEL_PREFIX}_{j}_{key}"))
                 
                 #We only want to update the parameters that are true for fitting
                 if self.include_fit[index_param] == True:                
                     if key =='S0' and index_param == None:
                         parameter_update.append(1)
                     elif key!= 'S0' and index_param == None:
-                        raise ValueError(f"Parameter {key} for model_{j} update is missing")
+                        raise ValueError(f"Parameter {key} for {MODEL_PREFIX}_{j} update is missing")
                     else: 
                         parameter_update.append(new_values[index_param])
              
             model.set_fit_parameters(np.array(parameter_update))
         
         # update volume fraction 0 if necessary
-        if self.N_models > 1:
+        if len(self._models) > 1:
             self[VOLUME_FRACTION_PREFIX + "0"].value = 1 - np.sum(self.volume_fractions[1:])
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
@@ -365,14 +364,14 @@ class MultiTissueModel(TissueModel):
         compartment_signals = np.stack([model(scheme) for model in self._models], axis=-1)
         return np.sum(compartment_signals * self.volume_fractions, axis=-1)
 
-    def check_model_dependencies(self, scheme: AcquisitionScheme):        
+    def check_dependencies(self, scheme: AcquisitionScheme):        
         """
         Method for consistency check-up between model requirements and defined scheme parameters
         """        
         #Check model-specific requirements
         for i in range(len(self._models)):
             model = self._models[i]          
-            model.check_model_dependencies(scheme)            
+            model.check_dependencies(scheme)            
  
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, method: Union[str, callable] = 'trust-constr',
             **fit_options) -> FittedModelMinimize:
@@ -420,7 +419,7 @@ class MultiTissueModel(TissueModel):
 
     @property
     def fit_constraints(self) -> ConstraintTypes:
-        if self.N_models == 1:
+        if len(self._models) == 1:
             return ()
 
         # for now only volume fractions.
@@ -508,12 +507,9 @@ class RelaxationTissueModel(TissueModel):
                 
                 signal = model_signal * (1 - 2 * ti_t1 + tr_t1) * te_t2 
                          
-        else:
-            return ValueError('Signal computation not implemented for this acquisition scheme and relaxation model')
-        
         return signal
    
-    def check_model_dependencies(self, scheme: AcquisitionScheme):        
+    def check_dependencies(self, scheme: AcquisitionScheme):        
         """
         Method for consistency check-up between model requirements and defined scheme parameters
 
