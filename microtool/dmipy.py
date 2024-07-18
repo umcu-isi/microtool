@@ -251,7 +251,7 @@ class DmipyTissueModel(TissueModel):
 
     def _dmipy_fix_parameters(self, fix_parameter: str, fix_value: float) -> None:
         """
-        Sets as fixed desired dmipy model parameters 
+        Wrapper for Dmipy's own MultiComparmentModel function that sets fixed model parameters
 
         :fix parameter: string of parameter to fix
         :fix_value: value to fix the paramter to
