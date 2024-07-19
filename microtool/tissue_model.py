@@ -20,7 +20,7 @@ from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differen
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
-    ReducedDiffusionScheme
+    ReducedDiffusionScheme, DiffusionAcquisitionScheme
 from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY, T2_KEY, T1_KEY, \
     DIFFUSIVITY_KEY, RELAXATION_BOUNDS, ConstraintTypes
 
