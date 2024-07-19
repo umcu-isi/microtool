@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from copy import copy, deepcopy
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Union, Tuple, Sequence
 
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
