@@ -271,10 +271,10 @@ class MultiTissueModel(TissueModel):
             for key, value in model.items():
                 if key != BASE_SIGNAL_KEY:
                     parameters.update({f"{MODEL_PREFIX}_{i}_{key}": value})
-                    param_location.update(f{"{MODEL_PREFIX}_{i}_{key}": j})
+                    param_location.update({f"{MODEL_PREFIX}_{i}_{key}": j})
                     j += 1
                 else:
-                    param_location.update(f{"{MODEL_PREFIX}_{i}_{key}": None})
+                    param_location.update({f"{MODEL_PREFIX}_{i}_{key}": None})
 
         if len(self._models) > 1:
             if volume_fractions is None:
@@ -297,7 +297,7 @@ class MultiTissueModel(TissueModel):
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
         parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False,
                                                             fit_bounds=(0.0, 2.0))})
-        param_location.update(f"{MODEL_PREFIX}{BASE_SIGNAL_KEY}": j})
+        param_location.update({f"{MODEL_PREFIX}{BASE_SIGNAL_KEY}": j})
         self._param_location = param_location
 
         super().__init__(parameters)
