@@ -337,28 +337,24 @@ class MultiTissueModel(TissueModel):
 
         # We also update the parameters on the models in this object
         for j, model in enumerate(self._models):
-            parameter_update = []
+            parameter_update = []            
             
             for key in model: 
-                if key == 'S0': 
-                    index_param = self._param_location.get(("S0"))
-                else: 
-                    index_param = self._param_location.get((f"{MODEL_PREFIX}_{j}_{key}"))
+                index_param = self._param_location.get((f"{MODEL_PREFIX}_{j}_{key}"))
                 
-                #We only want to update the parameters that are true for fitting
-                if self.include_fit[index_param] == True:                
-                    if key =='S0' and index_param == None:
-                        parameter_update.append(1)
-                    elif key!= 'S0' and index_param == None:
-                        raise ValueError(f"Parameter {key} for {MODEL_PREFIX}_{j} update is missing")
-                    else: 
+                if key == 'S0' and index_param == None:
+                    continue
+                elif key!= 'S0' and index_param == None:
+                    raise ValueError(f"Parameter {key} for {MODEL_PREFIX}_{j} update is missing")
+                else: 
+                    if self.include_fit[index_param] == True:
                         parameter_update.append(new_values[index_param])
              
             model.set_fit_parameters(np.array(parameter_update))
         
         # update volume fraction 0 if necessary
         if len(self._models) > 1:
-            self[VOLUME_FRACTION_PREFIX + "0"].value = 1 - np.sum(self.volume_fractions[1:])
+            self[VOLUME_FRACTION_PREFIX + "_0"].value = 1 - np.sum(self.volume_fractions[1:])
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
         # use the call functions of the models
