@@ -357,7 +357,7 @@ class AnalyticBall(DmipyTissueModel):
 
     def __init__(self, lambda_iso: float):
         model = G1Ball(lambda_iso)
-        super().__init__(MultiCompartmentModel([model]))
+        super().__init__(model)
 
     def jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         bvals = copy(scheme.b_values)
