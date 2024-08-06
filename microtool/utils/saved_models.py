@@ -30,7 +30,7 @@ def verdict() -> DmipyTissueModel:
     return verdict_model
 
 
-def cylinder_zeppelin_naked(orientation: Orientation) -> MultiCompartmentModel:
+def cylinder_zeppelin(orientation: Orientation) -> MultiCompartmentModel:
     """
      A function to build the tissuemodel used in Alexander 2008.
 
@@ -51,26 +51,16 @@ def cylinder_zeppelin_naked(orientation: Orientation) -> MultiCompartmentModel:
     # ----------EXTRA AXONAL MODEL-----------------
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
 
-    mc_model = MultiCompartmentModel(models=[zeppelin, cylinder])
+    #mc_model = MultiCompartmentModel(models=[zeppelin, cylinder])
 
     # Fixing the parralel diffusivity parameter to be equal for intra and extra axonal models
-    mc_model.set_equal_parameter('C4CylinderGaussianPhaseApproximation_1_lambda_par', 'G2Zeppelin_1_lambda_par')
+    #mc_model.set_equal_parameter('C4CylinderGaussianPhaseApproximation_1_lambda_par', 'G2Zeppelin_1_lambda_par')
     # Setting the initial diameter to the ground truth
-    mc_model.set_initial_guess_parameter('C4CylinderGaussianPhaseApproximation_1_diameter', diameter)
+    #mc_model.set_initial_guess_parameter('C4CylinderGaussianPhaseApproximation_1_diameter', diameter)
+
+    mc_model = DmipyTissueModel(dmipy_models=[zeppelin, cylinder], volume_fractions=[.7, .3])
+
     return mc_model
-
-
-def cylinder_zeppelin(orientation: Orientation) -> DmipyTissueModel:
-    """
-     A function to build the tissuemodel used in Alexander 2008.
-    :return:
-    """
-    mc_model = cylinder_zeppelin_naked(orientation)
-
-    # Wrapping the model for compatibility
-    mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=[.7, .3])
-
-    return mc_model_wrapped
 
 
 def stick_zeppelin() -> DmipyTissueModel:
@@ -82,8 +72,8 @@ def stick_zeppelin() -> DmipyTissueModel:
 
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
     stick = cylinder_models.C1Stick(mu, lambda_par)
-    stick_zeppelin = MultiCompartmentModel(models=[zeppelin, stick])
-    return DmipyTissueModel(stick_zeppelin, volume_fractions=[0.5, 0.5])
+    
+    return DmipyTissueModel(dmipy_models=[zeppelin, stick], volume_fractions=[0.5, 0.5])
 
 
 def stick() -> DmipyTissueModel:
