@@ -11,7 +11,8 @@ from dmipy.core.modeling_framework import ModelProperties as SingleDmipyModel
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.gaussian_models import G1Ball
 
-from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool.acquisition_scheme import DiffusionAcquisitionScheme, \
+    DiffusionAcquisitionScheme_bval_dependency, DiffusionAcquisitionScheme_delta_dependency
 from microtool.constants import BASE_SIGNAL_KEY
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
@@ -97,7 +98,8 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     :param scheme: DiffusionAcquisitionScheme
     :return: DmipyAcquisitionScheme
     """
-    if not isinstance(scheme, DiffusionAcquisitionScheme):
+    if not isinstance(scheme, (DiffusionAcquisitionScheme, DiffusionAcquisitionScheme_bval_dependency, 
+                               DiffusionAcquisitionScheme_delta_dependency)):
         raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DiffusionAcquisitionScheme}")
     # note that dmipy has a different notion of echo times so they are not included in the conversion
     return acquisition_scheme_from_bvalues(
