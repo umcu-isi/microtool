@@ -5,20 +5,19 @@ from dmipy.signal_models import sphere_models, cylinder_models, gaussian_models
 
 
 from microtool.dmipy import DmipyTissueModel
-from microtool.tissue_model import MultiTissueModel
-from NewRelaxation import NewRelaxationTissueModel
+from microtool.tissue_model import MultiTissueModel, RelaxationTissueModel
 
 sphere_dmipy = sphere_models.S4SphereGaussianPhaseApproximation(diffusion_constant=2.0e-9, diameter=10e-6)
 sphere = DmipyTissueModel(sphere_dmipy)
 sphere._dmipy_fix_parameters('S4SphereGaussianPhaseApproximation_1_diameter', 2.0e-9)
-sphere_relax = NewRelaxationTissueModel(sphere, T2 = 0.020)
+sphere_relax = RelaxationTissueModel(sphere, T2 = 0.020)
 
 
 stick_dmipy = cylinder_models.C1Stick(mu=[np.pi / 2, np.pi / 2], lambda_par=8.0e-9)
 stick = DmipyTissueModel(stick_dmipy)
 stick._dmipy_fix_parameters('C1Stick_1_lambda_par', 8.0e-9)
 stick._dmipy_fix_parameters('C1Stick_1_mu', [np.pi / 2, np.pi / 2])
-stick_relax = NewRelaxationTissueModel(stick, T2 = 0.020)
+stick_relax = RelaxationTissueModel(stick, T2 = 0.020)
 
 model = MultiTissueModel([sphere_relax, stick_relax], volume_fractions= [0.3, 0.7])
 
