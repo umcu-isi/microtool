@@ -13,6 +13,32 @@ from microtool.scanner_parameters import ScannerParameters
 gamma_different_unit = 1e-3 * GAMMA
 
 
+#Computations as in Matlab code: G:[mT/um], time: [ms], S: [mT/um/ms]
+def New_minimal_echo_time(scanner_parameters: ScannerParameters):
+    """
+
+    :param b: The bvalue in seconds/millimeters^2
+    :param scanner_parameters: Scan parameters
+    :return: The minimal echo time in seconds
+    """
+
+    # converting units to milliseconds/millimeters^2
+    scanner_parameters = copy(scanner_parameters)
+    scan_parameter_to_ms(scanner_parameters)
+    
+    # extracting the scan parameters
+    G_max = scanner_parameters.G_max
+    t90 = scanner_parameters.t_90
+    t180 = scanner_parameters.t_180
+    S_max = scanner_parameters.S_max
+    
+    t_ramp = G_max/S_max #ramp time
+    
+    TE_min = t90 + t180 + 4*t_ramp
+
+    # echo time convert back to seconds
+    return TE_min * 1e-3
+
 def minimal_echo_time(b, scanner_parameters: ScannerParameters):
     """
 
