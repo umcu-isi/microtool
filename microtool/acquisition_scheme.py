@@ -10,6 +10,7 @@ from scipy.optimize import NonlinearConstraint
 from tabulate import tabulate
 
 from microtool.gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
+from microtool.gradient_sampling import sample_uniform_half_sphere
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.utils.math import is_smaller_than_with_tolerance, is_higher_than_with_tolerance
 from microtool.utils.solve_echo_time import minimal_echo_time, New_minimal_echo_time
