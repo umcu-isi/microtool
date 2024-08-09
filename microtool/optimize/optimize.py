@@ -28,6 +28,38 @@ logging.basicConfig(filename=os.path.join(log_dir, log_filename),
 AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
 
 
+def iterative_shell_optimization(scheme: AcquisitionScheme, 
+                           model: TissueModel, 
+                           shells_M_N: Dict[str, int],
+                           iterations: int,
+                           noise_variance: float,
+                           loss: LossFunction = default_loss,
+                           loss_scaling_factor: float = 1.0,
+                           method: Optional[Union[str, Optimizer]] = "differential_evolution",
+                           solver_options: dict = None) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
+    
+    optimized_schemes = {}
+    
+    for iter in range(iterations):
+                
+        scheme.fix_b0_measurements()
+        
+        print(f"Starting iteration {iter}")
+        
+        optimal_scheme, optimal_loss = optimize_scheme(scheme, model, noise_variance=noise_variance, 
+                                                method=method, solver_options=solver_options)
+        
+        optimized_schemes[iter] = {'scheme': optimal_scheme, 'loss': optimal_loss}
+        
+        print(f"Finished iteration {iter}")
+        
+        scheme = scheme.random_shell_initialization(shells_M_N, model)
+        
+    min_loss = min(optimized_schemes, key=lambda k: optimized_schemes[k]['loss'])
+    optimal_scheme = optimized_schemes[min_loss]['scheme']
+    
+    return optimal_scheme
+
 def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
                     noise_variance: float,
                     loss: LossFunction = default_loss,
@@ -105,13 +137,13 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     # check if the optimized scheme is better than the initial scheme
     current_loss = compute_loss(scheme_copy, model, noise_variance, loss)
     if current_loss > initial_loss:
-        raise RuntimeError("Loss increased during optimization, try a different optimization method.")
+        Warning("Loss increased during optimization, try a different optimization method.")
 
     check_constraints_satisfied(x, scheme_copy.constraints)
 
     warn_early_termination(result)
 
-    return scheme_copy, result
+    return scheme_copy, current_loss
 
 
 def log_callback(iteration: int, parameters: np.ndarray, objective_function: float, more_info: Dict[str, str] = None):
