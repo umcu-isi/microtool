@@ -19,8 +19,8 @@ def test_set_parameter_vector():
 
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
     stick = cylinder_models.C1Stick(mu, lambda_par)
-    stick_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[stick]))
-    zeppelin_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[zeppelin]))
+    stick_wrapped = DmipyTissueModel(stick)
+    zeppelin_wrapped = DmipyTissueModel(zeppelin)
     multi_model = MultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5])
 
     expected = np.ones(len(multi_model))
@@ -44,11 +44,10 @@ class TestIntegrationWithAcquisitionScheme:
 
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
     stick = cylinder_models.C1Stick(mu, lambda_par)
-    stick_zeppelin = MultiCompartmentModel(models=[zeppelin, stick])
-    single_model = DmipyTissueModel(stick_zeppelin, volume_fractions=[0.5, 0.5])
+    single_model = DmipyTissueModel([zeppelin, stick], volume_fractions=[0.5, 0.5])
 
-    stick_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[stick]))
-    zeppelin_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[zeppelin]))
+    stick_wrapped = DmipyTissueModel(stick)
+    zeppelin_wrapped = DmipyTissueModel(zeppelin)
     multi_model = MultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5])
 
     def test_signal(self):
