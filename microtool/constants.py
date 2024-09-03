@@ -13,7 +13,7 @@ B_UNIT = 's/mm²'
 B_VAL_LB = 0.0
 B_VAL_UB = 3e3
 B_VAL_SCALE = 1e3
-B_MAX = 6000 #s/mm2
+B_MAX = 6000 #s/mm2  # TODO: what's the difference in usage with B_VAL_UB?
 
 GRADIENT_UNIT = 'mT/mm'
 PULSE_TIMING_UNIT = 's'

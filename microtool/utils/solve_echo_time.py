@@ -27,17 +27,18 @@ def New_minimal_echo_time(scanner_parameters: ScannerParameters):
     scan_parameter_to_ms(scanner_parameters)
     
     # extracting the scan parameters
-    G_max = scanner_parameters.G_max
+    g_max = scanner_parameters.G_max
     t90 = scanner_parameters.t_90
     t180 = scanner_parameters.t_180
-    S_max = scanner_parameters.S_max
+    s_max = scanner_parameters.S_max
     
-    t_ramp = G_max/S_max #ramp time
+    t_ramp = g_max / s_max  # ramp time
     
-    TE_min = t90 + t180 + 4*t_ramp
+    te_min = t90 + t180 + 4 * t_ramp
 
     # echo time convert back to seconds
-    return TE_min * 1e-3
+    return te_min * 1e-3
+
 
 def minimal_echo_time(b, scanner_parameters: ScannerParameters):
     """

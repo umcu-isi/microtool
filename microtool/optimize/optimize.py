@@ -12,7 +12,7 @@ from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
 from ..constants import ConstraintTypes
-from ..tissue_model import TissueModel
+from ..tissue_model import TissueModel, RelaxationTissueModel
 from ..utils.IO import initiate_logging_directory
 
 # Set up the logger
@@ -24,48 +24,58 @@ logging.basicConfig(filename=os.path.join(log_dir, log_filename),
                     level=logging.INFO,
                     format='%(message)s')
 
-# A way of type hinting all the derived classes of AcquisitionScheme
-AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
 
+def iterative_shell_optimization(
+        scheme: AcquisitionScheme,
+        model: RelaxationTissueModel,
+        n_shells: int,
+        n_directions: int,
+        iterations: int,
+        noise_variance: float,
+        loss: LossFunction = default_loss,
+        loss_scaling_factor: float = 1.0,
+        method: Optional[Union[str, Optimizer]] = "differential_evolution",
+        solver_options: dict = None) -> AcquisitionScheme:
+    """
+    Iteratively optimizes the free parameters in the acquisition scheme and returns the scheme with the lowest loss.
+    The b-values and gradient directions are randomly initialized on the given number of shells and directions per
+    shell after each iteration.
+    """
 
-def iterative_shell_optimization(scheme: AcquisitionScheme, 
-                           model: TissueModel, 
-                           shells_M_N: Dict[str, int],
-                           iterations: int,
-                           noise_variance: float,
-                           loss: LossFunction = default_loss,
-                           loss_scaling_factor: float = 1.0,
-                           method: Optional[Union[str, Optimizer]] = "differential_evolution",
-                           solver_options: dict = None) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
-    
-    optimized_schemes = {}
-    
-    for iter in range(iterations):
-                
+    optimal_loss = None
+    optimal_scheme = scheme
+
+    for i in range(iterations):
         scheme.fix_b0_measurements()
         
-        print(f"Starting iteration {iter}")
+        print(f"Starting iteration {i}")
+        optimized_scheme, optimized_loss = optimize_scheme(
+            scheme,
+            model,
+            noise_variance=noise_variance,
+            loss=loss,
+            loss_scaling_factor=loss_scaling_factor,
+            method=method,
+            solver_options=solver_options
+        )
+        if i == 0 or optimized_loss < optimal_loss:
+            optimal_scheme = optimized_scheme
+            optimal_loss = optimized_loss
         
-        optimal_scheme, optimal_loss = optimize_scheme(scheme, model, noise_variance=noise_variance, 
-                                                method=method, solver_options=solver_options)
-        
-        optimized_schemes[iter] = {'scheme': optimal_scheme, 'loss': optimal_loss}
-        
-        print(f"Finished iteration {iter}")
-        
-        scheme = scheme.random_shell_initialization(shells_M_N, model)
-        
-    min_loss = min(optimized_schemes, key=lambda k: optimized_schemes[k]['loss'])
-    optimal_scheme = optimized_schemes[min_loss]['scheme']
+        print(f"Finished iteration {i}")
+
+        model_dependencies = model.get_dependencies()
+        scheme = scheme.random_shell_initialization(n_shells, n_directions, model_dependencies)
     
     return optimal_scheme
 
-def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
+
+def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
                     noise_variance: float,
                     loss: LossFunction = default_loss,
                     loss_scaling_factor: float = 1.0,
                     method: Optional[Union[str, Optimizer]] = "differential_evolution",
-                    solver_options: dict = None) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
+                    solver_options: dict = None) -> Tuple[AcquisitionScheme, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
