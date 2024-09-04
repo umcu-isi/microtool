@@ -54,6 +54,8 @@ def find_or_optimize(ns: int, base_name, constraints):
     """
     Looks up if a vector collection was already optimzed, if not optimizes.
     """
+    # TODO: Do we really want to store the
+    #  if so, then we need to make sure to store them in a proper path.
     stored_samples = [sample_path.name for sample_path in list(folder.glob(base_name + '*'))]
 
     sample_name = base_name + str(ns) + '.npy'

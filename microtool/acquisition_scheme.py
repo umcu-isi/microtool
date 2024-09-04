@@ -10,12 +10,14 @@ from scipy.optimize import NonlinearConstraint
 from tabulate import tabulate
 
 from microtool.gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
+from microtool.gradient_sampling import sample_uniform_half_sphere
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.utils.math import is_smaller_than_with_tolerance, is_higher_than_with_tolerance
-from microtool.utils.solve_echo_time import minimal_echo_time
+from microtool.utils.solve_echo_time import minimal_echo_time, New_minimal_echo_time
 from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT, PULSE_TIMING_LB, PULSE_TIMING_UB, \
-    PULSE_TIMING_SCALE
+    PULSE_TIMING_SCALE,  B_VAL_LB, B_VAL_UB, B_VAL_SCALE, MAX_TE, B_MAX
 from .pulse_relations import get_b_value_complete, get_gradients
+from .bval_delta_pulse_relations import delta_Delta_from_TE, b_val_from_delta_Delta, constrained_dependencies
 
 
 class AcquisitionParameters:
@@ -366,6 +368,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
 
 # TODO: Revised until this line
+# TODO: Use DiffusionAcquisitionScheme as a base-class for all other diffusion acquisition schemes.
 class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
     Defines a diffusion MR acquisition scheme.
@@ -632,6 +635,509 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             self[par].set_fixed_mask(new_mask)
 
 
+class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
+    """
+    Defines a diffusion MR acquisition scheme.
+
+    :param gradient_directions: A list or numpy array of direction cosines.
+    :param echo_times: A list or numpy array of the echo times in seconds.
+    :param scan_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
+    :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
+    """
+            
+    _required_parameters = ['gradient_magnitudes', 'gradient_directions', 'pulse_widths', 
+                            'pulse_intervals', 'echo_times']
+
+    def __init__(self,
+                 gradient_magnitudes: Union[List[float], np.ndarray],
+                 gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],
+                 pulse_widths: Union[List[float], np.ndarray],
+                 pulse_intervals: Union[List[float], np.ndarray],
+                 echo_times: Optional[Union[List[float], np.ndarray]] = None,
+                 scan_parameters: ScannerParameters = default_scanner):
+
+
+        self.scan_parameters = scan_parameters   
+        
+        # converting to np array of correct type
+        gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
+        # Calculate the spherical angles φ and θ.
+        theta, phi = unitvector_to_angles(gradient_directions).T
+
+        b_values = get_b_value_complete(GAMMA, gradient_magnitudes, pulse_intervals, pulse_widths, scan_parameters)
+        
+        if echo_times is None:
+            # # offset to prevent being to close to actual minimal echo times
+            offset = 1e-6
+            min_echo_time = New_minimal_echo_time(scan_parameters) + offset
+            echo_times = np.random.uniform(min_echo_time, MAX_TE, size=len(b_values))
+
+        # checking for b0 values and setting vector to zero for these values
+        self._check_b_vectors(b_values, gradient_directions)
+
+        super().__init__({
+            #Cristina 07-05
+            'DiffusionPulseMagnitude': AcquisitionParameters(
+                values=gradient_magnitudes, unit=GRADIENT_UNIT, scale=1., symbol="|G|", 
+                lower_bound=0.0, upper_bound = scan_parameters.G_max
+            ),
+            'DiffusionGradientAnglePhi': AcquisitionParameters(
+                values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
+            ),
+            'DiffusionGradientAngleTheta': AcquisitionParameters(
+                values=theta, unit='rad', scale=1., symbol=r"$\theta$", lower_bound=None, fixed=True
+            ),
+            'DiffusionPulseWidth': AcquisitionParameters(
+                values=pulse_widths, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$\delta$", fixed=False,
+                lower_bound=PULSE_TIMING_LB,
+                upper_bound=PULSE_TIMING_UB
+            ),
+            'DiffusionPulseInterval': AcquisitionParameters(
+                values=pulse_intervals, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$\Delta$",
+                fixed=False,
+                lower_bound=PULSE_TIMING_LB,
+                upper_bound=PULSE_TIMING_UB
+            ),
+            'EchoTime': AcquisitionParameters(
+                values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
+                lower_bound=New_minimal_echo_time(self.scan_parameters),
+                upper_bound=MAX_TE
+            )
+        })
+        
+        #Cristina 04-07
+        self._check_constraints()
+        
+    @classmethod
+    def random_shell_initialization(cls, n_shells: int, n_directions: int, model_dependencies: list,
+                                    scan_parameters: ScannerParameters = default_scanner):
+        """
+        Defines random initialization of DiffusionAcquisitionScheme based on a series of pulse relations and 
+        boundaries per parameter. 
+
+        """
+        #Cristina 21-06
+        #Directions are only sampled once, not iterative
+        # TODO: Shouldn't we sample n_directions and duplicate those for each shell?
+        # TODO: And wouldn't it be better if we could have an increasing number (squared) of directions per b-value?
+        gradient_directions = sample_uniform_half_sphere(n_shells * n_directions)
+        
+        #Randomize the class based on its initialization parameters and constraints established by the model
+        random_scheme = random_parameter_definition(cls._required_parameters, model_dependencies, 
+                                                    n_shells, n_directions, scan_parameters)
+        
+        return cls(gradient_magnitudes=random_scheme['gradient_magnitudes'],
+                   gradient_directions=gradient_directions,
+                   pulse_widths=random_scheme['pulse_widths'],
+                   pulse_intervals=random_scheme['pulse_intervals'],
+                   echo_times=random_scheme['echo_times'],
+                   scan_parameters=scan_parameters)
+    
+    @staticmethod
+    def _check_b_vectors(b_values: np.ndarray, b_vectors: np.ndarray) -> None:
+        
+        # Checking for b0 measurements
+        b0 = b_values == 0
+        
+        # Checking for unit vectors
+        if not np.allclose(np.linalg.norm(b_vectors[~b0], axis=1), 1):
+            raise ValueError('b-vectors are not unit vectors.')
+
+        # setting the vectors to (0,0,0) for the b0 measurements
+        b_vectors[b0] = 0
+
+    def _check_constraints(self):
+        for desc, constraint in self.constraints.items():
+            fun_val = constraint.fun(self.x0)
+
+            lower_than_lb = is_smaller_than_with_tolerance(fun_val, constraint.lb)
+            higher_than_ub = is_higher_than_with_tolerance(fun_val, constraint.ub)
+            if lower_than_lb.any() or higher_than_ub.any():
+                raise ValueError(f"DiffusionAcquisitionScheme: constraint violated, scheme does not satisfy {desc}")                      
+
+    #Cristina 12-07
+    @property
+    def b_values(self) -> np.ndarray:
+        """
+        An array of N b-values in s/mm².
+        """        
+        #In this case, b-values are not directly obtained but computed from pulse relations
+        b_values = get_b_value_complete(GAMMA, self.pulse_magnitude, self.pulse_intervals, self.pulse_widths,
+                                        self.scan_parameters)
+            
+        return b_values
+        
+    @property
+    def phi(self) -> np.ndarray:
+        """
+        An array of N angles in radians.
+        """
+        return self['DiffusionGradientAnglePhi'].values
+
+    @property
+    def theta(self) -> np.ndarray:
+        """
+        An array of N angles in radians.
+        """     
+        # Calculate the spherical angles φ and θ.
+        return self['DiffusionGradientAngleTheta'].values
+ 
+    @property
+    def pulse_widths(self) -> np.ndarray:
+        """
+        An array of N pulse widths in seconds.
+        """
+        pulse_widths = self['DiffusionPulseWidth'].values
+            
+        return pulse_widths
+
+
+    @property
+    def pulse_intervals(self) -> np.ndarray:
+        """
+        An array of N pulse intervals in seconds.
+        """
+        pulse_intervals = self['DiffusionPulseInterval']
+        
+        return pulse_intervals
+
+    @property
+    def b_vectors(self) -> np.ndarray:
+        """
+        An N×3 array of direction cosines.
+        """
+        b_vectors = angles_to_unitvectors(np.array([self.theta, self.phi]).T)
+    
+        # Set b=0 'vectors' to (0, 0, 0) as per convention.
+        b_vectors[self.b_values == 0] = 0
+
+        return b_vectors
+
+    @property
+    def echo_times(self) -> np.ndarray:
+        return self["EchoTime"].values
+
+    def write_bval(self, file: Union[str, bytes, PathLike]) -> None:
+        """
+        Writes b-values to an FSL [*_]dwi.bval file.
+        """
+        # An ASCII text file containing a list of b values applied during each volume acquisition. The b values are
+        # assumed to be in s/mm² units. The order of entries in this file must match the order of volumes in the input
+        # data and entries in the gradient directions text file. The format is: b_1 b_2 b_3 ... b_n
+        file = Path(file)
+        if not file.name.endswith('_dwi.bval') and not file.name == 'dwi.bval':
+            warnings.warn('BIDS specifies that FSL b-value files should be named like: [*_]dwi.bval')
+
+        with file.open('w', encoding='latin-1', newline='\n') as f:
+            f.write(' '.join(f'{x:.6e}' for x in self.b_values))
+
+    def write_bvec(self, file) -> None:
+        """
+        Writes b-vectors to an FSL [*_]dwi.bvec file.
+        """
+        # The [*_]dwi.bvec file contains 3 rows with N space-delimited floating-point numbers (corresponding to the N
+        # volumes in the corresponding NIfTI file.) The first row contains the x elements, the second row contains
+        # the y elements and the third row contains the z elements of a unit vector in the direction of the applied
+        # diffusion gradient, where the i-th elements in each row correspond together to the i-th volume, with [0,0,0]
+        # for non-diffusion-weighted (also called b=0 or low-b) volumes. Following the FSL format for the
+        # [*_]dwi.bvec specification, the coordinate system of the b vectors MUST be defined with respect to the
+        # coordinate system defined by the header of the corresponding _dwi NIfTI file and not the scanner's device
+        # coordinate system.
+        file = Path(file)
+        if not file.name.endswith('_dwi.bvec') and not file.name == 'dwi.bvec':
+            warnings.warn('BIDS specifies that FSL b-vector files should be named like: [*_]dwi.bvec')
+
+        with file.open('w', encoding='latin-1', newline='\n') as f:
+            for bvec in self.b_vectors:
+                f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
+    
+    @property
+    def constraints(self) -> Optional[Dict[str, NonlinearConstraint]]:
+
+        constraints = {}
+            
+        def delta_constraint_fun(x: np.ndarray):
+            """ Should be larger than zero """
+            
+            #In this case deltas are optimize and used directly to compute b_val
+            pulse_widths = self._copy_and_update_parameter('DiffusionPulseWidth', x)
+            pulse_intervals = self._copy_and_update_parameter('DiffusionPulseInterval', x)
+            
+            t_rise = self.scan_parameters._t_rise*1e3
+            t_180 = self.scan_parameters.t_180*1e3
+            
+            return pulse_intervals - (pulse_widths + t_rise + t_180)
+
+        delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
+        constraints["PulseIntervalLargerThanPulseWidth"] = delta_constraint
+
+        def echo_constraint_fun(x: np.ndarray):
+
+            echo_time = self._copy_and_update_parameter("EchoTime", x)
+            
+            t_min = New_minimal_echo_time(self.scan_parameters)
+            
+            return echo_time - t_min
+
+        echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
+        constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
+                               
+        def gradient_b_val_constraint_fun(x: np.ndarray):
+            
+            g = self._copy_and_update_parameter('DiffusionPulseMagnitude', x)
+            pulse_widths = self._copy_and_update_parameter('DiffusionPulseWidth', x)
+            pulse_intervals = self._copy_and_update_parameter('DiffusionPulseInterval', x)               
+            
+            return B_MAX - b_val_from_delta_Delta(pulse_widths, pulse_intervals, g, self.scan_parameters)
+
+        g_b_val_constraint = NonlinearConstraint(gradient_b_val_constraint_fun, 0.0, np.inf, keep_feasible=True)
+        constraints["BValSmallerThanBMax"] = g_b_val_constraint
+          
+        return constraints
+    
+    def fix_b0_measurements(self) -> None:
+        """
+        Fixes the b0 values so they are not optimised. This is a utility method for using diffusion acquisition
+        schemes with the dmipy package.
+
+        :return:
+        """
+        #Cristina 12-07
+        b0_mask = self.b_values == 0
+
+        for par in ["DiffusionPulseMagnitude", "DiffusionPulseWidth", "DiffusionPulseInterval", "EchoTime"]:
+            # we should get the old fixed measurements and make sure that the new mask includes them
+            old_mask = ~self[par].optimize_mask
+            new_mask = np.logical_or(b0_mask, old_mask)
+            self[par].set_fixed_mask(new_mask)
+            
+class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
+    """
+    Defines a diffusion MR acquisition scheme.
+
+    :param gradient_directions: A list or numpy array of direction cosines.
+    :param echo_times: A list or numpy array of the echo times in seconds.
+    :param scan_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
+    :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
+    """
+
+    _required_parameters = ['gradient_directions', 'echo_times', 'b_values']
+
+    #Cristina 21-06: removed pulse width and interval from initialization: they will be computed from TE and b-val relation
+    def __init__(self,
+                 gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],
+                 b_values: Union[List[float], np.ndarray],
+                 echo_times: Optional[Union[List[float], np.ndarray]],
+                 # model_dependencies: [List[str]],
+                 scan_parameters: ScannerParameters = default_scanner):
+
+        self.scan_parameters = scan_parameters
+        # self.model_dependencies = model_dependencies
+
+        # converting to np array of correct type
+        gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
+        # Calculate the spherical angles φ and θ.
+        theta, phi = unitvector_to_angles(gradient_directions).T
+
+        # checking for b0 values and setting vector to zero for these values
+        self._check_b_vectors(b_values, gradient_directions)
+
+        super().__init__({
+            'DiffusionGradientAnglePhi': AcquisitionParameters(
+                values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
+            ),
+            'DiffusionGradientAngleTheta': AcquisitionParameters(
+                values=theta, unit='rad', scale=1., symbol=r"$\theta$", lower_bound=None, fixed=True
+            ),
+            # Cristina 09-05
+            'EchoTime': AcquisitionParameters(
+                values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
+                lower_bound=New_minimal_echo_time(self.scan_parameters),
+                upper_bound=MAX_TE
+            ),
+            'B-Values': AcquisitionParameters(
+                values=b_values, unit='s/mm²', scale=B_VAL_SCALE, symbol=r"$b$",
+                lower_bound=B_VAL_LB, upper_bound=B_MAX
+            ),
+        })
+
+        # Cristina 04-07
+        self._check_constraints()
+
+    @classmethod
+    def random_shell_initialization(cls, n_shells: int, n_directions: int, model_dependencies: list,
+                                    scan_parameters: ScannerParameters = default_scanner):
+        """
+        Defines random initialization of DiffusionAcquisitionScheme based on a series of pulse relations and
+        boundaries per parameter.
+
+        """
+        # Cristina 21-06
+        # Directions are only sampled once, not iterative
+        # TODO: Shouldn't we sample n_directions and duplicate those for each shell?
+        gradient_directions = sample_uniform_half_sphere(n_shells * n_directions)
+
+        # Randomize the class based on its initialization parameters and constraints established by the model
+        random_scheme = random_parameter_definition(cls._required_parameters, model_dependencies,
+                                                    n_shells, n_directions, scan_parameters)
+
+        return cls(gradient_directions=gradient_directions,
+                   b_values=random_scheme['b_values'],
+                   echo_times=random_scheme['echo_times'])
+
+    @staticmethod
+    def _check_b_vectors(b_values: np.ndarray, b_vectors: np.ndarray) -> None:
+
+        # Checking for b0 measurements
+        b0 = b_values == 0
+
+        # Checking for unit vectors
+        if not np.allclose(np.linalg.norm(b_vectors[~b0], axis=1), 1):
+            raise ValueError('b-vectors are not unit vectors.')
+
+        # setting the vectors to (0,0,0) for the b0 measurements
+        b_vectors[b0] = 0
+
+    def _check_constraints(self):
+        for desc, constraint in self.constraints.items():
+            fun_val = constraint.fun(self.x0)
+
+            lower_than_lb = is_smaller_than_with_tolerance(fun_val, constraint.lb)
+            higher_than_ub = is_higher_than_with_tolerance(fun_val, constraint.ub)
+            if lower_than_lb.any() or higher_than_ub.any():
+                raise ValueError(f"DiffusionAcquisitionScheme: constraint violated, scheme does not satisfy {desc}")
+
+    #Cristina 12-07
+    @property
+    def b_values(self) -> np.ndarray:
+        """
+        An array of N b-values in s/mm².
+        """
+        return self['B-Values'].values
+
+    @property
+    def phi(self) -> np.ndarray:
+        """
+        An array of N angles in radians.
+        """
+        return self['DiffusionGradientAnglePhi'].values
+
+    @property
+    def theta(self) -> np.ndarray:
+        """
+        An array of N angles in radians.
+        """
+        return self['DiffusionGradientAngleTheta'].values
+
+    @property
+    def pulse_widths(self) -> np.ndarray:
+        """
+        An array of N pulse widths in seconds.
+        """
+        delta, _ = delta_Delta_from_TE(self.echo_times, self.scan_parameters)
+
+        return delta
+
+    @property
+    def pulse_intervals(self) -> np.ndarray:
+        """
+        An array of N pulse intervals in seconds.
+        """
+        _, Delta = delta_Delta_from_TE(self.echo_times, self.scan_parameters)
+
+        return Delta
+
+    @property
+    def b_vectors(self) -> np.ndarray:
+        """
+        An N×3 array of direction cosines.
+        """
+        b_vectors = angles_to_unitvectors(np.array([self.theta, self.phi]).T)
+
+        # Set b=0 'vectors' to (0, 0, 0) as per convention.
+        b_vectors[self.b_values == 0] = 0
+
+        return b_vectors
+
+    @property
+    def echo_times(self) -> np.ndarray:
+        return self["EchoTime"].values
+
+    def write_bval(self, file: Union[str, bytes, PathLike]) -> None:
+        """
+        Writes b-values to an FSL [*_]dwi.bval file.
+        """
+        # An ASCII text file containing a list of b values applied during each volume acquisition. The b values are
+        # assumed to be in s/mm² units. The order of entries in this file must match the order of volumes in the input
+        # data and entries in the gradient directions text file. The format is: b_1 b_2 b_3 ... b_n
+        file = Path(file)
+        if not file.name.endswith('_dwi.bval') and not file.name == 'dwi.bval':
+            warnings.warn('BIDS specifies that FSL b-value files should be named like: [*_]dwi.bval')
+
+        with file.open('w', encoding='latin-1', newline='\n') as f:
+            f.write(' '.join(f'{x:.6e}' for x in self.b_values))
+
+    def write_bvec(self, file) -> None:
+        """
+        Writes b-vectors to an FSL [*_]dwi.bvec file.
+        """
+        # The [*_]dwi.bvec file contains 3 rows with N space-delimited floating-point numbers (corresponding to the N
+        # volumes in the corresponding NIfTI file.) The first row contains the x elements, the second row contains
+        # the y elements and the third row contains the z elements of a unit vector in the direction of the applied
+        # diffusion gradient, where the i-th elements in each row correspond together to the i-th volume, with [0,0,0]
+        # for non-diffusion-weighted (also called b=0 or low-b) volumes. Following the FSL format for the
+        # [*_]dwi.bvec specification, the coordinate system of the b vectors MUST be defined with respect to the
+        # coordinate system defined by the header of the corresponding _dwi NIfTI file and not the scanner's device
+        # coordinate system.
+        file = Path(file)
+        if not file.name.endswith('_dwi.bvec') and not file.name == 'dwi.bvec':
+            warnings.warn('BIDS specifies that FSL b-vector files should be named like: [*_]dwi.bvec')
+
+        with file.open('w', encoding='latin-1', newline='\n') as f:
+            for bvec in self.b_vectors:
+                f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
+
+    @property
+    def constraints(self) -> Optional[Dict[str, NonlinearConstraint]]:
+
+        constraints = {}
+
+        def bval_TE_constraint_fun(x: np.ndarray):
+            """ Should be larger than zero """
+
+            b_values = self._copy_and_update_parameter('B-Values', x) #s/mm^2
+            echo_times = self._copy_and_update_parameter("EchoTime", x) #[s]???
+
+            #In this case compute deltas from optimized echo_time
+            delta, Delta = delta_Delta_from_TE(echo_times, self.scan_parameters)
+
+            #This computation is based on maximal G
+            b_from_TE = b_val_from_delta_Delta(delta, Delta, self.scan_parameters.G_max, self.scan_parameters)
+
+            return b_values - b_from_TE
+
+        bval_TE_constraint = NonlinearConstraint(bval_TE_constraint_fun, - np.inf, 0.0, keep_feasible=True)
+        constraints["BValueDependentOnTE"] = bval_TE_constraint
+
+        return constraints
+
+    def fix_b0_measurements(self) -> None:
+        """
+        Fixes the b0 values so they are not optimised. This is a utility method for using diffusion acquisition
+        schemes with the dmipy package.
+
+        :return:
+        """
+        #Cristina 12-07
+        b0_mask = self.b_values == 0
+
+        # for par in ["DiffusionPulseMagnitude", "DiffusionPulseWidth", "DiffusionPulseInterval", "EchoTime"]:
+        for par in ["B-Values", "EchoTime"]:
+            # we should get the old fixed measurements and make sure that the new mask includes them
+            old_mask = ~self[par].optimize_mask
+            new_mask = np.logical_or(b0_mask, old_mask)
+            self[par].set_fixed_mask(new_mask)
+
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
     Defines an inversion-recovery MR acquisition scheme.
@@ -763,3 +1269,71 @@ class ReducedDiffusionScheme(AcquisitionScheme):
             return te - te_min
 
         return NonlinearConstraint(fun, 0.0, np.inf)
+
+
+def random_parameter_definition(required_params: List, randomization_constraints: List, n_shells: int,
+                                n_directions: int, scan_parameters: default_scanner) -> dict:
+    # to '1/mT . 1/ms'
+    gamma = GAMMA * 1e-3
+    
+    # Get random values for n_shells and duplicate those for n_directions per shell.
+    
+    scheme_params = {}
+    for param in required_params:
+        # Gradient directions initialized once
+        if param == 'gradient_directions':
+            continue
+        else:
+            bounds = param_initialization_bounds(param)
+            scheme_params[param] = np.random.uniform(bounds[0], bounds[1], size=n_shells)
+  
+    # Repeat randomization for values that do not follow the constraint
+    while not np.all(constrained_dependencies(randomization_constraints, scheme_params, scan_parameters)):
+        mask = ~constrained_dependencies(randomization_constraints, scheme_params, scan_parameters)        
+        
+        # Based on B-Value dependency uniquely
+        if 'DiffusionPulseWidth' and 'DiffusionPulseInterval' not in randomization_constraints:
+            scheme_params['b_values'][mask] = np.random.uniform(B_VAL_LB, B_VAL_UB, size=np.sum(mask))
+            scheme_params['echo_times'][mask] = np.random.uniform(New_minimal_echo_time(default_scanner), MAX_TE, 
+                                                                  size=np.sum(mask))
+            
+        elif 'DiffusionPulseWidth' and 'DiffusionPulseInterval' in randomization_constraints:
+            
+            # scheme_params['gradient_magnitudes'][mask] = np.random.uniform(0, default_scanner.G_max,
+            #                                                     size=np.sum(mask))
+            scheme_params['echo_times'][mask] = np.random.uniform(New_minimal_echo_time(default_scanner), MAX_TE,
+                                                                  size=np.sum(mask))
+            scheme_params['pulse_widths'][mask] = np.random.uniform(PULSE_TIMING_LB, PULSE_TIMING_UB, size=np.sum(mask))
+            scheme_params['pulse_intervals'][mask] = np.random.uniform(PULSE_TIMING_LB, PULSE_TIMING_UB,
+                                                                       size=np.sum(mask))
+    
+            scheme_params['gradient_magnitudes'][mask] = np.sqrt(
+                B_VAL_UB / (
+                    gamma**2 * (
+                        scheme_params['pulse_widths'][mask]**2 *
+                        (scheme_params['pulse_intervals'][mask] - scheme_params['pulse_widths'][mask] / 3) +
+                        (scan_parameters.t_ramp**3) / 30 -
+                        (scheme_params['pulse_widths'][mask] * scan_parameters.t_ramp**2) / 6)
+                )
+            )
+        print('New randomization')
+    
+    # Duplicate the values for n_directions per shell.
+    scheme_measurements = {key: np.repeat(value, n_directions) for key, value in scheme_params.items()}
+            
+    return scheme_measurements
+
+
+def param_initialization_bounds(parameter: str):
+        
+    parameter_bound_dict = {
+        'echo_times': [New_minimal_echo_time(default_scanner), MAX_TE],
+        'b_values': [B_VAL_LB, B_VAL_UB],
+        'pulse_intervals': [PULSE_TIMING_LB, PULSE_TIMING_UB],
+        'pulse_widths': [PULSE_TIMING_LB, PULSE_TIMING_UB],
+        'gradient_magnitudes': [0, 265e-3]
+        }
+    
+    bounds = parameter_bound_dict[parameter]
+    
+    return bounds
