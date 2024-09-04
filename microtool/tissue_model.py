@@ -464,7 +464,7 @@ class MultiTissueModel(TissueModel):
 
     @property
     def volume_fractions(self) -> np.ndarray:
-         """
+        """
         An array with volume fractions definining the multi-compartment model and unit fraction for 
         each compartment
         """
