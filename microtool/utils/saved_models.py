@@ -34,7 +34,7 @@ def verdict() -> DmipyTissueModel:
     return verdict_model
 
 
-def cylinder_zeppelin_naked(orientation: Orientation) -> MultiCompartmentModel:
+def cylinder_zeppelin(orientation: Orientation) -> MultiCompartmentModel:
     """
     A function to build the tissuemodel used in Alexander 2008 [2]. As described, the model constitutes a 
     simplified version of Assaf et al.'s CHARMED model [3], with the addition of cylinder attenuation from that 
@@ -67,10 +67,10 @@ def cylinder_zeppelin_naked(orientation: Orientation) -> MultiCompartmentModel:
     # ----------EXTRA AXONAL MODEL-----------------
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
 
-    mc_model = MultiCompartmentModel(models=[zeppelin, cylinder])
+    #mc_model = MultiCompartmentModel(models=[zeppelin, cylinder])
 
     # Fixing the parralel diffusivity parameter to be equal for intra and extra axonal models
-    mc_model.set_equal_parameter('C4CylinderGaussianPhaseApproximation_1_lambda_par', 'G2Zeppelin_1_lambda_par')
+    #mc_model.set_equal_parameter('C4CylinderGaussianPhaseApproximation_1_lambda_par', 'G2Zeppelin_1_lambda_par')
     # Setting the initial diameter to the ground truth
     mc_model.set_initial_guess_parameter('C4CylinderGaussianPhaseApproximation_1_diameter', diameter)
 

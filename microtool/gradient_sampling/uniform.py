@@ -55,6 +55,8 @@ def find_or_optimize(n: int, base_name, constraints):
     if n <= 0:
         raise ValueError("Invalid number of samples")
 
+    # TODO: Do we really want to store the samples?
+    #  If so, then we need to make sure to store them in a proper path.
     stored_samples = [sample_path.name for sample_path in list(folder.glob(base_name + '*'))]
 
     sample_name = base_name + str(n) + '.npy'
