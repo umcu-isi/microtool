@@ -53,7 +53,11 @@ class TissueParameter:
 
 
 class TissueModel(Dict[str, TissueParameter], ABC):
-    # TODO write docstring
+    """
+    Base-class for Tissue Models.
+
+    :param parameters: A dictionary with TissueParameter definitions. 
+    """
 
     @abstractmethod
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
@@ -79,6 +83,9 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         return f'Tissue model with {len(self)} scalar parameters:\n{table_str}'
 
     def _set_finite_difference_vars(self):
+        """
+        Defines parameter values in diagonal matrix to be utilized in jacobian computation
+        """
         # Get the baseline parameter vector, but don't include S0.
         self._parameter_baseline = np.array([parameter.value for parameter in self.values()])
 
@@ -119,10 +126,11 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
     def _simulate_signals(self, parameter_vectors: np.ndarray, scheme: AcquisitionScheme) -> np.ndarray:
         """
-
-        :param parameter_vectors:
-        :param scheme:
-        :return:
+        Retrieve signal simulation from child tissue models with modified values and based on scheme parameters
+        
+        :param parameter_vectors: numpy array with new set of N parameter values to define the TissueModel with
+        :param scheme: an AcquisitionScheme instance
+        :return: Nx1 simulated signals from modified model with parameter(i) at each iteration i = 1:N 
         """
         # number of parameter vectors
         npv = parameter_vectors.shape[0]
@@ -145,6 +153,12 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         raise NotImplementedError()
 
     def scaled_jacobian(self, scheme: AcquisitionScheme):
+        """
+        Jacobian computation based on scaled values
+
+        :param scheme: An AcquisitionScheme.
+        :return: An N×M scaled Jacobian matrix.
+        """
         # Extracting the jacobian w.r.t the included parameters only
         # casting to numpy array if not done already
         include = self.include_optimize
@@ -170,10 +184,11 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
     def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
         """
-        You should probably overwrite this method if you are using a wrapped model.
+        Parameter values of TissueModel are redefined based on new array
+        
+        Note: You should probably overwrite this method if you are using a wrapped model.
 
-        :param new_parameter_values:
-        :return:
+        :param new_parameter_values: new array of values to define parameters of a TissueModel
         """
         for parameter, new_value in zip(self.values(), new_parameter_values):
             parameter.value = new_value
@@ -261,6 +276,10 @@ class TissueModel(Dict[str, TissueParameter], ABC):
 
 
 class MultiTissueModel(TissueModel):
+    """
+    Class for multi-comparment models.
+
+    """
     def __init__(self, models: List[TissueModel], volume_fractions: Optional[List[float]] = None):
 
         self._models = models
@@ -304,6 +323,10 @@ class MultiTissueModel(TissueModel):
         super().__init__(parameters)
 
     def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
+        """
+        New definition of parameter values performed initially on each individual compartment and later
+        on MultiTissue instance to ensure consistency
+        """ 
         # Make sure that the parameters are updated on the individual models first
         for j, model in enumerate(self._models):
             parameter_update = []
@@ -331,6 +354,9 @@ class MultiTissueModel(TissueModel):
         super().set_parameters_from_vector(new_parameter_values)
 
     def set_fit_parameters(self, new_values: Union[np.ndarray, dict]) -> None:
+        """
+        New definition of parameter values for fitting both in compartment models and MultiTissueModel
+        """ 
         super().set_fit_parameters(new_values)
 
         if isinstance(new_values, dict):
@@ -373,6 +399,13 @@ class MultiTissueModel(TissueModel):
  
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, method: Union[str, callable] = 'trust-constr',
             **fit_options) -> FittedModelMinimize:
+        """
+        Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
+        
+        :param signal: The noisy signal
+        :param scheme: The scheme under investigation
+        :return: A FittedModelMinimize
+        """
 
         cost_fun_args = (signal, scheme, deepcopy(self))
 
@@ -431,6 +464,10 @@ class MultiTissueModel(TissueModel):
 
     @property
     def volume_fractions(self) -> np.ndarray:
+        """
+        An array with volume fractions definining the multi-compartment model and unit fraction for 
+        each compartment
+        """
         vfs = []
         for key, parameter in self.items():
             if key.startswith(VOLUME_FRACTION_PREFIX):

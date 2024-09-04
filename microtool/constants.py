@@ -32,6 +32,10 @@ VOLUME_FRACTION_PREFIX = "vf_"
 MODEL_PREFIX = "model_"
 
 # Relaxation stuff
+RELAXATION_PREFIX = "T2_relaxation_"
+RELAXATION_BOUNDS = (.1e-3, 100e-3) #s
+
+# old model constants
 T2_KEY = 'T2'
 T1_KEY = 'T1'
 RELAXATION_BOUNDS = (.1e-3, 1) #s

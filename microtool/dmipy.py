@@ -156,20 +156,21 @@ class DmipyTissueModel(TissueModel):
     """
     _model: MultiCompartmentModel  # Reminder that we store the dmipy multicompartment model in this attribute
 
-    def __init__(self, dmipy_models: Union[Sequence[SingleDmipyModel], SingleDmipyModel], volume_fractions: Union[Sequence[float], float] = None):
+    def __init__(self,
+                 model: Union[MultiCompartmentModel, SingleDmipyModel, Sequence[SingleDmipyModel]],
+                 volume_fractions: Union[Sequence[float], float] = None):
         """
-
-        :param model: MultiCompartment model
+        :param model: Either a MultiCompartment model, a single Dmipy model or a sequence of Dmipy models.
             Models created from Dmipy toolbox are to be stored as MultiCompartment instances as to utilize
             the associated functionalities for signal generation, fitting and more, which are absent in Model classes.
         :param volume_fractions: The relative volume fractions of the models (order in the same way you initialized the
                                  multicompartment model)
         """
-
-        if not isinstance(dmipy_models, list):
-            dmipy_models = [dmipy_models]
-
-        model = MultiCompartmentModel(dmipy_models)
+        if not isinstance(model, MultiCompartmentModel):
+            if isinstance(model, list):
+                model = MultiCompartmentModel(model)
+            else:
+                model = MultiCompartmentModel([model])
 
         # Extract the tissue parameters from individual models and convert to 'scalars'. (makes parameter dict)
         parameters = get_parameters(model)
