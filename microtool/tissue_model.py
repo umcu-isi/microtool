@@ -271,11 +271,11 @@ class MultiTissueModel(TissueModel):
         for i, model in enumerate(models):
             for key, value in model.items():
                 if key != BASE_SIGNAL_KEY:
-                    parameters.update({f"{MODEL_PREFIX}_{i}_{key}": value})
-                    param_location.update({f"{MODEL_PREFIX}_{i}_{key}": j})
+                    parameters.update({f"{MODEL_PREFIX}{i}_{key}": value})
+                    param_location.update({f"{MODEL_PREFIX}{i}_{key}": j})
                     j += 1
                 else:
-                    param_location.update({f"{MODEL_PREFIX}_{i}_{key}": None})
+                    param_location.update({f"{MODEL_PREFIX}{i}_{key}": None})
 
         if len(self._models) > 1:
             if volume_fractions is None:
@@ -289,10 +289,10 @@ class MultiTissueModel(TissueModel):
             # The 0th volume fractions is defined as 1 - the others so we mark it to be excluded from fitting
             for i, vf in enumerate(volume_fractions):
                 parameters.update({
-                    f"{VOLUME_FRACTION_PREFIX}_{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0),
+                    f"{VOLUME_FRACTION_PREFIX}{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0),
                                                                      fit_flag=False if i == 0 else True)
                 })
-                param_location.update({f"{VOLUME_FRACTION_PREFIX}_{i}": j})
+                param_location.update({f"{VOLUME_FRACTION_PREFIX}{i}": j})
                 j += 1
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
@@ -311,12 +311,12 @@ class MultiTissueModel(TissueModel):
             
             #Obtain original parameters from new MultiTissue instance for each model
             for key in model: 
-                index_param = self._param_location.get(f"{MODEL_PREFIX}_{j}_{key}")
+                index_param = self._param_location.get(f"{MODEL_PREFIX}{j}_{key}")
                 if key == 'S0' and index_param == None:
                     # param_value = 1
                     parameter_update.append(1)
                 elif key != 'S0' and index_param == None:
-                    raise ValueError(f"Parameter {key} for {MODEL_PREFIX}_{j} update is missing")
+                    raise ValueError(f"Parameter {key} for {MODEL_PREFIX}{j} update is missing")
                 else:
                     parameter_update.append(new_parameter_values[index_param])                 
 
@@ -341,12 +341,12 @@ class MultiTissueModel(TissueModel):
             parameter_update = []            
             
             for key in model: 
-                index_param = self._param_location.get((f"{MODEL_PREFIX}_{j}_{key}"))
+                index_param = self._param_location.get((f"{MODEL_PREFIX}{j}_{key}"))
                 
                 if key == 'S0' and index_param == None:
                     continue
                 elif key!= 'S0' and index_param == None:
-                    raise ValueError(f"Parameter {key} for {MODEL_PREFIX}_{j} update is missing")
+                    raise ValueError(f"Parameter {key} for {MODEL_PREFIX}{j} update is missing")
                 else: 
                     if self.include_fit[index_param] == True:
                         parameter_update.append(new_values[index_param])
@@ -355,7 +355,7 @@ class MultiTissueModel(TissueModel):
         
         # update volume fraction 0 if necessary
         if len(self._models) > 1:
-            self[VOLUME_FRACTION_PREFIX + "_0"].value = 1 - np.sum(self.volume_fractions[1:])
+            self[VOLUME_FRACTION_PREFIX + "0"].value = 1 - np.sum(self.volume_fractions[1:])
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
         # use the call functions of the models
@@ -495,16 +495,18 @@ class RelaxationTissueModel(TissueModel):
         elif isinstance(scheme, InversionRecoveryAcquisitionScheme):
             if self['T1'] is None:
                 raise ValueError("Expected T1 values for Inversion Recovery scheme")
-            else: 
-                ti = scheme.inversion_times  # ms
-                tr = scheme.repetition_times  # ms
-                te = scheme.echo_times  # ms
-        
-                ti_t1 = np.exp(-ti / self[T1_KEY].value)
-                tr_t1 = np.exp(-tr / self[T1_KEY].value)
-                te_t2 = np.exp(-te / self[T2_KEY].value)
-                
-                signal = model_signal * (1 - 2 * ti_t1 + tr_t1) * te_t2 
+            ti = scheme.inversion_times  # ms
+            tr = scheme.repetition_times  # ms
+            te = scheme.echo_times  # ms
+
+            ti_t1 = np.exp(-ti / self[T1_KEY].value)
+            tr_t1 = np.exp(-tr / self[T1_KEY].value)
+            te_t2 = np.exp(-te / self[T2_KEY].value)
+
+            signal = model_signal * (1 - 2 * ti_t1 + tr_t1) * te_t2
+
+        else:
+            raise ValueError("Unsupported scheme type")
                          
         return signal
    

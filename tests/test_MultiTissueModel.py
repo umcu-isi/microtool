@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
-from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import gaussian_models, cylinder_models
 
 from microtool.dmipy import DmipyTissueModel, convert_dmipy_scheme2diffusion_scheme
 from microtool.tissue_model import MultiTissueModel
+from microtool.constants import MODEL_PREFIX, VOLUME_FRACTION_PREFIX
 
 
 def test_set_parameter_vector():
@@ -38,7 +38,7 @@ class TestIntegrationWithAcquisitionScheme:
     acq_wrapped = convert_dmipy_scheme2diffusion_scheme(acq_scheme)
     # Cylinder orientation angles theta, phi := mu
     mu = np.array([np.pi / 2, np.pi / 2])
-    # Parralel diffusivity lambda_par in E-9 m^2/s (in the paper d_par)
+    # Parallel diffusivity lambda_par in E-9 m^2/s (in the paper d_par)
     lambda_par = 1.7e-9
     lambda_perp = 0.2e-9
 
@@ -73,14 +73,14 @@ class TestIntegrationWithAcquisitionScheme:
 
         # I have to extract the proper keys from fitted parameters to make dict comparison possible
         mt_to_dmipy_map = {
-            'C1Stick_1_lambda_par': 'model_0_C1Stick_1_lambda_par',
-            'C1Stick_1_mu_0': 'model_0_C1Stick_1_mu_0',
-            'C1Stick_1_mu_1': 'model_0_C1Stick_1_mu_1',
-            'G2Zeppelin_1_lambda_par': 'model_1_G2Zeppelin_1_lambda_par',
-            'G2Zeppelin_1_lambda_perp': 'model_1_G2Zeppelin_1_lambda_perp',
-            'G2Zeppelin_1_mu_0': 'model_1_G2Zeppelin_1_mu_0',
-            'G2Zeppelin_1_mu_1': 'model_1_G2Zeppelin_1_mu_1',
-            'partial_volume_0': 'vf_1',
+            'C1Stick_1_lambda_par': MODEL_PREFIX + '0_C1Stick_1_lambda_par',
+            'C1Stick_1_mu_0': MODEL_PREFIX + '0_C1Stick_1_mu_0',
+            'C1Stick_1_mu_1': MODEL_PREFIX + '0_C1Stick_1_mu_1',
+            'G2Zeppelin_1_lambda_par': MODEL_PREFIX + '1_G2Zeppelin_1_lambda_par',
+            'G2Zeppelin_1_lambda_perp': MODEL_PREFIX + '1_G2Zeppelin_1_lambda_perp',
+            'G2Zeppelin_1_mu_0': MODEL_PREFIX + '1_G2Zeppelin_1_mu_0',
+            'G2Zeppelin_1_mu_1': MODEL_PREFIX + '1_G2Zeppelin_1_mu_1',
+            'partial_volume_0': VOLUME_FRACTION_PREFIX + '1',
         }
 
         mt_fit = actual_fit.fitted_parameters
