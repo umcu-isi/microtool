@@ -11,7 +11,8 @@ from dmipy.core.modeling_framework import ModelProperties as SingleDmipyModel
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.gaussian_models import G1Ball
 
-from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool.acquisition_scheme import DiffusionAcquisitionScheme, \
+    DiffusionAcquisitionScheme_bval_dependency, DiffusionAcquisitionScheme_delta_dependency
 from microtool.constants import BASE_SIGNAL_KEY
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
@@ -97,7 +98,8 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     :param scheme: DiffusionAcquisitionScheme
     :return: DmipyAcquisitionScheme
     """
-    if not isinstance(scheme, DiffusionAcquisitionScheme):
+    if not isinstance(scheme, (DiffusionAcquisitionScheme, DiffusionAcquisitionScheme_bval_dependency, 
+                               DiffusionAcquisitionScheme_delta_dependency)):
         raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DiffusionAcquisitionScheme}")
     # note that dmipy has a different notion of echo times so they are not included in the conversion
     return acquisition_scheme_from_bvalues(
@@ -308,27 +310,48 @@ class DmipyTissueModel(TissueModel):
     def dmipy_model(self):
         return self._model
 
+    #Cristina 28-06
+    def get_dependencies(self) -> list:
+        """
+        Obtains model dependencies from Dmipy package as defined by each model class
+        
+        :return: list with model parameter dependencies     
+        """
+        
+        dmipy_model = self.dmipy_model
+        
+        requirements = []     
+        for model in dmipy_model.models:
+            #Obtain from dmipy model the required acquisition parameters
+            parameters = model._required_acquisition_parameters           
+            translated_params = [dmipy2micotrool_dictionary_translation(param) for param in parameters]
+    
+            requirements = requirements + translated_params
+            
+        requirement_list = list(set(requirements))  #Remove duplicates and translate back to list
+        
+        return requirement_list
+
     def check_dependencies(self, scheme: DiffusionAcquisitionScheme):
         """
         Method for consistency check-up between model requirements and defined scheme parameters
     
         """          
-        dmipy_model = self.dmipy_model
-        
-        for model in dmipy_model.models:
-            #Obtain from dmipy model the required acquisition parameters
-            required = model._required_acquisition_parameters
+        #Cristina 12-07
+        model_requirements = self.get_dependencies()
             
-            #If any of these parameters is not set for optimization, raise warning
-            for param in required:
-                #Translate dmipy acquisition parameter name to microtool nomenclature
-                param_name = dmipy2micotrool_dictionary_translation(param)
+        #If any of these parameters is not set for optimization, raise warning
+        for param in model_requirements:
+            #Translate dmipy acquisition parameter name to microtool nomenclature
+            param_name = dmipy2micotrool_dictionary_translation(param)
 
-                #B-values and b-vectors computed from established parameter relations.
-                if param_name in ['B-Values', 'b-vectors']:
-                    continue
-                elif scheme._are_fixed([param_name]):
-                    warnings.warn(f"Parameter {param} should be optimized for {model} model.")
+            #B-values and b-vectors computed from established parameter relations.
+            if param_name in ['B-Values', 'b-vectors']:
+                continue
+            elif scheme._are_fixed([param_name]):
+                warnings.warn(f"Parameter {param} should be optimized for the established model.")
+                    
+        return model_requirements
 
 class FittedDmipyModel(FittedModel):
     def __init__(self, dmipymodel: DmipyTissueModel, dmipyfitresult: FittedMultiCompartmentModel):

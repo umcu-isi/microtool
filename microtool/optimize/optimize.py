@@ -12,7 +12,7 @@ from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
 from ..constants import ConstraintTypes
-from ..tissue_model import TissueModel
+from ..tissue_model import TissueModel, RelaxationTissueModel
 from ..utils.IO import initiate_logging_directory
 
 # Set up the logger
@@ -24,16 +24,58 @@ logging.basicConfig(filename=os.path.join(log_dir, log_filename),
                     level=logging.INFO,
                     format='%(message)s')
 
-# A way of type hinting all the derived classes of AcquisitionScheme
-AcquisitionType = TypeVar('AcquisitionType', bound=AcquisitionScheme)
+
+def iterative_shell_optimization(
+        scheme: AcquisitionScheme,
+        model: RelaxationTissueModel,
+        n_shells: int,
+        n_directions: int,
+        iterations: int,
+        noise_variance: float,
+        loss: LossFunction = default_loss,
+        loss_scaling_factor: float = 1.0,
+        method: Optional[Union[str, Optimizer]] = "differential_evolution",
+        solver_options: dict = None) -> AcquisitionScheme:
+    """
+    Iteratively optimizes the free parameters in the acquisition scheme and returns the scheme with the lowest loss.
+    The b-values and gradient directions are randomly initialized on the given number of shells and directions per
+    shell after each iteration.
+    """
+
+    optimal_loss = None
+    optimal_scheme = scheme
+
+    for i in range(iterations):
+        scheme.fix_b0_measurements()
+        
+        print(f"Starting iteration {i}")
+        optimized_scheme, optimized_loss = optimize_scheme(
+            scheme,
+            model,
+            noise_variance=noise_variance,
+            loss=loss,
+            loss_scaling_factor=loss_scaling_factor,
+            method=method,
+            solver_options=solver_options
+        )
+        if i == 0 or optimized_loss < optimal_loss:
+            optimal_scheme = optimized_scheme
+            optimal_loss = optimized_loss
+        
+        print(f"Finished iteration {i}")
+
+        model_dependencies = model.get_dependencies()
+        scheme = scheme.random_shell_initialization(n_shells, n_directions, model_dependencies)
+    
+    return optimal_scheme
 
 
-def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
+def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
                     noise_variance: float,
                     loss: LossFunction = default_loss,
                     loss_scaling_factor: float = 1.0,
                     method: Optional[Union[str, Optimizer]] = "differential_evolution",
-                    solver_options: dict = None) -> Tuple[AcquisitionType, Optional[OptimizeResult]]:
+                    solver_options: dict = None) -> Tuple[AcquisitionScheme, Optional[OptimizeResult]]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -105,13 +147,13 @@ def optimize_scheme(scheme: AcquisitionType, model: TissueModel,
     # check if the optimized scheme is better than the initial scheme
     current_loss = compute_loss(scheme_copy, model, noise_variance, loss)
     if current_loss > initial_loss:
-        raise RuntimeError("Loss increased during optimization, try a different optimization method.")
+        Warning("Loss increased during optimization, try a different optimization method.")
 
     check_constraints_satisfied(x, scheme_copy.constraints)
 
     warn_early_termination(result)
 
-    return scheme_copy, result
+    return scheme_copy, current_loss
 
 
 def log_callback(iteration: int, parameters: np.ndarray, objective_function: float, more_info: Dict[str, str] = None):

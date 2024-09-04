@@ -20,7 +20,8 @@ from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differen
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
-    ReducedDiffusionScheme, DiffusionAcquisitionScheme
+    ReducedDiffusionScheme, DiffusionAcquisitionScheme, \
+        DiffusionAcquisitionScheme_bval_dependency, DiffusionAcquisitionScheme_delta_dependency
 from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY, T2_KEY, T1_KEY, \
     DIFFUSIVITY_KEY, RELAXATION_BOUNDS, ConstraintTypes
 
@@ -482,8 +483,9 @@ class RelaxationTissueModel(TissueModel):
         else:
             model_signal = self._model(scheme)
      
-        #Cristina 07-05
-        if isinstance(scheme, DiffusionAcquisitionScheme):
+        if isinstance(scheme, (DiffusionAcquisitionScheme, 
+                               DiffusionAcquisitionScheme_bval_dependency, 
+                               DiffusionAcquisitionScheme_delta_dependency)):
             te = scheme.echo_times  # ms       
             t2 = self[T2_KEY].value
             te_t2 = np.exp(- te / t2)
@@ -506,6 +508,16 @@ class RelaxationTissueModel(TissueModel):
                          
         return signal
    
+    def get_dependencies(self):       
+        """
+        Method to retrieve scheme parameter dependencies based on defined model. 
+        Currently only implemented for DmipyTissueModels
+        """
+        
+        dependencies = self._model.get_dependencies()
+            
+        return dependencies
+
     def check_dependencies(self, scheme: AcquisitionScheme):        
         """
         Method for consistency check-up between model requirements and defined scheme parameters
