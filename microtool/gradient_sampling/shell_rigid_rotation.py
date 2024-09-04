@@ -23,19 +23,11 @@ def main():
         fig.savefig('animation_shells/shell_step' + magick_label + '.png', dpi=200)
         plt.close(fig)
 
-
-def verify_rotation():
-    """ Quick test to see if it works """
-    samples = sample_shells_rotation([4, 16, 32])
-    plot_shells(samples)
-    plt.show()
-
-
 def sample_shells_rotation(n_shells: List[int]) -> List[np.ndarray]:
     """
 
-    :param n_shells:
-    :return:
+    :param n_shells: Number of shells for sampling  
+    :return: sampled rotated vectors
     """
 
     initial_vectors = list(map(sample_uniform, n_shells))

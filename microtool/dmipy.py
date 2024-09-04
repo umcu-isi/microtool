@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from copy import copy, deepcopy
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Union, Tuple, Sequence
 
 import numpy as np
 from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
@@ -11,13 +11,23 @@ from dmipy.core.modeling_framework import ModelProperties as SingleDmipyModel
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models.gaussian_models import G1Ball
 
-from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool.acquisition_scheme import DiffusionAcquisitionScheme, \
+    DiffusionAcquisitionScheme_bval_dependency, DiffusionAcquisitionScheme_delta_dependency
 from microtool.constants import BASE_SIGNAL_KEY
 from microtool.scanner_parameters import ScannerParameters, default_scanner
 from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
 
 # dmipy wants b0 measurements but we are happy to handle schemes without b0 measuerements
 warnings.filterwarnings('ignore', 'No b0 measurements were detected.*')
+
+
+dmipy_to_microtool_name = {
+    "bvalues": "B-Values",
+    "delta": "DiffusionPulseWidth",
+    "Delta": "DiffusionPulseInterval",
+    "gradient_directions": "b-vectors",
+    "gradient_strengths": "DiffusionPulseMagnitude",
+}
 
 
 # TODO: deal with fractional parameter relations!
@@ -97,7 +107,8 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     :param scheme: DiffusionAcquisitionScheme
     :return: DmipyAcquisitionScheme
     """
-    if not isinstance(scheme, DiffusionAcquisitionScheme):
+    if not isinstance(scheme, (DiffusionAcquisitionScheme, DiffusionAcquisitionScheme_bval_dependency, 
+                               DiffusionAcquisitionScheme_delta_dependency)):
         raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DiffusionAcquisitionScheme}")
     # note that dmipy has a different notion of echo times so they are not included in the conversion
     return acquisition_scheme_from_bvalues(
@@ -138,32 +149,6 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme,
                                                      scan_parameters=scanner_parameters)
 
 
-def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel]):
-    """
-
-    :param dmipy_models:
-    :return:
-    """
-    if not isinstance(dmipy_models, list):
-        dmipy_models = [dmipy_models]
-
-    multi_comp_model = MultiCompartmentModel(dmipy_models)
-    return DmipyTissueModel(multi_comp_model)
-
-
-def make_microtool_tissue_model(dmipy_models: Union[List[SingleDmipyModel], SingleDmipyModel]):
-    """
-
-    :param dmipy_models:
-    :return:
-    """
-    if not isinstance(dmipy_models, list):
-        dmipy_models = [dmipy_models]
-
-    multi_comp_model = MultiCompartmentModel(dmipy_models)
-    return DmipyTissueModel(multi_comp_model)
-
-
 class DmipyTissueModel(TissueModel):
     """
     Wrapper for the MultiCompartment models used by dmipy. Note that the parameters need to be initialized in the
@@ -171,13 +156,21 @@ class DmipyTissueModel(TissueModel):
     """
     _model: MultiCompartmentModel  # Reminder that we store the dmipy multicompartment model in this attribute
 
-    def __init__(self, model: MultiCompartmentModel, volume_fractions: Union[List[float], float] = None):
+    def __init__(self,
+                 model: Union[MultiCompartmentModel, SingleDmipyModel, Sequence[SingleDmipyModel]],
+                 volume_fractions: Union[Sequence[float], float] = None):
         """
-
-        :param model: MultiCompartment model
+        :param model: Either a MultiCompartment model, a single Dmipy model or a sequence of Dmipy models.
+            Models created from Dmipy toolbox are to be stored as MultiCompartment instances as to utilize
+            the associated functionalities for signal generation, fitting and more, which are absent in Model classes.
         :param volume_fractions: The relative volume fractions of the models (order in the same way you initialized the
                                  multicompartment model)
         """
+        if not isinstance(model, MultiCompartmentModel):
+            if isinstance(model, list):
+                model = MultiCompartmentModel(model)
+            else:
+                model = MultiCompartmentModel([model])
 
         # Extract the tissue parameters from individual models and convert to 'scalars'. (makes parameter dict)
         parameters = get_parameters(model)
@@ -268,6 +261,20 @@ class DmipyTissueModel(TissueModel):
                 setattr(model, parameter_name, vector[k:(k + par_size)])
                 k += par_size
 
+    def _dmipy_fix_parameters(self, fix_parameter: str, fix_value: float) -> None:
+        """
+        Wrapper for Dmipy's own MultiComparmentModel function that sets fixed model parameters
+
+        :fix parameter: string of parameter to fix
+        :fix_value: value to fix the paramter to
+        :return: nothing
+        """
+        dmipy_models = self.dmipy_model
+        dmipy_models.set_fixed_parameter(fix_parameter, fix_value)
+        
+        parameters = get_parameters(dmipy_models)
+        super().__init__(parameters)
+        
     @property
     def _dmipy_parameters(self) -> dict:
         """
@@ -313,6 +320,48 @@ class DmipyTissueModel(TissueModel):
     def dmipy_model(self):
         return self._model
 
+    #Cristina 28-06
+    def get_dependencies(self) -> list:
+        """
+        Obtains model dependencies from Dmipy package as defined by each model class
+        
+        :return: list with model parameter dependencies     
+        """
+        
+        dmipy_model = self.dmipy_model
+        
+        requirements = []     
+        for model in dmipy_model.models:
+            #Obtain from dmipy model the required acquisition parameters
+            parameters = model._required_acquisition_parameters           
+            translated_params = [dmipy_to_microtool_name[param] for param in parameters]
+    
+            requirements = requirements + translated_params
+            
+        requirement_list = list(set(requirements))  #Remove duplicates and translate back to list
+        
+        return requirement_list
+
+    def check_dependencies(self, scheme: DiffusionAcquisitionScheme):
+        """
+        Method for consistency check-up between model requirements and defined scheme parameters
+    
+        """          
+        #Cristina 12-07
+        model_requirements = self.get_dependencies()
+            
+        #If any of these parameters is not set for optimization, raise warning
+        for param in model_requirements:
+            #Translate dmipy acquisition parameter name to microtool nomenclature
+            param_name = dmipy_to_microtool_name[param]
+
+            #B-values and b-vectors computed from established parameter relations.
+            if param_name in ['B-Values', 'b-vectors']:
+                continue
+            elif scheme._are_fixed([param_name]):
+                warnings.warn(f"Parameter {param} should be optimized for the established model.")
+                    
+        return model_requirements
 
 class FittedDmipyModel(FittedModel):
     def __init__(self, dmipymodel: DmipyTissueModel, dmipyfitresult: FittedMultiCompartmentModel):
@@ -341,7 +390,7 @@ class AnalyticBall(DmipyTissueModel):
 
     def __init__(self, lambda_iso: float):
         model = G1Ball(lambda_iso)
-        super().__init__(MultiCompartmentModel([model]))
+        super().__init__(model)
 
     def jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         bvals = copy(scheme.b_values)

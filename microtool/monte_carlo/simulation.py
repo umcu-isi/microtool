@@ -74,8 +74,9 @@ class MonteCarloSimulation:
 
     def run(self) -> pd.DataFrame:
         """
+        Performs MonteCarlo simulation after class initialization
 
-        :return:
+        :return: DataFrame with MonteCarlo simulations results
         """
         n_sim = self._n_sim
         # Setting up the noise sampler
@@ -108,9 +109,9 @@ class MonteCarloSimulation:
 
     def save(self, result_path: Union[pathlib.Path, str]) -> None:
         """
-        Saves the result of the monte carlo simulation
+        Saves the result of the MonteCarlo simulation
 
-        :param result_path:
+        :param result_path: directory for simulation saving
         """
         if self.result is None:
             raise RuntimeError("You cannot save a simulation that has not been run yet.")

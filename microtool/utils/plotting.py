@@ -153,8 +153,6 @@ class LossInspector:
 
     def _check_domains(self, parameters: List[Dict[str, int]], domains: List[Tuple[float, float]]):
         """
-        :param parameters: Dictionary for
-        :param domains:
         :raises: ValueError if domains are out of bounds or if incompatible with number of parameters
         """
         if len(parameters) != len(domains):
@@ -179,7 +177,7 @@ def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = "Acquisi
                                 label=None) -> plt.Figure:
     """
     Makes subplots of all the acquisition parameters
-    :param scheme:
+    :param scheme: AcquisitionScheme instance with saved parameters
     :return: matplotlib figure
     """
     n_par = len(scheme)
@@ -206,6 +204,12 @@ def plot_acquisition_parameters(scheme: AcquisitionScheme, title: str = "Acquisi
 
 
 def plot_signal(scheme: AcquisitionScheme, model: TissueModel, fig_title: str = None, fig: plt.Figure = None):
+    """
+    Makes plot of a signal 
+    :param scheme: AcquisitionScheme instance for signal computation
+    :param model: TissueModel instance to create the signal
+    :return: matplotlib figure
+    """
     # Signal plotting
     if fig is None:
         if fig_title is None:

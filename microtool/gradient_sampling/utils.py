@@ -190,6 +190,13 @@ def sample_sphere_angles(ns: int = 100) -> np.ndarray:
     :param ns: Number of samples you wish to take on the sphere
     :return: The spherical angles in shape (number of samples, 2)
     """
+    # TODO: instead of random sampling points, we could use a spherical Fibonacci lattice point set. E.g.:
+    # i = np.arange(0, n, dtype=float) + 0.5
+    # phi = np.arccos(1 - i / n)  # Use 1 - 2*i / n to sample a full sphere.
+    # golden_ratio = 0.5 * (1 + np.sqrt(5))
+    # theta = 2 * np.pi * i / golden_ratio
+    # x, y, z = np.cos(theta) * np.sin(phi), np.sin(theta) * np.sin(phi), np.cos(phi)
+
     # sample the uniform distribution for both angles
     urng = np.random.default_rng()
     mu = urng.random(size=(ns, 2))

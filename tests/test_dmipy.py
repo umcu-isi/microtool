@@ -67,7 +67,7 @@ class TestModelSchemeIntegration:
     lambda_par = 1.7e-9  # in m^2/s
     stick = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
     stick_model = MultiCompartmentModel(models=[stick])
-    stick_model_wrapped = DmipyTissueModel(stick_model)
+    stick_model_wrapped = DmipyTissueModel(stick)
     parameters = {'C1Stick_1_mu': mu, 'C1Stick_1_lambda_par': lambda_par}
 
     def test_simulate_signal(self):
