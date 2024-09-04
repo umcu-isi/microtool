@@ -21,6 +21,15 @@ from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDeco
 warnings.filterwarnings('ignore', 'No b0 measurements were detected.*')
 
 
+dmipy_to_microtool_name = {
+    "bvalues": "B-Values",
+    "delta": "DiffusionPulseWidth",
+    "Delta": "DiffusionPulseInterval",
+    "gradient_directions": "b-vectors",
+    "gradient_strengths": "DiffusionPulseMagnitude",
+}
+
+
 # TODO: deal with fractional parameter relations!
 def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParameter]:
     """
@@ -324,7 +333,7 @@ class DmipyTissueModel(TissueModel):
         for model in dmipy_model.models:
             #Obtain from dmipy model the required acquisition parameters
             parameters = model._required_acquisition_parameters           
-            translated_params = [dmipy2micotrool_dictionary_translation(param) for param in parameters]
+            translated_params = [dmipy_to_microtool_name[param] for param in parameters]
     
             requirements = requirements + translated_params
             
@@ -343,7 +352,7 @@ class DmipyTissueModel(TissueModel):
         #If any of these parameters is not set for optimization, raise warning
         for param in model_requirements:
             #Translate dmipy acquisition parameter name to microtool nomenclature
-            param_name = dmipy2micotrool_dictionary_translation(param)
+            param_name = dmipy_to_microtool_name[param]
 
             #B-values and b-vectors computed from established parameter relations.
             if param_name in ['B-Values', 'b-vectors']:
@@ -480,17 +489,3 @@ def compute_compartment_signals(dmipy_model: MultiCompartmentModel,
         S_compartment[:, i] = single_compartment.simulate_signal(dmipy_scheme, parameters)
 
     return S_compartment
-
-def dmipy2micotrool_dictionary_translation(parameter: str) -> str:
-    
-    to_microtool_name = {
-    "bvalues": "B-Values",
-    "delta": "DiffusionPulseWidth",
-    "Delta": "DiffusionPulseInterval",
-    "gradient_directions": "b-vectors",
-    "gradient_strengths": "DiffusionPulseMagnitude",
-    }
-
-    microtool_param = to_microtool_name[parameter]
-    
-    return microtool_param
