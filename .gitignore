@@ -2,3 +2,32 @@
 /venv
 /MICROtool.egg-info
 *.pyc
+
+# Results and images
+/scripts/MonteCarlo/results
+/Images
+
+# profiling files
+*.prof
+
+# Data files
+*.npy
+*.pkl
+
+# Testing overviews
+/Test Results -*.html
+
+# images
+*.png
+
+# animations
+*.gif
+
+# Dot files for hierarchy graphs
+*.dot
+
+# not sure why this directory is even here?
+/build/
+
+# dont push log files
+*.log
