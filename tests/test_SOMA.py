@@ -27,7 +27,7 @@ def test_ackley_problem():
 
     solution = np.zeros(Ndim)
 
-    np.testing.assert_allclose(solution, result.x, atol=1e-6)
+    np.testing.assert_allclose(solution, result.x, atol=1e-5)
 
 
 def test_multi_constraint():

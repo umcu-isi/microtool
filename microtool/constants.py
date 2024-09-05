@@ -7,15 +7,20 @@ from scipy.optimize import LinearConstraint, NonlinearConstraint
 
 # Base units that results in numeric values of order magnitude 1.
 GAMMA = 42.57747892 * 2 * np.pi * 1e3
-GAMMA_UNIT = '1/mT . 1/s'
+GAMMA_UNIT = '1/mT/s'
 
-B_UNIT = 's/mm^2'
+B_UNIT = 's/mm²'
+B_VAL_LB = 0.0
+B_VAL_UB = 3e3
+B_VAL_SCALE = 1e3
+B_MAX = 6000 #s/mm2  # TODO: what's the difference in usage with B_VAL_UB?
 
 GRADIENT_UNIT = 'mT/mm'
 PULSE_TIMING_UNIT = 's'
 PULSE_TIMING_LB = 1e-3
 PULSE_TIMING_UB = 100e-3
 PULSE_TIMING_SCALE = 1e-2
+MAX_TE = 0.05 #s 
 
 SLEW_RATE_UNIT = 'mT/mm/s'
 
@@ -28,11 +33,13 @@ MODEL_PREFIX = "model_"
 
 # Relaxation stuff
 RELAXATION_PREFIX = "T2_relaxation_"
-RELAXATION_BOUNDS = (.1, 1e3)  # ms
+RELAXATION_BOUNDS = (.1e-3, 100e-3) #s
 
 # old model constants
 T2_KEY = 'T2'
 T1_KEY = 'T1'
+RELAXATION_BOUNDS = (.1e-3, 1) #s
+
 DIFFUSIVITY_KEY = 'Diffusivity'
 
 ConstraintTypes = Union[

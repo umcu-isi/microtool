@@ -58,8 +58,9 @@ def plot_parameter_distributions(mc_result: pd.DataFrame, gt_model: TissueModel,
     :param symbols: A dict mapping a tissuemodel name to another string used to format the plot
     :param gaussian_fit: Result from fitting gaussian distributions to monte carlo result
     :param color: Color used in plotting
-    :param fig_label:
-    :return:
+    :param fig_label: default -> "parameter distributions"
+    :param hist_label: default -> "hist_label"
+    :return: figure with plotted parameter distributions
     """
     fig = plt.figure(fig_label)
 
@@ -129,6 +130,6 @@ def plot_dataframe_index(df: pd.DataFrame, index_name: str, ax: plt.Axes) -> Non
     :param df: The dataframe
     :param index_name: The index you wish to plot
     :param ax: The axes you wish to plot to
-    :return:
+    :return: None
     """
     df.loc[index_name].to_frame(index_name).T.plot.bar(ylabel=r'std_fitted', xticks=[], title=index_name, ax=ax)
