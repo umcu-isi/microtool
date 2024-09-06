@@ -1,5 +1,5 @@
 """
-This file containts the tests for the microtool.dmipy submodule. In this way we assert that the wrappers work as
+This file contains the tests for the microtool.dmipy submodule. In this way we assert that the wrappers work as
 intended.
 
 We want to test the following aspects:
@@ -10,20 +10,48 @@ We want to test the following aspects:
 2.) When simulating signal using dmipytissuemodelwrapper we get the same result
 as simulating signal using the same pure dmipy model and scheme.
 
-3.) When computing the jacobian trough the finite differences method we get a result that agrees with analytical mehtods
+3.) When computing the Jacobian through the finite differences method we get a result that agrees with analytical
+ methods.
 """
+from copy import copy
 from typing import Dict
 
 import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models
+from dmipy.signal_models.gaussian_models import G1Ball
 
-from microtool.dmipy import CascadeFitDmipy
-from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyTissueModel, \
-    convert_diffusion_scheme2dmipy_scheme, \
-    AnalyticBall
+from microtool.acquisition_scheme import DiffusionAcquisitionScheme
+from microtool.constants import BASE_SIGNAL_KEY
+from microtool.dmipy import CascadeFitDmipy, get_microtool_parameters
+from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyMultiTissueModel, \
+    convert_diffusion_scheme2dmipy_scheme
 from microtool.utils import saved_models, saved_schemes
+
+
+class AnalyticBall(DmipyMultiTissueModel):
+    """
+    Quick and dirty inheritance of dmipytissue model. Purpose is for testing finite differences
+    """
+
+    def __init__(self, lambda_iso: float):
+        model = G1Ball(lambda_iso)
+        super().__init__(model)
+
+    def jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        bvals = copy(scheme.b_values) * 1e6  # convert to SI units
+
+        s0 = self[BASE_SIGNAL_KEY].value
+        d_iso = self['G1Ball_1_lambda_iso'].value
+
+        # the signal S = S_0 * e^{-T_E / T_2} * e^{-b * D}
+        s = s0 * np.exp(-bvals * d_iso)
+        s_diso = -bvals * s
+
+        # d S / d D_iso , d S / d S_0
+        jac = np.array([s_diso, s]).T
+        return jac[:, self.include_optimize]
 
 
 def test_scheme_conversion():
@@ -67,7 +95,7 @@ class TestModelSchemeIntegration:
     lambda_par = 1.7e-9  # in m^2/s
     stick = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
     stick_model = MultiCompartmentModel(models=[stick])
-    stick_model_wrapped = DmipyTissueModel(stick)
+    stick_model_wrapped = DmipyMultiTissueModel(stick)
     parameters = {'C1Stick_1_mu': mu, 'C1Stick_1_lambda_par': lambda_par}
 
     def test_simulate_signal(self):
@@ -112,7 +140,7 @@ class TestModelSchemeIntegration:
         fit_result = self.stick_model_wrapped.fit(self.acq_wrapped, signal)
         result = fit_result.fitted_parameters
 
-        expected_mt = self.stick_model_wrapped.dmipy_parameters2microtool_parameters(expected)
+        expected_mt = get_microtool_parameters(self.stick_model_wrapped.dmipy_model, expected)
 
         # testing to make sure the converter works on the keys
         assert expected_mt.keys() == result.keys()
@@ -141,7 +169,7 @@ class TestModelSchemeIntegration:
         cylinder_zeppelin.set_initial_parameters(self._stickzeppelin_to_cylinderzeppelin(simple_dict))
         expected_result = cylinder_zeppelin.fit(scheme, signal, use_parallel_processing=False)
 
-        # ---------------- Now doing the samething for the decorator
+        # ---------------- Now doing the same thing for the decorator
         # name map maps the simple model names to complex model names
         name_map = {
             # The same model so we simply map
@@ -149,7 +177,7 @@ class TestModelSchemeIntegration:
             'G2Zeppelin_1_lambda_par': 'G2Zeppelin_1_lambda_par',
             'G2Zeppelin_1_lambda_perp': 'G2Zeppelin_1_lambda_perp',
 
-            # For the cylinder we initialize the orientation and parralel diffusivities
+            # For the cylinder we initialize the orientation and parallel diffusivities
             # to those found by fitting stick zep
             "C1Stick_1_mu": 'C4CylinderGaussianPhaseApproximation_1_mu',
             "C1Stick_1_lambda_par": 'C4CylinderGaussianPhaseApproximation_1_lambda_par',

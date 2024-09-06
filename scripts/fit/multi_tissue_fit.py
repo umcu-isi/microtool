@@ -4,7 +4,7 @@ from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import cylinder_models, gaussian_models
 from matplotlib import pyplot as plt
 
-from microtool.dmipy import DmipyTissueModel, convert_dmipy_scheme2diffusion_scheme
+from microtool.dmipy import DmipyMultiTissueModel, convert_dmipy_scheme2diffusion_scheme
 from microtool.tissue_model import MultiTissueModel
 
 if __name__ == "__main__":
@@ -22,10 +22,10 @@ if __name__ == "__main__":
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
     stick = cylinder_models.C1Stick(mu, lambda_par)
     stick_zeppelin = MultiCompartmentModel(models=[zeppelin, stick])
-    single_model = DmipyTissueModel(stick_zeppelin, volume_fractions=[.5, .5])
+    single_model = DmipyMultiTissueModel(stick_zeppelin, volume_fractions=[.5, .5])
 
-    stick_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[stick]))
-    zeppelin_wrapped = DmipyTissueModel(MultiCompartmentModel(models=[zeppelin]))
+    stick_wrapped = DmipyMultiTissueModel(MultiCompartmentModel(models=[stick]))
+    zeppelin_wrapped = DmipyMultiTissueModel(MultiCompartmentModel(models=[zeppelin]))
 
     multi_model = MultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5])
     multi_model['S0'].fit_flag = True

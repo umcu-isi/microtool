@@ -16,7 +16,7 @@ class ScannerParameters:
         self.t_90 = t_90
 
     @property
-    def _t_rise(self) -> float:
+    def t_rise(self) -> float:
         """
         :return: The inferred rise time in seconds
         """

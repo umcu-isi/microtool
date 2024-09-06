@@ -4,14 +4,14 @@ import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import cylinder_models, gaussian_models, sphere_models
 
-from microtool.dmipy import DmipyTissueModel
+from microtool.dmipy import DmipyMultiTissueModel
 
 Orientation = Union[List[float], np.ndarray]
 
 # TODO: Review with new dmipy translation from dmipy branch
 
 
-def verdict() -> DmipyTissueModel:
+def verdict() -> DmipyMultiTissueModel:
     """
     A function to build a VERDICT tissue model, as utilized by Panagiotaki et al [1]. The models hereby are utilized
     to model the Vascular, Extracellular and Restricted Diffusion for Cytometry in Tumors. 
@@ -30,12 +30,12 @@ def verdict() -> DmipyTissueModel:
     stick = cylinder_models.C1Stick(mu=[np.pi / 2, np.pi / 2], lambda_par=8.0e-9)
     verdict_model = MultiCompartmentModel(models=[sphere, ball, stick])
 
-    verdict_model = DmipyTissueModel(verdict_model, [.3, .3, .4])
+    verdict_model = DmipyMultiTissueModel(verdict_model, [.3, .3, .4])
 
     return verdict_model
 
 
-def cylinder_zeppelin(orientation: Orientation) -> DmipyTissueModel:
+def cylinder_zeppelin(orientation: Orientation) -> DmipyMultiTissueModel:
     """
     A function to build the tissue model used in Alexander 2008 [2]. As described, the model constitutes a
     simplified version of Assaf et al.'s CHARMED model [3], with the addition of cylinder attenuation from that 
@@ -81,6 +81,19 @@ def cylinder_zeppelin(orientation: Orientation) -> DmipyTissueModel:
     mc_model.set_initial_guess_parameter('C4CylinderGaussianPhaseApproximation_1_diameter', diameter)
 
     # Wrapping the model for compatibility
-    mc_model_wrapped = DmipyTissueModel(mc_model, volume_fractions=[.7, .3])
+    mc_model_wrapped = DmipyMultiTissueModel(mc_model, volume_fractions=[.7, .3])
 
     return mc_model_wrapped
+
+
+def stick_zeppelin() -> DmipyMultiTissueModel:
+    # Cylinder orientation angles theta, phi := mu
+    mu = np.array([np.pi / 2, np.pi / 2])
+    # Parallel diffusivity lambda_par in E-9 m^2/s (in the paper d_par)
+    lambda_par = 1.7e-9
+    lambda_perp = 0.2e-9
+
+    zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
+    stick = cylinder_models.C1Stick(mu, lambda_par)
+
+    return DmipyMultiTissueModel([zeppelin, stick], volume_fractions=[0.5, 0.5])

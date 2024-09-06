@@ -3,7 +3,7 @@ import pytest
 from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models import gaussian_models, cylinder_models
 
-from microtool.dmipy import DmipyTissueModel, convert_dmipy_scheme2diffusion_scheme
+from microtool.dmipy import DmipyMultiTissueModel, convert_dmipy_scheme2diffusion_scheme
 from microtool.tissue_model import MultiTissueModel
 from microtool.constants import MODEL_PREFIX, VOLUME_FRACTION_PREFIX
 
@@ -19,8 +19,8 @@ def test_set_parameter_vector():
 
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
     stick = cylinder_models.C1Stick(mu, lambda_par)
-    stick_wrapped = DmipyTissueModel(stick)
-    zeppelin_wrapped = DmipyTissueModel(zeppelin)
+    stick_wrapped = DmipyMultiTissueModel(stick)
+    zeppelin_wrapped = DmipyMultiTissueModel(zeppelin)
     multi_model = MultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5])
 
     expected = np.ones(len(multi_model))
@@ -44,10 +44,10 @@ class TestIntegrationWithAcquisitionScheme:
 
     zeppelin = gaussian_models.G2Zeppelin(mu, lambda_par, lambda_perp)
     stick = cylinder_models.C1Stick(mu, lambda_par)
-    single_model = DmipyTissueModel([zeppelin, stick], volume_fractions=[0.5, 0.5])
+    single_model = DmipyMultiTissueModel([zeppelin, stick], volume_fractions=[0.5, 0.5])
 
-    stick_wrapped = DmipyTissueModel(stick)
-    zeppelin_wrapped = DmipyTissueModel(zeppelin)
+    stick_wrapped = DmipyMultiTissueModel(stick)
+    zeppelin_wrapped = DmipyMultiTissueModel(zeppelin)
     multi_model = MultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5])
 
     def test_signal(self):

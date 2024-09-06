@@ -750,6 +750,8 @@ class FittedModelMinimize(FittedModel):
             out.update({name: fit_values[i]})
         return out
 
+
+# TODO: Do we need this?
 class TissueModelDecorator(TissueModel, ABC):
     """
     Abstract class for initialization of TissueModel decorators. this just passes all public methods to the original object

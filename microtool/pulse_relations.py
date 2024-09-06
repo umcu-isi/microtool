@@ -15,7 +15,7 @@ def get_gradients(gamma, b, Delta, delta, scanner_parameters: ScannerParameters)
     :param scanner_parameters: scanner parameter definition
     :return: numpy array with gradient magnitudes
     """
-    t_r = scanner_parameters._t_rise
+    t_r = scanner_parameters.t_rise
     d = gamma ** 2 * (delta ** 2 * (Delta - delta / 3) + (1 / 30) * t_r ** 3 - (delta * t_r ** 2) / 6)
     return np.sqrt(b / d)
 

@@ -1,7 +1,7 @@
 import numpy as np
 
 from dmipy.signal_models.gaussian_models import G2Zeppelin
-from microtool.dmipy import DmipyTissueModel
+from microtool.dmipy import DmipyMultiTissueModel
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme_bval_dependency
 from microtool.optimize.optimize import iterative_shell_optimization
@@ -11,7 +11,7 @@ from microtool.tissue_model import RelaxationTissueModel
 
 model_dmipy = G2Zeppelin(mu=[0.5, 0.5], lambda_par=0.5e-09, lambda_perp=0.2e-09)
 
-model = DmipyTissueModel(model_dmipy)
+model = DmipyMultiTissueModel(model_dmipy)
 model._dmipy_fix_parameters('G2Zeppelin_1_mu', [0.5, 0.5])
 model._dmipy_fix_parameters('G2Zeppelin_1_lambda_par', 0.5e-09)
 model._dmipy_fix_parameters('G2Zeppelin_1_lambda_perp', 0.2e-09)

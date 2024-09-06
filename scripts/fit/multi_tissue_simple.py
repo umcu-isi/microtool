@@ -5,13 +5,13 @@ from dmipy.data import saved_acquisition_schemes
 from dmipy.signal_models.gaussian_models import G1Ball
 from matplotlib import pyplot as plt
 
-from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyTissueModel
+from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyMultiTissueModel
 from microtool.tissue_model import RelaxedMultiTissueModel
 
 if __name__ == "__main__":
     ball = G1Ball(lambda_iso=2e-9)
     ball = MultiCompartmentModel([ball])
-    ball = DmipyTissueModel(ball)
+    ball = DmipyMultiTissueModel(ball)
     multi_model = RelaxedMultiTissueModel([ball], [1.0], [100.0])
 
     dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
