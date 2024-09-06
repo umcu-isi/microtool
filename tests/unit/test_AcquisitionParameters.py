@@ -5,7 +5,7 @@ from microtool.acquisition_scheme import AcquisitionParameters
 
 def test_repeated_parameters():
     """
-    We should be able to have repeated parameters over only the free parameteres, we test this by prepending a fixed
+    We should be able to have repeated parameters over only the free parameters, we test this by prepending a fixed
     parameter to the start of this parameter.
     """
     N = 4  # number of measurement without the prepended fixed measurement
@@ -31,6 +31,31 @@ def test_repeated_parameters():
 
     parameter.update_repeated_values()
 
-    # after updateing repeated values we expect
+    # after updating repeated values we expect
     expected_value_array = np.array([0, 0.5, 0.5, 0.25, 0.25])
     np.testing.assert_allclose(parameter.values, expected_value_array)
+
+
+class TestAcquisitionParameters:
+    parameter = AcquisitionParameters(
+        values=np.array([1., 2., 3.]), unit='m', scale=1.0
+    )
+
+    expected_fix_mask = np.array([True, False, False])
+
+    def test_set_fixed_mask(self):
+        """
+        Testing if fixed mask number of truth values matches free parameter length
+        """
+        # fix only first measurement
+
+        self.parameter.set_fixed_mask(self.expected_fix_mask)
+
+        # testing if the optimize mask matches input fixed mask
+        actual_fix_mask = np.logical_not(self.parameter.optimize_mask)
+        assert np.all(self.expected_fix_mask == actual_fix_mask)
+
+        # testing if the number of free parameters matches the mask we provided
+        expected_free_parameter_length = np.sum(np.logical_not(self.expected_fix_mask))
+        actual_free_parameter_length = len(self.parameter.free_values)
+        assert expected_free_parameter_length == actual_free_parameter_length

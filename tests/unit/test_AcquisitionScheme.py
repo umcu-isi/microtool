@@ -15,7 +15,7 @@ class SimpleScheme(AcquisitionScheme):
 
     @property
     def constraints(self) -> ConstraintTypes:
-        return None
+        return []
 
 
 class LessSimpleScheme(AcquisitionScheme):
@@ -31,7 +31,7 @@ class LessSimpleScheme(AcquisitionScheme):
 
     @property
     def constraints(self) -> ConstraintTypes:
-        return None
+        return []
 
 
 class TestLessSimpleScheme:
@@ -49,7 +49,6 @@ class TestLessSimpleScheme:
         np.testing.assert_equal(self.scheme.free_parameter_vector,new_free_vector)
 
         np.testing.assert_equal(self.scheme["Space"].values, expected_values_space)
-
 
 
 class TestSimpleAcquisitionScheme:

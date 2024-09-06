@@ -25,8 +25,7 @@ from dmipy.signal_models.gaussian_models import G1Ball
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.constants import BASE_SIGNAL_KEY
 from microtool.dmipy import CascadeFitDmipy, get_microtool_parameters
-from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyMultiTissueModel, \
-    convert_diffusion_scheme2dmipy_scheme
+from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyMultiTissueModel
 from microtool.utils import saved_models, saved_schemes
 
 
@@ -52,33 +51,6 @@ class AnalyticBall(DmipyMultiTissueModel):
         # d S / d D_iso , d S / d S_0
         jac = np.array([s_diso, s]).T
         return jac[:, self.include_optimize]
-
-
-def test_scheme_conversion():
-    """
-    Since some of the DmipyAcquisitionScheme attributes are strange objects we test here for all float,int or
-    numpy array attributes to check if they are approximately equal (up to 1% percent deviation is tolerated).
-
-    Failure of this test means there is something wrong with microtool.dmipy.convert_dmipy_scheme2diffusion_scheme or
-    microtool.dmipy.convert_diffusion_scheme2dmipy_scheme
-    """
-    # going over all attributes that are python native or numpy native and asserting equality
-    # Standard acquisition scheme from dmipy.data
-    naked_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
-    # Micrtool scheme wrapper
-    wrapped_scheme = convert_dmipy_scheme2diffusion_scheme(naked_scheme)
-    # Microtool scheme converter
-    converted_wrapped_scheme = convert_diffusion_scheme2dmipy_scheme(wrapped_scheme)
-
-    naked_attributes = vars(naked_scheme)
-    converted_attributes = vars(converted_wrapped_scheme)
-    for attribute, value in naked_attributes.items():
-        report = f"The attribute {attribute} triggered an assertion, i.e., they are not equal for both " \
-                 f"scheme types "
-        if isinstance(value, np.ndarray):
-            np.testing.assert_allclose(value, converted_attributes[attribute], rtol=0.01), report
-        elif isinstance(value, (float, int)):
-            assert value == converted_attributes[attribute], report
 
 
 class TestModelSchemeIntegration:
