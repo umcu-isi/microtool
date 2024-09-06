@@ -7,7 +7,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.stats import norm
 
-from microtool.tissue_model import TissueModel
+from ..tissue_model import TissueModel
 
 
 def fit_gaussian(parameter_distribution: pd.DataFrame) -> pd.DataFrame:

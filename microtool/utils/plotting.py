@@ -5,9 +5,9 @@ from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
-from microtool.acquisition_scheme import AcquisitionScheme
-from microtool.optimize.loss_functions import LossFunction, default_loss, scipy_loss
-from microtool.tissue_model import TissueModel
+from ..acquisition_scheme import AcquisitionScheme
+from ..optimize.loss_functions import LossFunction, default_loss, scipy_loss
+from ..tissue_model import TissueModel
 
 
 class LossInspector:

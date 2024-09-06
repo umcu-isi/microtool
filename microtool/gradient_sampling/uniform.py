@@ -7,7 +7,7 @@ import pathlib
 import numpy as np
 from scipy.optimize import minimize
 
-from microtool.gradient_sampling.utils import sample_sphere_vectors, get_unit_vec_constraint, normalize, \
+from ..gradient_sampling.utils import sample_sphere_vectors, get_unit_vec_constraint, normalize, \
     total_potential, get_positive_half_spere_constraint
 
 module_folder = pathlib.Path(__file__).resolve().parent

@@ -6,8 +6,8 @@ from typing import Union
 
 import numpy as np
 
-from microtool.constants import GAMMA
-from microtool.scanner_parameters import ScannerParameters
+from ..constants import GAMMA
+from ..scanner_parameters import ScannerParameters
 
 # to '1/mT . 1/ms'
 gamma_different_unit = 1e-3 * GAMMA

@@ -9,8 +9,8 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.spatial.transform import Rotation
 
-from microtool.gradient_sampling.uniform import sample_uniform
-from microtool.gradient_sampling.utils import plot_shells, total_potential
+from ..gradient_sampling.uniform import sample_uniform
+from ..gradient_sampling.utils import plot_shells, total_potential
 
 
 def main():

@@ -6,8 +6,8 @@ from typing import Tuple
 
 import numpy as np
 
-from microtool.scanner_parameters import ScannerParameters
-from microtool.constants import GAMMA, B_VAL_UB
+from .scanner_parameters import ScannerParameters
+from .constants import GAMMA, B_VAL_UB
 
 
 def constrained_dependencies(dependency: list, parameters: dict, scan_parameters: ScannerParameters):

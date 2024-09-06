@@ -4,7 +4,7 @@ import numpy as np
 from dmipy.core.modeling_framework import MultiCompartmentModel
 from dmipy.signal_models import cylinder_models, gaussian_models, sphere_models
 
-from microtool.dmipy import DmipyMultiTissueModel
+from ..dmipy import DmipyMultiTissueModel
 
 Orientation = Union[List[float], np.ndarray]
 

@@ -1,9 +1,9 @@
 import numpy as np
 
-from microtool.acquisition_scheme import InversionRecoveryAcquisitionScheme, DiffusionAcquisitionScheme
-from microtool.constants import PULSE_TIMING_LB, PULSE_TIMING_UB
-from microtool.gradient_sampling import sample_uniform_half_sphere
-from microtool.scanner_parameters import default_scanner
+from ..acquisition_scheme import InversionRecoveryAcquisitionScheme, DiffusionAcquisitionScheme
+from ..constants import PULSE_TIMING_LB, PULSE_TIMING_UB
+from ..gradient_sampling import sample_uniform_half_sphere
+from ..scanner_parameters import default_scanner
 
 
 def alexander_b0_measurement(eps_time: float = 1e-3, eps_gradient: float = 1e-2):

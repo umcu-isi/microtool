@@ -10,11 +10,11 @@ from dmipy.core.fitted_modeling_framework import FittedMultiCompartmentModel
 from dmipy.core.modeling_framework import ModelProperties as SingleDmipyModel
 from dmipy.core.modeling_framework import MultiCompartmentModel
 
-from microtool.acquisition_scheme import DiffusionAcquisitionScheme, \
+from .acquisition_scheme import DiffusionAcquisitionScheme, \
     DiffusionAcquisitionScheme_bval_dependency, DiffusionAcquisitionScheme_delta_dependency
-from microtool.constants import BASE_SIGNAL_KEY
-from microtool.scanner_parameters import ScannerParameters, default_scanner
-from microtool.tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
+from .constants import BASE_SIGNAL_KEY
+from .scanner_parameters import ScannerParameters, default_scanner
+from .tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
 
 # dmipy wants b0 measurements but we are happy to handle schemes without b0 measuerements
 warnings.filterwarnings('ignore', 'No b0 measurements were detected.*')

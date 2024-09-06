@@ -7,12 +7,10 @@ from itertools import combinations
 from typing import List
 
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy.optimize import minimize
 
-from microtool.gradient_sampling.utils import sample_sphere_vectors, get_unit_vec_constraint, normalize, \
-    total_potential, \
-    plot_shells
+from ..gradient_sampling.utils import sample_sphere_vectors, get_unit_vec_constraint, normalize, total_potential
+
 
 def sample_shells_electrostatic(n_shells: List[int]) -> List[np.ndarray]:
     """
