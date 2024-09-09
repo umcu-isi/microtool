@@ -3,12 +3,12 @@ import os
 import warnings
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional, Union, Tuple, TypeVar, List, Dict
+from typing import Optional, Union, Tuple, List, Dict
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize, differential_evolution, Bounds
 
-from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_COST, compute_crlbs
+from .loss_functions import compute_loss, scipy_loss, LossFunction, default_loss, ILL_LOSS, compute_crlb
 from .methods import Optimizer
 from ..acquisition_scheme import AcquisitionScheme
 from ..constants import ConstraintTypes
@@ -83,7 +83,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
     in the acquisition and M is the number of tissue parameters.
 
     :param scheme: The MR acquisition scheme to be optimized. (NOTE: a reference of the scheme is passed,
-                    so it will be changed.
+                    so it will be changed).
     :param model: The tissuemodel for which we want the optimal acquisition scheme.
     :param noise_variance: Noise variance on the MR signal attenuation.
     :param loss: a function of type LossFunction.
@@ -123,7 +123,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
         if constraints is None:
             constraints = ()
 
-        callback = make_DE_callback(scheme_copy, model, noise_variance, loss)
+        callback = make_de_callback(scheme_copy, model, noise_variance, loss)
 
         logging.info("Optimizing with differential evolution optimizer.")
         result = differential_evolution(scipy_loss, bounds=scipy_bounds,
@@ -132,7 +132,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
                                         polish=True, callback=callback, **solver_options)
     else:
         logging.info(f"Optimizing with {method}.")
-        callback = make_local_callback(scheme_copy, model, noise_variance)
+        callback = make_local_callback(scheme_copy, model, noise_variance, loss)
         result = minimize(scipy_loss, x0, args=scipy_loss_args,
                           method=method, bounds=scipy_bounds, constraints=constraints,
                           options=solver_options, callback=callback)
@@ -174,13 +174,17 @@ def log_callback(iteration: int, parameters: np.ndarray, objective_function: flo
     logging.info("------------------------------")
 
 
-def make_local_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float) -> callable:
+def make_local_callback(scheme: AcquisitionScheme,
+                        model: TissueModel,
+                        noise_var: float,
+                        loss: LossFunction) -> callable:
     """
     A maker function for the callback currently only tested with trust-constr method.
 
     :param scheme: Acquisition scheme used in optimization
     :param model: Tissuemodel used in optimization
     :param noise_var: The chosen noise variance
+    :param loss: The used loss function
     :return: A callback function for use with scipy.optimize.minimize methods that support intermediate results
     """
 
@@ -190,13 +194,13 @@ def make_local_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var
         jac = intermediate_result.jac
 
         scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
-        crlbs = compute_crlbs(scheme, model, noise_var)
-        log_callback(iteration, x_current, fun, more_info={"Scaled CRLBs": f"{crlbs}", "Jacobian": f"{jac}"})
+        crlb = compute_crlb(scheme, model, noise_var, loss)
+        log_callback(iteration, x_current, fun, more_info={"Scaled CRLBs": f"{crlb}", "Jacobian": f"{jac}"})
 
     return callback
 
 
-def make_DE_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float, loss: LossFunction) -> callable:
+def make_de_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: float, loss: LossFunction) -> callable:
     """
     A maker function for the callback function used with differential evolution optimizer.
     Might be applicable to other methods but used here only with differential evolution.
@@ -210,12 +214,12 @@ def make_DE_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: f
     # Using mutable object to track iterations
     iteration_tracker = [0]
 
-    def callback(x_current, convergence):
+    def callback(x_current, _convergence):
         iteration_tracker[0] += 1
         scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
         fun = compute_loss(scheme, model, noise_var, loss)
-        crlbs = compute_crlbs(scheme, model, noise_var)
-        log_callback(iteration_tracker[0], x_current, fun, {"Scaled CRLBs": f"{crlbs}"})
+        crlb = compute_crlb(scheme, model, noise_var, loss)
+        log_callback(iteration_tracker[0], x_current, fun, {"Scaled CRLBs": f"{crlb}"})
 
     return callback
 
@@ -232,18 +236,19 @@ def warn_early_termination(result: OptimizeResult):
         print(result)
         warnings.warn(
             "Optimization procedure was unsuccessful. "
-            "Possible solutions include but are not limited to: Changing the "
-            "optimizer setings, changing the optimization method or changing the initial scheme to a more suitable one."
+            "Possible solutions include but are not limited to: Changing the optimizer settings, changing the "
+            "optimization method or changing the initial scheme to a more suitable one. "
             "If you are using a scipy optimizer its settings can be changed by passing options to this function. "
-            "If you are using a microtool optimization method please consult the optimization_methods module for more details.")
+            "If you are using a MICROtool optimization method please consult the optimization_methods module for more "
+            "details.")
 
 
 def check_ill_conditioned(loss_value: float):
-    if loss_value == ILL_COST:
+    if loss_value == ILL_LOSS:
         raise RuntimeError(
-            f"Initial AcquisitionScheme error: the initial acquisition scheme results in ill conditioned fisher "
-            f"information matrix, possibly due to model degeneracy. "
-            f"Try a different initial AcquisitionScheme, or alternatively simplify your TissueModel.")
+            "Initial AcquisitionScheme error: the initial acquisition scheme results in ill conditioned fisher "
+            "information matrix, possibly due to model degeneracy. "
+            "Try a different initial AcquisitionScheme, or alternatively simplify your TissueModel.")
 
 
 def check_insensitive(scheme: AcquisitionScheme, model: TissueModel):
@@ -252,18 +257,19 @@ def check_insensitive(scheme: AcquisitionScheme, model: TissueModel):
     # (jac is signal derivative for all parameters)
     insensitive_parameters = np.all(jac == 0, axis=0)
     if np.any(insensitive_parameters):
+        params = np.array(model.parameter_names)[model.include_optimize][insensitive_parameters]
         raise ValueError(
-            f"Initial AcquisitionScheme error: the parameters {np.array(model.parameter_names)[model.include_optimize][insensitive_parameters]} have a zero signal derivative for all measurements. "
-            f"Optimizing will not result in a scheme that better estimates these parameters. "
-            f"Exclude them from optimization if you are okay with that.")
+            f"Initial AcquisitionScheme error: the parameters {params} have a zero signal derivative for all "
+            "measurements. Optimizing will not result in a scheme that better estimates these parameters. "
+            "Exclude them from optimization if you are okay with that.")
 
 
 def check_degrees_of_freedom(scheme: AcquisitionScheme, model: TissueModel):
-    M = int(np.sum(np.array(model.include_optimize)))
-    N = scheme.pulse_count
-    if M > N:
-        raise ValueError(f"The TissueModel has too many degrees of freedom ({M}) to optimize the "
-                         f"AcquisitionScheme parameters ({N}) with meaningful result.")
+    m = int(np.sum(np.array(model.include_optimize)))
+    n = scheme.pulse_count
+    if m > n:
+        raise ValueError(f"The TissueModel has too many degrees of freedom ({m}) to optimize the "
+                         f"AcquisitionScheme parameters ({n}) with meaningful result.")
 
 
 def check_constraints_satisfied(x: np.ndarray, constraints: Dict[str, ConstraintTypes]):

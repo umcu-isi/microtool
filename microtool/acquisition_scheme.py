@@ -282,7 +282,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         return np.repeat([p.scale for p in self.values()], [p.free_values.size for p in self.values()])
 
     @property
-    def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], ...]]:
+    def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], Optional[float]]]:
         """
         :return: The free parameters bounds divided by their scales. List of min max pairs
         """
@@ -290,9 +290,9 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         bounds = []
         for key in self.free_parameter_keys:
             p = self[key]
-            p_bounds = (p.lower_bound, p.upper_bound)
             for _ in range(len(p.free_values)):
-                bounds.append(tuple([None if bound is None else bound / p.scale for bound in p_bounds]))
+                bounds.append((p.lower_bound / p.scale if p.lower_bound else None,
+                               p.upper_bound / p.scale if p.upper_bound else None))
 
         return bounds
 
