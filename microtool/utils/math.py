@@ -40,16 +40,20 @@ def is_higher_than_with_tolerance(number: Number, upper_bound: Number, tolerance
     # Using math we reuse the function above
     return is_smaller_than_with_tolerance(-1. * number, -1. * upper_bound, tolerance)
 
+
+# TODO: is this function necessary? Is its use a bottleneck and is this significantly faster than np.cross?
 @njit
 def cartesian_product(jac: np.ndarray):
     # number of parameters (we use N for tissue parameters and M for Measurements)
-    M, N = jac.shape
-    derivative_term = np.zeros((N, N, M))
-    for i in range(N):
-        for j in range(N):
+    m, n = jac.shape
+    derivative_term = np.zeros((n, n, m))
+    for i in range(n):
+        for j in range(n):
             derivative_term[i, j, :] = jac[:, i] * jac[:, j]
     return derivative_term
 
+
+# TODO: is this function necessary? Is its use a bottleneck and is this significantly faster than np.diagonal?
 @njit
 def diagonal(square: np.ndarray) -> np.ndarray:
     size, _ = square.shape

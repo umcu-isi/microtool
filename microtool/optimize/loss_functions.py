@@ -19,18 +19,17 @@ InformationFunction = Callable[[np.ndarray, np.ndarray, float], np.ndarray]
 
 
 @njit
-def fisher_information_gauss(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
+def fisher_information_gauss(jac: np.ndarray, _signal: np.ndarray, noise_var: float) -> np.ndarray:
     """
     Calculates the Fisher information matrix, assuming Gaussian noise.
     This is the sum of the matrices of squared gradients, for all samples, divided by the noise variance.
     See equation A2 in Alexander, 2008 (DOI 0.1002/mrm.21646)
 
     :param jac: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
-    :param signal: The signal 
+    :param _signal: The signal, not used.
     :param noise_var: The noise variance
     :return: The M×M information matrix.
     """
-    # TODO: Add Rician noise version, as explained in the appendix to Alexander, 2008 (DOI 0.1002/mrm.21646).
     return (1 / noise_var) * jac.T @ jac
 
 
@@ -38,7 +37,7 @@ def fisher_information_gauss(jac: np.ndarray, signal: np.ndarray, noise_var: flo
 def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
     """
     Calculates the fisher information matrix assuming Rician noise.The integral term can be approximated up to 
-    4% as reported in https://doi.org/10.1109/TIT.1967.1054037
+    4% as reported in https://doi.org/10.1109/TIT.1967.1054037 (eq. 8)
 
     :param jac: An N×M Jacobian matrix, where N is the number of samples and M is the number of parameters.
     :param signal: The signal
@@ -46,19 +45,22 @@ def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: floa
     :return: The MxN information matrix
     """
 
-    # Approximating the integral without closed form
+    # Approximating the integral, which does not have a closed form expression.
     sigma = np.sqrt(noise_var)
-    Z = 2 * signal * (sigma + signal) / (sigma + 2 * signal)
+    z = 2 * signal * (sigma + signal) / (sigma + 2 * signal)
 
     # Computing the cross term derivatives
     derivative_term = cartesian_product(jac)
 
-    return (1 / noise_var ** 2) * np.sum(derivative_term * (Z - signal ** 2), axis=-1)
+    # TODO: there is probably some mistake here, since:
+    #  1) this can become negative (e.g. with jac=1, signal=2, noise var=1).
+    #  2) z and signal have different units.
+    return (1 / noise_var ** 2) * np.sum(derivative_term * (z - signal ** 2), axis=-1)
 
 
 class LossFunction(ABC):
     """
-    Base class for lossfunctions, just to ensure call signature constant between different loss functions
+    Base class for loss functions, just to ensure call signature constant between different loss functions
     """
 
     @abstractmethod
@@ -66,7 +68,7 @@ class LossFunction(ABC):
         """
         Computes a loss value
 
-        :param jac: the jacobian of the signal w.r.t. the tissue parameters (should be preprocessed)
+        :param jac: the Jacobian of the signal w.r.t. the tissue parameters (should be preprocessed)
         :param signal: the actual signal
         :param noise_var: the variance of the noise distribution
         :return: loss
@@ -94,7 +96,7 @@ class CrlbBase(LossFunction, ABC):
         Computes the loss using the compute crlb method implemented on the child classes.
         If the fisher information matrix is ill conditioned we return a high loss value.
 
-        :param jac: The preprocessed jacobian
+        :param jac: The preprocessed Jacobian
         :param signal: The signal
         :param noise_var: The noise variance
         :return: Loss value
@@ -136,10 +138,10 @@ class CrlbInversion(CrlbBase):
         crlb = diagonal(np.linalg.inv(information))
         return float(np.sum(crlb))
 
-    def compute_crlb_individual(self, jac: np.ndarray, signal: np.ndarray, noise_var: float) -> float:
+    def compute_crlb_individual(self, jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
         """
         Computes the crlb of the individual parameters
-        :param jac: the jacobian of the signal w.r.t. the tissue parameters (should be preprocessed)
+        :param jac: the Jacobian of the signal w.r.t. the tissue parameters (should be preprocessed)
         :param signal: the actual signal
         :param noise_var: The noise variance
         :return: crlb from matrix diagonal
@@ -183,7 +185,7 @@ def compute_loss(scheme: AcquisitionScheme,
     """
     Function for computing the loss given the following parameters
 
-    :param model: The tissuemodel for which you wish to know the loss
+    :param model: The tissue model for which you wish to know the loss
     :param scheme: The acquisition scheme for which you wish to know the loss
     :param noise_var: The scaling factor of the noise distribution
     :param loss: The loss function
@@ -200,7 +202,7 @@ def scipy_loss(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noi
     Wraps the compute loss function, where we use the API of AcquisitionScheme to set the acquisition parameters to
     the optimizers' desired values.
 
-    :param x: The acquisiton parameter vector provided by scipy optimization (so scaled values in an np.ndarray)
+    :param x: The acquisition parameter vector provided by scipy optimization (so scaled values in an np.ndarray)
     :param scheme: The AcquisitionScheme
     :param model: The TissueModel
     :param noise_variance: The noise shape parameter (variance for gaussian)
