@@ -2,6 +2,7 @@
 /venv
 /MICROtool.egg-info
 *.pyc
+.ipynb_checkpoints
 
 # Results and images
 /scripts/MonteCarlo/results

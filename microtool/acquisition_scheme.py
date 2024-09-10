@@ -291,8 +291,8 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         for key in self.free_parameter_keys:
             p = self[key]
             for _ in range(len(p.free_values)):
-                bounds.append((p.lower_bound / p.scale if p.lower_bound else None,
-                               p.upper_bound / p.scale if p.upper_bound else None))
+                bounds.append((p.lower_bound / p.scale if p.lower_bound is not None else None,
+                               p.upper_bound / p.scale if p.upper_bound is not None else None))
 
         return bounds
 
