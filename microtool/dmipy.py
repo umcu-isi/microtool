@@ -296,14 +296,12 @@ class DmipyMultiTissueModel(TissueModel):
             
         # If any of these parameters is not set for optimization, raise warning
         for param in model_requirements:
-            # Translate dmipy acquisition parameter name to microtool nomenclature
-            param_name = dmipy_to_microtool_name[param]
 
             # B-values and b-vectors computed from established parameter relations.
-            if param_name in ['B-Values', 'b-vectors']:
+            if param in ['B-Values', 'b-vectors']:
                 continue
-            elif scheme._are_fixed([param_name]):
-                warnings.warn(f"Parameter {param} should be optimized for the established model.")
+            elif scheme[param].fixed:
+                warnings.warn(f"Parameter {param} is fixed, but it should be optimized for the model.")
                     
         return model_requirements
 

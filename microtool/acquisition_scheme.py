@@ -368,9 +368,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         value_array[self[parameter].optimize_mask] = update_values
         return value_array
 
-    def _are_fixed(self, parameter_list: List[str]) -> bool:
-        return all(self[name].fixed for name in parameter_list)
-
 
 # TODO: Revised until this line
 # TODO: Use DiffusionAcquisitionScheme as a base-class for all other diffusion acquisition schemes.
@@ -554,7 +551,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
         # Defining Δ > δ + epsilon + t180 or equivalently 0 < Δ - (δ + epsilon + t180) < \infty
         # We check in case both parameters are fixed we need not apply a constraint
-        if not self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval']):
+        if not (self['DiffusionPulseWidth'].fixed and self['DiffusionPulseInterval'].fixed):
             # get fixed parameter values and mask with the free parameter mask
             def delta_constraint_fun(x: np.ndarray):
                 """ Should be larger than zero """
@@ -567,7 +564,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints["PulseIntervalLargerThanPulseWidth"] = delta_constraint
 
-        if not self._are_fixed(['DiffusionPulseMagnitude']):
+        if not self['DiffusionPulseMagnitude'].fixed:
             def gradient_constraint_fun(x: np.ndarray):
                 g = self._copy_and_update_parameter('DiffusionPulseMagnitude', x)
                 g_max = self.scan_parameters.G_max
@@ -576,7 +573,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             g_constraint = NonlinearConstraint(gradient_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints["PulseMagnitudeSmallerThanMaxMagnitude"] = g_constraint
 
-        if not self._are_fixed(['DiffusionPulseWidth', 'DiffusionPulseInterval', 'EchoTime']):
+        if not (self['DiffusionPulseWidth'].fixed and self['DiffusionPulseInterval'].fixed and self['EchoTime'].fixed):
             def echo_constraint_fun(x: np.ndarray):
                 self.set_free_parameter_vector(x * self.free_parameter_scales)
                 echo_time = self._copy_and_update_parameter("EchoTime", x)
@@ -1196,7 +1193,7 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     @property
     def constraints(self) -> Optional[Dict[str, ConstraintTypes]]:
         involved_parameters = ['InversionTime', 'EchoTime', 'RepetitionTimeExcitation']
-        if self._are_fixed(involved_parameters):
+        if all(self[p].fixed for p in involved_parameters):
             return None
 
         def time_constraint_fun(x: np.ndarray):

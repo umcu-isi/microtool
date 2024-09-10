@@ -564,10 +564,10 @@ class RelaxationTissueModel(TissueModel):
         """  
         #If T2 is not utilized for fitting
         if not self['T2'].fit_flag:    
-            if not scheme._are_fixed(['EchoTime']):
+            if not scheme['EchoTime'].fixed:
                 warnings.warn("If T2 relaxation is not used for fitting, echo time should be fixed.")
         else:
-            if scheme._are_fixed(['EchoTime']):
+            if scheme['EchoTime'].fixed:
                 warnings.warn("If T2 relaxation used for fitting, echo time should not be fixed.")
 
 class ExponentialTissueModel(TissueModel):
