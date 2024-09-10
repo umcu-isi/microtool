@@ -25,7 +25,7 @@ class LessSimpleScheme(AcquisitionScheme):
                 values=t, unit="s", scale=1.0
             ),
             "Space": AcquisitionParameters(
-                values=s, unit="m", scale=1.0
+                values=s, unit="m", scale=0.1, lower_bound=0, upper_bound=10,
             )
         })
 
@@ -42,26 +42,29 @@ class TestLessSimpleScheme:
     def test_set_free_parameter_vector(self):
         new_free_vector = np.array([7, 8])
 
-        expected_values_space = np.array([4, 7, 8
-                                         ])
+        expected_values_space = np.array([4, 7, 8])
 
         self.scheme.set_free_parameter_vector(new_free_vector)
-        np.testing.assert_equal(self.scheme.free_parameter_vector,new_free_vector)
+        np.testing.assert_equal(self.scheme.free_parameter_vector, new_free_vector)
 
         np.testing.assert_equal(self.scheme["Space"].values, expected_values_space)
+
+    def test_bounds(self):
+        # There are two free parameters. Their bounds are (0, 10) and parameter scale 0.1.
+        expected_bounds = [(0, 100), (0, 100)]
+        np.testing.assert_equal(self.scheme.free_parameter_bounds_scaled, expected_bounds)
+
+        # Creating a scheme with out-of-bound values should raise an error.
+        with pytest.raises(ValueError):
+            LessSimpleScheme(np.array([1]), np.array([10.1]))  # 10.1 > 10
+        with pytest.raises(ValueError):
+            LessSimpleScheme(np.array([1]), np.array([-0.1]))  # -0.1 < 0
 
 
 class TestSimpleAcquisitionScheme:
     scheme = SimpleScheme(np.array([1., 2., 3.]))
     # so we have only first measurement free
     scheme["Time"].set_fixed_mask(np.array([True, False, False]))
-
-    def test_set_free_parameter_vector_error_catching(self):
-        new_free_parameter_values = np.array([0.5, 0.6, 0.7])
-
-        # using too many values should raise error
-        with pytest.raises(ValueError):
-            self.scheme.set_free_parameter_vector(new_free_parameter_values)
 
     def test_set_free_parameter_vector(self):
         new_free_parameter_values = np.array([0.6, 0.7])
@@ -71,3 +74,8 @@ class TestSimpleAcquisitionScheme:
         np.testing.assert_equal(self.scheme.free_parameter_vector, new_free_parameter_values)
 
         np.testing.assert_equal(self.scheme["Time"].values, expected_parameter_vector)
+
+        # using too many values should raise error
+        new_free_parameter_values = np.array([0.5, 0.6, 0.7])
+        with pytest.raises(ValueError):
+            self.scheme.set_free_parameter_vector(new_free_parameter_values)

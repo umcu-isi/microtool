@@ -55,8 +55,8 @@ class AcquisitionParameters:
         self._optimize_mask = np.full(self.values.size, not self._fixed)
         self._repetition_period = 0
 
-        if ((self.lower_bound and np.any(self.values < self.lower_bound)) or
-                (self.upper_bound and np.any(self.values > self.upper_bound))):
+        if ((self.lower_bound is not None and np.any(self.values < self.lower_bound)) or
+                (self.upper_bound is not None and np.any(self.values > self.upper_bound))):
             raise ValueError("One or more parameter values are out of bounds.")
 
     def __str__(self):
@@ -155,6 +155,7 @@ class AcquisitionParameters:
         for i in range(first_free_measurement, len(self.values), period):
             self.values[i + 1:i + period] = self.values[i]
 
+
 class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     """
     Base-class for MR acquisition schemes.
@@ -202,7 +203,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         if any(n != first for n in all_lengths):
             raise ValueError(f"One or more parameters have unequal length: {parameter_lengths}")
 
-    #TODO: Only used in @plotting.plot
+    # TODO: Only used in @plotting.plot
     @property
     def free_parameters(self) -> Dict[str, np.ndarray]:
         """
@@ -242,7 +243,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
 
             i += stride
 
-    #TODO: Only used for @plotting.plot
+    # TODO: Only used for @plotting.plot
     def get_free_parameter_idx(self, parameter: str, pulse_id: int) -> int:
         """
         Allows you to get the index of a parameter pulse number combination in the free parameter vector.
@@ -555,26 +556,31 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             # get fixed parameter values and mask with the free parameter mask
             def delta_constraint_fun(x: np.ndarray):
                 """ Should be larger than zero """
+                # TODO: What is the purpose of updating the parameters here?
                 pulse_width = self._copy_and_update_parameter('DiffusionPulseWidth', x)
                 pulse_interval = self._copy_and_update_parameter('DiffusionPulseInterval', x)
                 t_rise = self.scan_parameters.t_rise
                 t_180 = self.scan_parameters.t_180
                 return pulse_interval - (pulse_width + t_rise + t_180)
 
+            # TODO: This seems like a linear constraint.
             delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints["PulseIntervalLargerThanPulseWidth"] = delta_constraint
 
         if not self['DiffusionPulseMagnitude'].fixed:
             def gradient_constraint_fun(x: np.ndarray):
+                # TODO: What is the purpose of updating the parameters here?
                 g = self._copy_and_update_parameter('DiffusionPulseMagnitude', x)
                 g_max = self.scan_parameters.G_max
                 return g_max - g
 
+            # TODO: This seems like a linear constraint.
             g_constraint = NonlinearConstraint(gradient_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints["PulseMagnitudeSmallerThanMaxMagnitude"] = g_constraint
 
         if not (self['DiffusionPulseWidth'].fixed and self['DiffusionPulseInterval'].fixed and self['EchoTime'].fixed):
             def echo_constraint_fun(x: np.ndarray):
+                # TODO: What is the purpose of updating the parameters here?
                 self.set_free_parameter_vector(x * self.free_parameter_scales)
                 echo_time = self._copy_and_update_parameter("EchoTime", x)
                 t_min = minimal_echo_time(self.b_values, self.scan_parameters)
@@ -657,7 +663,6 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
                  echo_times: Optional[Union[List[float], np.ndarray]] = None,
                  scan_parameters: ScannerParameters = default_scanner):
 
-
         self.scan_parameters = scan_parameters   
         
         # converting to np array of correct type
@@ -677,10 +682,9 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
         self._check_b_vectors(b_values, gradient_directions)
 
         super().__init__({
-            #Cristina 07-05
             'DiffusionPulseMagnitude': AcquisitionParameters(
                 values=gradient_magnitudes, unit=GRADIENT_UNIT, scale=1., symbol="|G|", 
-                lower_bound=0.0, upper_bound = scan_parameters.G_max
+                lower_bound=0.0, upper_bound=scan_parameters.G_max
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -705,8 +709,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
                 upper_bound=MAX_TE
             )
         })
-        
-        #Cristina 04-07
+
         self._check_constraints()
         
     @classmethod
@@ -717,13 +720,12 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
         boundaries per parameter. 
 
         """
-        #Cristina 21-06
-        #Directions are only sampled once, not iterative
+        # Directions are only sampled once, not iterative
         # TODO: Shouldn't we sample n_directions and duplicate those for each shell?
         # TODO: And wouldn't it be better if we could have an increasing number (squared) of directions per b-value?
         gradient_directions = sample_uniform_half_sphere(n_shells * n_directions)
         
-        #Randomize the class based on its initialization parameters and constraints established by the model
+        # Randomize the class based on its initialization parameters and constraints established by the model
         random_scheme = random_parameter_definition(cls._required_parameters, model_dependencies, 
                                                     n_shells, n_directions, scan_parameters)
         
@@ -756,13 +758,12 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
             if lower_than_lb.any() or higher_than_ub.any():
                 raise ValueError(f"DiffusionAcquisitionScheme: constraint violated, scheme does not satisfy {desc}")                      
 
-    #Cristina 12-07
     @property
     def b_values(self) -> np.ndarray:
         """
         An array of N b-values in s/mm².
         """        
-        #In this case, b-values are not directly obtained but computed from pulse relations
+        # In this case, b-values are not directly obtained but computed from pulse relations
         b_values = get_b_value_complete(GAMMA, self.pulse_magnitude, self.pulse_intervals, self.pulse_widths,
                                         self.scan_parameters)
             
@@ -792,15 +793,21 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
             
         return pulse_widths
 
-
     @property
     def pulse_intervals(self) -> np.ndarray:
         """
         An array of N pulse intervals in seconds.
         """
-        pulse_intervals = self['DiffusionPulseInterval']
+        pulse_intervals = self['DiffusionPulseInterval'].values
         
         return pulse_intervals
+
+    @property
+    def pulse_magnitude(self) -> np.ndarray:
+        """
+        Array of pulse magnitudes in mT/mm
+        """
+        return self['DiffusionPulseMagnitude'].values
 
     @property
     def b_vectors(self) -> np.ndarray:
@@ -860,7 +867,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
         def delta_constraint_fun(x: np.ndarray):
             """ Should be larger than zero """
             
-            #In this case deltas are optimize and used directly to compute b_val
+            # In this case deltas are optimize and used directly to compute b_val
             pulse_widths = self._copy_and_update_parameter('DiffusionPulseWidth', x)
             pulse_intervals = self._copy_and_update_parameter('DiffusionPulseInterval', x)
             
@@ -903,7 +910,6 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
 
         :return:
         """
-        #Cristina 12-07
         b0_mask = self.b_values == 0
 
         for par in ["DiffusionPulseMagnitude", "DiffusionPulseWidth", "DiffusionPulseInterval", "EchoTime"]:
@@ -911,7 +917,8 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
             old_mask = ~self[par].optimize_mask
             new_mask = np.logical_or(b0_mask, old_mask)
             self[par].set_fixed_mask(new_mask)
-            
+
+
 class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
     """
     Defines a diffusion MR acquisition scheme.
@@ -924,7 +931,8 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
 
     _required_parameters = ['gradient_directions', 'echo_times', 'b_values']
 
-    #Cristina 21-06: removed pulse width and interval from initialization: they will be computed from TE and b-val relation
+    # Cristina 21-06: removed pulse width and interval from initialization: they will be computed from TE and b-val
+    # relation
     def __init__(self,
                  gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],
                  b_values: Union[List[float], np.ndarray],
@@ -1008,7 +1016,6 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
             if lower_than_lb.any() or higher_than_ub.any():
                 raise ValueError(f"DiffusionAcquisitionScheme: constraint violated, scheme does not satisfy {desc}")
 
-    #Cristina 12-07
     @property
     def b_values(self) -> np.ndarray:
         """
@@ -1103,22 +1110,22 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
 
         constraints = {}
 
-        def bval_TE_constraint_fun(x: np.ndarray):
+        def bval_te_constraint_fun(x: np.ndarray):
             """ Should be larger than zero """
 
-            b_values = self._copy_and_update_parameter('B-Values', x) #s/mm^2
-            echo_times = self._copy_and_update_parameter("EchoTime", x) #[s]???
+            b_values = self._copy_and_update_parameter('B-Values', x)  # s/mm^2
+            echo_times = self._copy_and_update_parameter("EchoTime", x)  # [s]???  TODO: check this
 
-            #In this case compute deltas from optimized echo_time
+            # In this case compute deltas from optimized echo_time
             delta, Delta = delta_Delta_from_TE(echo_times, self.scan_parameters)
 
-            #This computation is based on maximal G
-            b_from_TE = b_val_from_delta_Delta(delta, Delta, self.scan_parameters.G_max, self.scan_parameters)
+            # This computation is based on maximal G
+            b_from_te = b_val_from_delta_Delta(delta, Delta, self.scan_parameters.G_max, self.scan_parameters)
 
-            return b_values - b_from_TE
+            return b_values - b_from_te
 
-        bval_TE_constraint = NonlinearConstraint(bval_TE_constraint_fun, - np.inf, 0.0, keep_feasible=True)
-        constraints["BValueDependentOnTE"] = bval_TE_constraint
+        bval_te_constraint = NonlinearConstraint(bval_te_constraint_fun, - np.inf, 0.0, keep_feasible=True)
+        constraints["BValueDependentOnTE"] = bval_te_constraint
 
         return constraints
 
@@ -1129,7 +1136,6 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
 
         :return:
         """
-        #Cristina 12-07
         b0_mask = self.b_values == 0
 
         # for par in ["DiffusionPulseMagnitude", "DiffusionPulseWidth", "DiffusionPulseInterval", "EchoTime"]:
@@ -1138,6 +1144,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
             old_mask = ~self[par].optimize_mask
             new_mask = np.logical_or(b0_mask, old_mask)
             self[par].set_fixed_mask(new_mask)
+
 
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
@@ -1208,9 +1215,9 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
 
 
 class EchoScheme(AcquisitionScheme):
-    def __init__(self, TE: np.ndarray):
+    def __init__(self, te: np.ndarray):
         super().__init__({
-            'EchoTime': AcquisitionParameters(values=TE, unit='ms', scale=1.0, symbol=r"$T_E$", lower_bound=1.0,
+            'EchoTime': AcquisitionParameters(values=te, unit='ms', scale=1.0, symbol=r"$T_E$", lower_bound=1.0,
                                               upper_bound=200.0)
         })
 
