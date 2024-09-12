@@ -11,7 +11,7 @@ import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Dict, Union, List, Optional
+from typing import Dict, Union, List, Optional, Sequence
 
 import numpy as np
 from numpy.random import default_rng
@@ -20,8 +20,8 @@ from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differen
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
-    ReducedDiffusionScheme, DiffusionAcquisitionScheme, \
-        DiffusionAcquisitionScheme_bval_dependency, DiffusionAcquisitionScheme_delta_dependency
+    ReducedDiffusionScheme, DiffusionAcquisitionScheme, DiffusionAcquisitionScheme_bval_dependency, \
+    DiffusionAcquisitionScheme_delta_dependency
 from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY, T2_KEY, T1_KEY, \
     DIFFUSIVITY_KEY, RELAXATION_BOUNDS, ConstraintTypes
 
@@ -49,7 +49,8 @@ class TissueParameter:
         self.fit_guess = self.scale * .5
 
     def __str__(self):
-        return f'{self.value} (scale: {self.scale}, optimize: {self.optimize}, fit:{self.fit_flag},bounds:{self.fit_bounds})'
+        return (f'{self.value} (scale: {self.scale}, optimize: {self.optimize}, fit:{self.fit_flag}, '
+                f'bounds:{self.fit_bounds})')
 
 
 class TissueModel(Dict[str, TissueParameter], ABC):
@@ -106,8 +107,6 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         :return: An N×M Jacobian matrix, where N is the number of samples and M is the number of tissue parameters.
         """
         self._set_finite_difference_vars()
-        # compute the baseline signal
-        baseline = self.__call__(scheme)
 
         forward_diff = self._simulate_signals(self._parameter_vectors_forward, scheme)
         backward_diff = self._simulate_signals(self._parameter_vectors_backward, scheme)
@@ -165,8 +164,6 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         scales = self.scales
         jac = self.jacobian(scheme)
 
-        N_measurements = scheme.pulse_count
-
         # Scaling the jacobian
         jac_rescaled = jac * scales[include]
         return jac_rescaled
@@ -182,7 +179,7 @@ class TissueModel(Dict[str, TissueParameter], ABC):
     def parameter_names(self) -> List[str]:
         return [key for key in self.keys()]
 
-    def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
+    def set_parameters_from_vector(self, new_parameter_values: Sequence[float]) -> None:
         """
         Parameter values of TissueModel are redefined based on new array
         
@@ -213,8 +210,8 @@ class TissueModel(Dict[str, TissueParameter], ABC):
                 if parameter.fit_flag:
                     parameter.value = new_values[i]
 
-    def get_fit_parameters(self):
-        return np.array(list(self.values()))[self.include_fit]
+    def get_fit_parameters(self) -> List[TissueParameter]:
+        return [param for param, incl in zip(self.values(), self.include_fit) if incl]
 
     @property
     def parameter_vector(self) -> np.ndarray:
@@ -265,6 +262,12 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         """
         return NotImplementedError()
 
+    def get_dependencies(self):
+        """
+        Retrieve scheme parameter dependencies based on defined model.
+        """
+        return NotImplementedError()
+
     def print_comparison(self, other: TissueModel):
         """
         Method for comparing two tissue models of the same type
@@ -286,13 +289,13 @@ class MultiTissueModel(TissueModel):
         # making a parameter dictionary using parameters in the individual compartments
         parameters = {}
         param_location = {}
-        j=0
+        param_index = 0
         for i, model in enumerate(models):
             for key, value in model.items():
                 if key != BASE_SIGNAL_KEY:
                     parameters.update({f"{MODEL_PREFIX}{i}_{key}": value})
-                    param_location.update({f"{MODEL_PREFIX}{i}_{key}": j})
-                    j += 1
+                    param_location.update({f"{MODEL_PREFIX}{i}_{key}": param_index})
+                    param_index += 1
                 else:
                     param_location.update({f"{MODEL_PREFIX}{i}_{key}": None})
 
@@ -309,20 +312,20 @@ class MultiTissueModel(TissueModel):
             for i, vf in enumerate(volume_fractions):
                 parameters.update({
                     f"{VOLUME_FRACTION_PREFIX}{i}": TissueParameter(value=vf, scale=1., fit_bounds=(0.0, 1.0),
-                                                                     fit_flag=False if i == 0 else True)
+                                                                    fit_flag=False if i == 0 else True)
                 })
-                param_location.update({f"{VOLUME_FRACTION_PREFIX}{i}": j})
-                j += 1
+                param_location.update({f"{VOLUME_FRACTION_PREFIX}{i}": param_index})
+                param_index += 1
 
         # Add S0 as a tissue parameter (to be excluded in parameters extraction etc.)
         parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=1.0, scale=1.0, optimize=False, fit_flag=False,
                                                             fit_bounds=(0.0, 2.0))})
-        param_location.update({f"{MODEL_PREFIX}{BASE_SIGNAL_KEY}": j})
+        param_location.update({f"{MODEL_PREFIX}{BASE_SIGNAL_KEY}": param_index})
         self._param_location = param_location
 
         super().__init__(parameters)
 
-    def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
+    def set_parameters_from_vector(self, new_parameter_values: Sequence[float]) -> None:
         """
         New definition of parameter values performed initially on each individual compartment and later
         on MultiTissue instance to ensure consistency
@@ -330,27 +333,27 @@ class MultiTissueModel(TissueModel):
         # Make sure that the parameters are updated on the individual models first
         for j, model in enumerate(self._models):
             parameter_update = []
-            N_p = len(model)    #Model length for check-up
+            n_p = len(model)  # Model length for check-up
             
-            #Obtain original parameters from new MultiTissue instance for each model
+            # Obtain original parameters from new MultiTissue instance for each model
             for key in model: 
                 index_param = self._param_location.get(f"{MODEL_PREFIX}{j}_{key}")
-                if key == 'S0' and index_param == None:
+                if key == 'S0' and index_param is None:
                     # param_value = 1
                     parameter_update.append(1)
-                elif key != 'S0' and index_param == None:
+                elif key != 'S0' and index_param is None:
                     raise ValueError(f"Parameter {key} for {MODEL_PREFIX}{j} update is missing")
                 else:
                     parameter_update.append(new_parameter_values[index_param])                 
 
-            #Check length of parameter update matches length of model
-            #Note: Error should never be reached as parameter check-up is performed in iterative process
-            if len(parameter_update) != N_p:
+            # Check length of parameter update matches length of model
+            # Note: Error should never be reached as parameter check-up is performed in iterative process
+            if len(parameter_update) != n_p:
                 raise ValueError("Missing parameters for model update")
             else:
                 model.set_parameters_from_vector(parameter_update)                     
                  
-        #Update MultiTissue instance lastly
+        # Update MultiTissue instance lastly
         super().set_parameters_from_vector(new_parameter_values)
 
     def set_fit_parameters(self, new_values: Union[np.ndarray, dict]) -> None:
@@ -367,14 +370,14 @@ class MultiTissueModel(TissueModel):
             parameter_update = []            
             
             for key in model: 
-                index_param = self._param_location.get((f"{MODEL_PREFIX}{j}_{key}"))
+                index_param = self._param_location.get(f"{MODEL_PREFIX}{j}_{key}")
                 
-                if key == 'S0' and index_param == None:
+                if key == 'S0' and index_param is None:
                     continue
-                elif key!= 'S0' and index_param == None:
+                elif key != 'S0' and index_param is None:
                     raise ValueError(f"Parameter {key} for {MODEL_PREFIX}{j} update is missing")
                 else: 
-                    if self.include_fit[index_param] == True:
+                    if self.include_fit[index_param]:
                         parameter_update.append(new_values[index_param])
              
             model.set_fit_parameters(np.array(parameter_update))
@@ -392,7 +395,7 @@ class MultiTissueModel(TissueModel):
         """
         Method for consistency check-up between model requirements and defined scheme parameters
         """        
-        #Check model-specific requirements
+        # Check model-specific requirements
         for i in range(len(self._models)):
             model = self._models[i]          
             model.check_dependencies(scheme)            
@@ -401,9 +404,11 @@ class MultiTissueModel(TissueModel):
             **fit_options) -> FittedModelMinimize:
         """
         Fits the tissue model parameters to noisy_signal data given an acquisition scheme.
-        
-        :param signal: The noisy signal
+
         :param scheme: The scheme under investigation
+        :param signal: The noisy signal
+        :param method: Type of solver. Either 'differential_evolution', 'basinhopping' or a solver available in
+         scipy.optimize.minimize.
         :return: A FittedModelMinimize
         """
 
@@ -416,7 +421,7 @@ class MultiTissueModel(TissueModel):
 
         x0 = self.fit_initial_guess / self.scales[self.include_fit]
         minimize_kwargs = {"args": cost_fun_args, "bounds": bounds, "constraints": self.fit_constraints}
-        if method == 'DE':
+        if method == 'differential_evolution':
             result = differential_evolution(fit_cost,
                                             **minimize_kwargs,
                                             workers=-1,
@@ -428,10 +433,10 @@ class MultiTissueModel(TissueModel):
         else:
             rng = default_rng()
             machine_epsilon = np.finfo(float).eps
-            N_INIT = 10
+            n_init = 10
             best_cost = np.inf
             best_result = None
-            for _ in range(N_INIT):
+            for _ in range(n_init):
                 # Generate initial guess in bounds where we account for machine precision to prevent stepping out
 
                 x0 = rng.uniform(low=bounds.lb + machine_epsilon, high=bounds.ub - machine_epsilon, size=bounds.lb.size)
@@ -451,16 +456,16 @@ class MultiTissueModel(TissueModel):
     @property
     def fit_constraints(self) -> ConstraintTypes:
         if len(self._models) == 1:
-            return ()
+            return []
 
         # for now only volume fractions.
-        A = []
+        mat = []
         for name in np.array(self.parameter_names)[self.include_fit]:
             if name.startswith(VOLUME_FRACTION_PREFIX):
-                A.append(1)
+                mat.append(1)
             else:
-                A.append(0)
-        return LinearConstraint(A, 0, 1, keep_feasible=False)
+                mat.append(0)
+        return LinearConstraint(mat, 0, 1, keep_feasible=False)
 
     @property
     def volume_fractions(self) -> np.ndarray:
@@ -479,42 +484,38 @@ class MultiTissueModel(TissueModel):
 
         return np.array(vfs)
 
+
 class RelaxationTissueModel(TissueModel):
     """
     Defines tissue by its relaxation parameters.
 
-    :param T1: Longitudinal relaxation time constant T1 in milliseconds.
-    :param T2: Transverse relaxation time constant T2 in milliseconds.
-    :param S0: MR signal from fully recovered magnetisation, just before the 90° RF pulse.
+    :param t1: Longitudinal relaxation time constant T1 in milliseconds.
+    :param t2: Transverse relaxation time constant T2 in milliseconds.
     """
 
-    def __init__(self, model: TissueModel,  T2: float, T1: Optional[float] = None):
+    def __init__(self, model: TissueModel, t2: float, t1: Optional[float] = None):
         
         self._model = model
         base_signal = self._model[BASE_SIGNAL_KEY].value
            
-        parameters = {}
-        for key, value in model.items():
-            if key != BASE_SIGNAL_KEY:
-                    parameters.update({MODEL_PREFIX + key: value})
+        parameters = {MODEL_PREFIX + key: value for key, value in model.items() if key != BASE_SIGNAL_KEY}
 
-        if T2 is None:
+        if t2 is None:
             raise ValueError("Expected T2 relaxation values.")
-        elif T1 is None:
-            parameters.update({T2_KEY: TissueParameter(value=T2, scale = 1.0, optimize = True, 
-                                                       fit_flag = True, fit_bounds=RELAXATION_BOUNDS)})
+        elif t1 is None:
+            parameters.update({T2_KEY: TissueParameter(value=t2, scale=1.0, optimize=True,
+                                                       fit_flag=True, fit_bounds=RELAXATION_BOUNDS)})
         else:
-            parameters.update({T2_KEY: TissueParameter(value=T2, scale = 1.0, optimize = True),
-                              T1_KEY: TissueParameter(value=T1, scale = 1.0, optimize=False)})
+            parameters.update({T2_KEY: TissueParameter(value=t2, scale=1.0, optimize=True),
+                              T1_KEY: TissueParameter(value=t1, scale=1.0, optimize=False)})
                
         parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=base_signal, scale=1.0, optimize=False, 
-                                                            fit_flag=False,fit_bounds = (0.0, 2.0))})
+                                                            fit_flag=False, fit_bounds=(0.0, 2.0))})
         
         super().__init__(parameters)
                 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
-        
-        #Signal from tissue model
+        # Signal from tissue model
         if type(self._model) is TissueModel:
             model_signal = self[BASE_SIGNAL_KEY].value
         else:
@@ -527,7 +528,7 @@ class RelaxationTissueModel(TissueModel):
             t2 = self[T2_KEY].value
             te_t2 = np.exp(- te / t2)
             
-            signal = model_signal * te_t2 #S0*exp(-TE/T2)
+            signal = model_signal * te_t2  # S0 * exp(-TE/T2)
         
         elif isinstance(scheme, InversionRecoveryAcquisitionScheme):
             if self['T1'] is None:
@@ -562,7 +563,7 @@ class RelaxationTissueModel(TissueModel):
         Method for consistency check-up between model requirements and defined scheme parameters
 
         """  
-        #If T2 is not utilized for fitting
+        # If T2 is not utilized for fitting
         if not self['T2'].fit_flag:    
             if not scheme['EchoTime'].fixed:
                 warnings.warn("If T2 relaxation is not used for fitting, echo time should be fixed.")
@@ -570,16 +571,21 @@ class RelaxationTissueModel(TissueModel):
             if scheme['EchoTime'].fixed:
                 warnings.warn("If T2 relaxation used for fitting, echo time should not be fixed.")
 
+    def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
+        # TODO: Implement this?
+        raise NotImplementedError
+
+
 class ExponentialTissueModel(TissueModel):
-    def __init__(self, T2: float, S0: float = 1.0):
+    def __init__(self, t2: float, s0: float = 1.0):
         """
 
-        :param T2: The T2 relaxation in [ms]
-        :param S0: The initial signal
+        :param t2: The T2 relaxation in [ms]
+        :param s0: The initial signal
         """
         super().__init__({
-            T2_KEY: TissueParameter(value=T2, scale=1.0, optimize=True, fit_bounds=(.1, 10e3)),
-            BASE_SIGNAL_KEY: TissueParameter(value=S0, scale=1.0, optimize=True, fit_bounds=(.1, 2))
+            T2_KEY: TissueParameter(value=t2, scale=1.0, optimize=True, fit_bounds=(.1, 10e3)),
+            BASE_SIGNAL_KEY: TissueParameter(value=s0, scale=1.0, optimize=True, fit_bounds=(.1, 2))
         })
 
     def __call__(self, scheme: EchoScheme) -> np.ndarray:
@@ -587,10 +593,10 @@ class ExponentialTissueModel(TissueModel):
         Implement the signal equation S = S0 * exp(-TE/T2) here
         :return:
         """
-        TE = scheme.echo_times
-        T2 = self[T2_KEY].value
-        S0 = self[BASE_SIGNAL_KEY].value
-        return S0 * np.exp(- TE / T2)
+        te = scheme.echo_times
+        t2 = self[T2_KEY].value
+        s0 = self[BASE_SIGNAL_KEY].value
+        return s0 * np.exp(- te / t2)
 
     def jacobian(self, scheme: EchoScheme) -> np.ndarray:
         """
@@ -598,14 +604,14 @@ class ExponentialTissueModel(TissueModel):
         :param scheme:
         :return:
         """
-        TE = scheme.echo_times
-        T2 = self[T2_KEY].value
-        S0 = self[BASE_SIGNAL_KEY].value
+        te = scheme.echo_times
+        t2 = self[T2_KEY].value
+        s0 = self[BASE_SIGNAL_KEY].value
 
         # the base signal
-        S = S0 * np.exp(-TE / T2)
+        s = s0 * np.exp(-te / t2)
         # return np.array([-TE * S, 1]).T
-        jac = np.array([(TE / T2 ** 2) * S, S / S0]).T
+        jac = np.array([(te / t2 ** 2) * s, s / s0]).T
         return jac[:, self.include_optimize]
 
     def fit(self, scheme: EchoScheme, signal: np.ndarray, **fit_options) -> FittedModelCurveFit:
@@ -626,7 +632,7 @@ class ExponentialTissueModel(TissueModel):
         parameter_value = list(self.parameters.values())
 
         # the function defining the signal in form compatible with scipy curve fitting
-        def signal_fun(measurement, t2, s0):
+        def signal_fun(_measurement, t2, s0):
             if not include[0]:
                 t2 = parameter_value[0]
             if not include[1]:
@@ -664,9 +670,9 @@ class RelaxedIsotropicModel(TissueModel):
         bvalues = scheme.b_values
         te = scheme.echo_times
 
-        b_D = np.exp(-bvalues * self[DIFFUSIVITY_KEY].value)
+        b_d = np.exp(-bvalues * self[DIFFUSIVITY_KEY].value)
         te_t2 = np.exp(- te / self[T2_KEY].value)
-        return self[BASE_SIGNAL_KEY].value * b_D * te_t2
+        return self[BASE_SIGNAL_KEY].value * b_d * te_t2
 
     def jacobian(self, scheme: ReducedDiffusionScheme) -> np.ndarray:
         # Acquisition parameters
@@ -674,16 +680,17 @@ class RelaxedIsotropicModel(TissueModel):
         te = scheme.echo_times
 
         # tissuemodel parameters
-        D = self[DIFFUSIVITY_KEY].value
-        T2 = self[T2_KEY].value
-        S0 = self[BASE_SIGNAL_KEY].value
+        d = self[DIFFUSIVITY_KEY].value
+        t2 = self[T2_KEY].value
+        s0 = self[BASE_SIGNAL_KEY].value
 
         # Exponents
-        b_D = np.exp(-bvalues * D)
-        te_t2 = np.exp(- te / T2)
+        b_d = np.exp(-bvalues * d)
+        te_t2 = np.exp(- te / t2)
 
-        jac = np.array([te * S0 * b_D * te_t2 / T2 ** 2, - bvalues * S0 * b_D * te_t2, b_D * te_t2]).T
+        jac = np.array([te * s0 * b_d * te_t2 / t2 ** 2, - bvalues * s0 * b_d * te_t2, b_d * te_t2]).T
         return jac[:, self.include_optimize]
+
 
 class FittedModel(ABC):
     @abstractmethod
@@ -745,17 +752,16 @@ class FittedModelMinimize(FittedModel):
     @property
     def fitted_parameters(self) -> Dict[str, np.ndarray]:
         fit_values = self.result.x
-        out = {}
-        for i, name in enumerate(np.array(self.model.parameter_names)[self.model.include_fit]):
-            out.update({name: fit_values[i]})
-        return out
+        fit_parameters = [name for name, incl in zip(self.model.parameter_names, self.model.include_fit) if incl]
+
+        return {name: value for name, value in zip(fit_parameters, fit_values)}
 
 
 # TODO: Do we need this?
 class TissueModelDecorator(TissueModel, ABC):
     """
-    Abstract class for initialization of TissueModel decorators. this just passes all public methods to the original object
-    override these methods to extend or alter functionality while retaining the same interface.
+    Abstract class for initialization of TissueModel decorators. this just passes all public methods to the original
+    object override these methods to extend or alter functionality while retaining the same interface.
 
     This concept is based on the decorator design pattern and more information can be found at
     https://refactoring.guru/design-patterns/decorator
@@ -795,6 +801,7 @@ class TissueModelDecorator(TissueModel, ABC):
     @property
     def parameter_vector(self) -> np.ndarray:
         return self._original.parameter_vector
+
 
 # TODO add docstrings
 def fit_cost(fit_parameter_vector, signal, scheme, model: TissueModel):
