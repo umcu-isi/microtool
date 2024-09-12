@@ -75,7 +75,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
                     loss: LossFunction = default_loss,
                     loss_scaling_factor: float = 1.0,
                     method: Optional[Union[str, Optimizer]] = "differential_evolution",
-                    solver_options: dict = None) -> Tuple[AcquisitionScheme, Optional[OptimizeResult]]:
+                    solver_options: dict = None) -> Tuple[AcquisitionScheme, float]:
     """
     Optimizes the free parameters in the given MR acquisition scheme such that the loss is minimized.
     The loss function should be of type LossFunction, which takes an N×M Jacobian matrix, an array with M parameter
@@ -84,14 +84,15 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
 
     :param scheme: The MR acquisition scheme to be optimized. (NOTE: a reference of the scheme is passed,
                     so it will be changed).
-    :param model: The tissuemodel for which we want the optimal acquisition scheme.
+    :param model: The tissue model for which we want the optimal acquisition scheme.
     :param noise_variance: Noise variance on the MR signal attenuation.
     :param loss: a function of type LossFunction.
     :param loss_scaling_factor: Can be used to scale the loss function to order 1.0 if you notice extreme values.
-    :param method: Type of solver. See the documentation for scipy.optimize.minimize
+    :param method: Either 'differential_evolution' or any solver available in scipy.optimize.minimize that does not
+                    require a Jacobian.
     :param solver_options: Options specific to the solver, provided as a dictionary with the options as keywords, see
                             the documentation of the solver for the keywords.
-    :return: A scipy.optimize.OptimizeResult object.
+    :return: The optimized acquisition scheme and the loss.
     """
     # setting to empty dict because unpack operation is required later
     if solver_options is None:
@@ -182,20 +183,28 @@ def make_local_callback(scheme: AcquisitionScheme,
     A maker function for the callback currently only tested with trust-constr method.
 
     :param scheme: Acquisition scheme used in optimization
-    :param model: Tissuemodel used in optimization
+    :param model: Tissue model used in optimization
     :param noise_var: The chosen noise variance
     :param loss: The used loss function
     :return: A callback function for use with scipy.optimize.minimize methods that support intermediate results
     """
+    # Using mutable object to track iterations
+    iteration_tracker = [0]
 
-    def callback(x_current, intermediate_result: OptimizeResult):
-        fun = intermediate_result.fun
-        iteration = intermediate_result.nit
-        jac = intermediate_result.jac
+    def callback(x_current, intermediate_result: Optional[OptimizeResult] = None, *_args, **_kwargs):
+        if intermediate_result is None:
+            iteration_tracker[0] += 1
+            fun = compute_loss(scheme, model, noise_var, loss)
+            crlb = compute_crlb(scheme, model, noise_var, loss)
+            log_callback(iteration_tracker[0], x_current, fun, more_info={"Scaled CRLBs": f"{crlb}"})
+        else:
+            fun = intermediate_result.fun
+            iteration = intermediate_result.nit
+            jac = intermediate_result.jac
 
-        scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
-        crlb = compute_crlb(scheme, model, noise_var, loss)
-        log_callback(iteration, x_current, fun, more_info={"Scaled CRLBs": f"{crlb}", "Jacobian": f"{jac}"})
+            scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
+            crlb = compute_crlb(scheme, model, noise_var, loss)
+            log_callback(iteration, x_current, fun, more_info={"Scaled CRLBs": f"{crlb}", "Jacobian": f"{jac}"})
 
     return callback
 
@@ -206,7 +215,7 @@ def make_de_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: f
     Might be applicable to other methods but used here only with differential evolution.
 
     :param scheme: Acquisition scheme used in optimization
-    :param model: Tissuemodel used in optimization
+    :param model: Tissue model used in optimization
     :param noise_var: The chosen noise variance
     :param loss: The used loss function
     :return: a callback function for differential evolution optimization method.
@@ -214,7 +223,7 @@ def make_de_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: f
     # Using mutable object to track iterations
     iteration_tracker = [0]
 
-    def callback(x_current, _convergence):
+    def callback(x_current, *_args, **_kwargs):
         iteration_tracker[0] += 1
         scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
         fun = compute_loss(scheme, model, noise_var, loss)

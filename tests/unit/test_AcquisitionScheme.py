@@ -1,3 +1,5 @@
+from typing import Dict
+
 import numpy as np
 import pytest
 
@@ -14,8 +16,8 @@ class SimpleScheme(AcquisitionScheme):
         })
 
     @property
-    def constraints(self) -> ConstraintTypes:
-        return []
+    def constraints(self) -> Dict[str, ConstraintTypes]:
+        return {}
 
 
 class LessSimpleScheme(AcquisitionScheme):
@@ -30,8 +32,8 @@ class LessSimpleScheme(AcquisitionScheme):
         })
 
     @property
-    def constraints(self) -> ConstraintTypes:
-        return []
+    def constraints(self) -> Dict[str, ConstraintTypes]:
+        return {}
 
 
 class TestLessSimpleScheme:
