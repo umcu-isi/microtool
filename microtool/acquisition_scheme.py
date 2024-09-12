@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from copy import copy
 from os import PathLike
 from pathlib import Path
-from typing import Union, List, Tuple, Dict, Optional
+from typing import Union, List, Tuple, Dict, Optional, Sequence
 
 import numpy as np
 from scipy.optimize import NonlinearConstraint
@@ -546,7 +546,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         return self["EchoTime"].values
     
     @property
-    def constraints(self) -> Optional[Dict[str, NonlinearConstraint]]:
+    def constraints(self) -> Dict[str, NonlinearConstraint]:
 
         constraints = {}
 
@@ -860,7 +860,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
     
     @property
-    def constraints(self) -> Optional[Dict[str, NonlinearConstraint]]:
+    def constraints(self) -> Dict[str, NonlinearConstraint]:
 
         constraints = {}
             
@@ -1106,7 +1106,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
                 f.write(' '.join(f'{x:.6e}' for x in bvec) + '\n')
 
     @property
-    def constraints(self) -> Optional[Dict[str, NonlinearConstraint]]:
+    def constraints(self) -> Dict[str, NonlinearConstraint]:
 
         constraints = {}
 
@@ -1198,10 +1198,10 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         return self['InversionTime'].values
 
     @property
-    def constraints(self) -> Optional[Dict[str, ConstraintTypes]]:
+    def constraints(self) -> Dict[str, ConstraintTypes]:
         involved_parameters = ['InversionTime', 'EchoTime', 'RepetitionTimeExcitation']
         if all(self[p].fixed for p in involved_parameters):
-            return None
+            return {}
 
         def time_constraint_fun(x: np.ndarray):
             # require return value larger than zero to enforce constraint TR > TE + TI
@@ -1215,10 +1215,10 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
 
 
 class EchoScheme(AcquisitionScheme):
-    def __init__(self, te: np.ndarray):
+    def __init__(self, te: Union[Sequence[float], np.array]):
         super().__init__({
-            'EchoTime': AcquisitionParameters(values=te, unit='ms', scale=1.0, symbol=r"$T_E$", lower_bound=1.0,
-                                              upper_bound=200.0)
+            'EchoTime': AcquisitionParameters(values=np.array(te), unit='ms', scale=1.0, symbol=r"$T_E$",
+                                              lower_bound=1.0, upper_bound=200.0)
         })
 
     @property
@@ -1226,9 +1226,9 @@ class EchoScheme(AcquisitionScheme):
         return self['EchoTime'].values
 
     @property
-    def constraints(self) -> Optional[Union[dict, List[dict]]]:
+    def constraints(self) -> Dict[str, ConstraintTypes]:
         """ For now without constraints. """
-        return None
+        return {}
 
 
 class ReducedDiffusionScheme(AcquisitionScheme):
@@ -1261,7 +1261,7 @@ class ReducedDiffusionScheme(AcquisitionScheme):
         return self['DiffusionBvalue'].values
 
     @property
-    def constraints(self) -> NonlinearConstraint:
+    def constraints(self) -> Dict[str, NonlinearConstraint]:
         def fun(x: np.ndarray) -> np.ndarray:
             # get b-values from x
             b = self.get_parameter_from_parameter_vector('DiffusionBvalue', x)
@@ -1276,7 +1276,7 @@ class ReducedDiffusionScheme(AcquisitionScheme):
             # The constraint is satisfied if actual TE is higher than minimal TE
             return te - te_min
 
-        return NonlinearConstraint(fun, 0.0, np.inf)
+        return {'Minimum TE': NonlinearConstraint(fun, 0.0, np.inf)}
 
 
 def random_parameter_definition(required_params: List, randomization_constraints: List, n_shells: int,
