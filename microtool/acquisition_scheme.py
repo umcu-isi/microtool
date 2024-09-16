@@ -16,7 +16,7 @@ from .utils.math import is_smaller_than_with_tolerance, is_higher_than_with_tole
 from .utils.solve_echo_time import minimal_echo_time, New_minimal_echo_time
 from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT, PULSE_TIMING_LB, PULSE_TIMING_UB, \
     PULSE_TIMING_SCALE,  B_VAL_LB, B_VAL_UB, B_VAL_SCALE, MAX_TE, B_MAX
-from .pulse_relations import get_b_value_complete, get_gradients
+from .pulse_relations import compute_b_values, get_gradients
 from .bval_delta_pulse_relations import delta_Delta_from_TE, b_val_from_delta_Delta, constrained_dependencies
 
 
@@ -27,7 +27,7 @@ class AcquisitionParameters:
     Note: Set fixed values before introducing repeated values through the set_repetition period method to include fixed
      measurements before the repeated measurements.
 
-    :param values: A numpy array with N parameter values.
+    :param values: A sequence or NumPy array with N parameter values.
     :param unit: The parameter unit as a string, e.g. 's/mm²'.
     :param scale: The typical parameter value scale (order of magnitude).
     :param symbol: A string used in type setting
@@ -37,7 +37,7 @@ class AcquisitionParameters:
     """
 
     def __init__(self,
-                 values: np.ndarray,
+                 values: Union[Sequence[float], np.ndarray],
                  unit: str,
                  scale: float,
                  symbol: Optional[str] = None,
@@ -45,7 +45,7 @@ class AcquisitionParameters:
                  upper_bound: Optional[float] = None,
                  fixed: bool = False):
 
-        self.values = values.copy().ravel()  # Ensure that the values are a 1D vector.
+        self.values = np.array(values).ravel()  # Makes a copy and ensures that the values are a 1D vector.
         self.unit = unit
         self.scale = scale
         self.symbol = symbol
@@ -60,7 +60,7 @@ class AcquisitionParameters:
             raise ValueError("One or more parameter values are out of bounds.")
 
     def __str__(self):
-        fixed = ' (fixed parameter)' if self.fixed else ''
+        fixed = ' (fixed)' if self.fixed else ''
         return f'{self.values} {self.unit}{fixed}'
 
     def __len__(self):
@@ -370,7 +370,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         return value_array
 
 
-# TODO: Revised until this line
 # TODO: Use DiffusionAcquisitionScheme as a base-class for all other diffusion acquisition schemes.
 class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
@@ -381,26 +380,28 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     :param pulse_widths: A list or numpy array of pulse widths δ in seconds.
     :param pulse_intervals: A list or numpy array of pulse intervals Δ in seconds.
     :param echo_times: A list or numpy array of the echo times in seconds.
-    :param scan_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
+    :param scanner_parameters: A ScannerParameters object that contains the quantities determined by scanner hardware.
+     If not supplied, the default values for ScannerParameters are used.
     :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
     """
 
     def __init__(self,
-                 gradient_magnitudes: Union[List[float], np.ndarray],
-                 gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],
-                 pulse_widths: Union[List[float], np.ndarray],
-                 pulse_intervals: Union[List[float], np.ndarray],
-                 echo_times: Optional[Union[List[float], np.ndarray]] = None,
-                 scan_parameters: ScannerParameters = default_scanner):
+                 gradient_magnitudes: Union[List[float], np.ndarray],  # [T/m]
+                 gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],  # [-]
+                 pulse_widths: Union[List[float], np.ndarray],  # [s]
+                 pulse_intervals: Union[List[float], np.ndarray],  # [s]
+                 echo_times: Optional[Union[List[float], np.ndarray]] = None,  # [s]
+                 scanner_parameters: Optional[ScannerParameters] = None):
 
-        self.scan_parameters = scan_parameters
+        self.scanner_parameters = scanner_parameters or ScannerParameters()
 
-        b_values = get_b_value_complete(GAMMA, gradient_magnitudes, pulse_intervals, pulse_widths, scan_parameters)
+        b_values = compute_b_values(gradient_magnitudes, pulse_intervals, pulse_widths,
+                                    scanner_parameters=self.scanner_parameters)
         # set default echo times to minimal echo time based on scan parameters and b values
         if echo_times is None:
             # offset to prevent being to close to actual minimal echo times
             offset = 1e-6
-            echo_times = minimal_echo_time(b_values, scan_parameters) + offset
+            echo_times = minimal_echo_time(b_values, self.scanner_parameters) + offset
 
         # converting to np array of correct type
         gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
@@ -445,7 +446,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     def from_bvals(cls, b_values: np.ndarray, b_vectors: np.ndarray, pulse_widths: np.ndarray,
                    pulse_intervals: np.ndarray,
                    echo_times: Optional[Union[List[float], np.ndarray]] = None,
-                   scan_parameters: ScannerParameters = default_scanner):
+                   scanner_parameters: ScannerParameters = default_scanner):
         """
         Converts parameters and passes them to the main constructor __init__. See this constructor for more details.
 
@@ -454,15 +455,15 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         :param pulse_widths: A list or numpy array of pulse widths δ in seconds.
         :param pulse_intervals: A list or numpy array of pulse intervals Δ in seconds.
         :param echo_times: A list or numpy array of the echo times in seconds.
-        :param scan_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
+        :param scanner_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
         :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
         :return: DiffusionAcquisitionScheme
         """
 
         # convert bvals to pulse magnitudes
-        gradient_magnitude = get_gradients(GAMMA, b_values, pulse_intervals, pulse_widths, scan_parameters)
+        gradient_magnitude = get_gradients(b_values, pulse_intervals, pulse_widths, scanner_parameters)
 
-        return cls(gradient_magnitude, b_vectors, pulse_widths, pulse_intervals, echo_times, scan_parameters)
+        return cls(gradient_magnitude, b_vectors, pulse_widths, pulse_intervals, echo_times, scanner_parameters)
 
     @staticmethod
     def _check_b_vectors(b_values: np.ndarray, b_vectors: np.ndarray) -> None:
@@ -491,8 +492,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         """
         An array of N b-values in s/mm².
         """
-        return get_b_value_complete(GAMMA, self.pulse_magnitude, self.pulse_intervals, self.pulse_widths,
-                                    self.scan_parameters)
+        return compute_b_values(self.pulse_magnitude, self.pulse_intervals, self.pulse_widths,
+                                scanner_parameters=self.scanner_parameters)
 
     @property
     def phi(self) -> np.ndarray:
@@ -559,8 +560,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 # TODO: What is the purpose of updating the parameters here?
                 pulse_width = self._copy_and_update_parameter('DiffusionPulseWidth', x)
                 pulse_interval = self._copy_and_update_parameter('DiffusionPulseInterval', x)
-                t_rise = self.scan_parameters.t_rise
-                t_180 = self.scan_parameters.t_180
+                t_rise = self.scanner_parameters.t_rise
+                t_180 = self.scanner_parameters.t_180
                 return pulse_interval - (pulse_width + t_rise + t_180)
 
             # TODO: This seems like a linear constraint.
@@ -571,7 +572,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             def gradient_constraint_fun(x: np.ndarray):
                 # TODO: What is the purpose of updating the parameters here?
                 g = self._copy_and_update_parameter('DiffusionPulseMagnitude', x)
-                g_max = self.scan_parameters.G_max
+                g_max = self.scanner_parameters.g_max
                 return g_max - g
 
             # TODO: This seems like a linear constraint.
@@ -583,7 +584,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 # TODO: What is the purpose of updating the parameters here?
                 self.set_free_parameter_vector(x * self.free_parameter_scales)
                 echo_time = self._copy_and_update_parameter("EchoTime", x)
-                t_min = minimal_echo_time(self.b_values, self.scan_parameters)
+                t_min = minimal_echo_time(self.b_values, self.scanner_parameters)
 
                 return echo_time - t_min
 
@@ -648,7 +649,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
 
     :param gradient_directions: A list or numpy array of direction cosines.
     :param echo_times: A list or numpy array of the echo times in seconds.
-    :param scan_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
+    :param scanner_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
     :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
     """
             
@@ -661,21 +662,22 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
                  pulse_widths: Union[List[float], np.ndarray],
                  pulse_intervals: Union[List[float], np.ndarray],
                  echo_times: Optional[Union[List[float], np.ndarray]] = None,
-                 scan_parameters: ScannerParameters = default_scanner):
+                 scanner_parameters: ScannerParameters = default_scanner):
 
-        self.scan_parameters = scan_parameters   
+        self.scanner_parameters = scanner_parameters   
         
         # converting to np array of correct type
         gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
         # Calculate the spherical angles φ and θ.
         theta, phi = unitvector_to_angles(gradient_directions).T
 
-        b_values = get_b_value_complete(GAMMA, gradient_magnitudes, pulse_intervals, pulse_widths, scan_parameters)
+        b_values = compute_b_values(gradient_magnitudes, pulse_intervals, pulse_widths,
+                                    scanner_parameters=scanner_parameters)
         
         if echo_times is None:
             # # offset to prevent being to close to actual minimal echo times
             offset = 1e-6
-            min_echo_time = New_minimal_echo_time(scan_parameters) + offset
+            min_echo_time = New_minimal_echo_time(scanner_parameters) + offset
             echo_times = np.random.uniform(min_echo_time, MAX_TE, size=len(b_values))
 
         # checking for b0 values and setting vector to zero for these values
@@ -684,7 +686,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
         super().__init__({
             'DiffusionPulseMagnitude': AcquisitionParameters(
                 values=gradient_magnitudes, unit=GRADIENT_UNIT, scale=1., symbol="|G|", 
-                lower_bound=0.0, upper_bound=scan_parameters.G_max
+                lower_bound=0.0, upper_bound=scanner_parameters.g_max
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -705,7 +707,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
             ),
             'EchoTime': AcquisitionParameters(
                 values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
-                lower_bound=New_minimal_echo_time(self.scan_parameters),
+                lower_bound=New_minimal_echo_time(self.scanner_parameters),
                 upper_bound=MAX_TE
             )
         })
@@ -714,7 +716,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
         
     @classmethod
     def random_shell_initialization(cls, n_shells: int, n_directions: int, model_dependencies: list,
-                                    scan_parameters: ScannerParameters = default_scanner):
+                                    scanner_parameters: ScannerParameters = default_scanner):
         """
         Defines random initialization of DiffusionAcquisitionScheme based on a series of pulse relations and 
         boundaries per parameter. 
@@ -727,14 +729,14 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
         
         # Randomize the class based on its initialization parameters and constraints established by the model
         random_scheme = random_parameter_definition(cls._required_parameters, model_dependencies, 
-                                                    n_shells, n_directions, scan_parameters)
+                                                    n_shells, n_directions, scanner_parameters)
         
         return cls(gradient_magnitudes=random_scheme['gradient_magnitudes'],
                    gradient_directions=gradient_directions,
                    pulse_widths=random_scheme['pulse_widths'],
                    pulse_intervals=random_scheme['pulse_intervals'],
                    echo_times=random_scheme['echo_times'],
-                   scan_parameters=scan_parameters)
+                   scanner_parameters=scanner_parameters)
     
     @staticmethod
     def _check_b_vectors(b_values: np.ndarray, b_vectors: np.ndarray) -> None:
@@ -764,8 +766,8 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
         An array of N b-values in s/mm².
         """        
         # In this case, b-values are not directly obtained but computed from pulse relations
-        b_values = get_b_value_complete(GAMMA, self.pulse_magnitude, self.pulse_intervals, self.pulse_widths,
-                                        self.scan_parameters)
+        b_values = compute_b_values(self.pulse_magnitude, self.pulse_intervals, self.pulse_widths,
+                                    scanner_parameters=self.scanner_parameters)
             
         return b_values
         
@@ -871,8 +873,8 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
             pulse_widths = self._copy_and_update_parameter('DiffusionPulseWidth', x)
             pulse_intervals = self._copy_and_update_parameter('DiffusionPulseInterval', x)
             
-            t_rise = self.scan_parameters.t_rise*1e3
-            t_180 = self.scan_parameters.t_180*1e3
+            t_rise = self.scanner_parameters.t_rise*1e3
+            t_180 = self.scanner_parameters.t_180*1e3
             
             return pulse_intervals - (pulse_widths + t_rise + t_180)
 
@@ -883,7 +885,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
 
             echo_time = self._copy_and_update_parameter("EchoTime", x)
             
-            t_min = New_minimal_echo_time(self.scan_parameters)
+            t_min = New_minimal_echo_time(self.scanner_parameters)
             
             return echo_time - t_min
 
@@ -896,7 +898,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
             pulse_widths = self._copy_and_update_parameter('DiffusionPulseWidth', x)
             pulse_intervals = self._copy_and_update_parameter('DiffusionPulseInterval', x)               
             
-            return B_MAX - b_val_from_delta_Delta(pulse_widths, pulse_intervals, g, self.scan_parameters)
+            return B_MAX - b_val_from_delta_Delta(pulse_widths, pulse_intervals, g, self.scanner_parameters)
 
         g_b_val_constraint = NonlinearConstraint(gradient_b_val_constraint_fun, 0.0, np.inf, keep_feasible=True)
         constraints["BValSmallerThanBMax"] = g_b_val_constraint
@@ -925,7 +927,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
 
     :param gradient_directions: A list or numpy array of direction cosines.
     :param echo_times: A list or numpy array of the echo times in seconds.
-    :param scan_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
+    :param scanner_parameters:  A ScannerParameters object that contains the quantities determined by scanner hardware
     :raise ValueError: b-vectors are not unit vectors or lists have unequal length.
     """
 
@@ -938,9 +940,9 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
                  b_values: Union[List[float], np.ndarray],
                  echo_times: Optional[Union[List[float], np.ndarray]],
                  # model_dependencies: [List[str]],
-                 scan_parameters: ScannerParameters = default_scanner):
+                 scanner_parameters: ScannerParameters = default_scanner):
 
-        self.scan_parameters = scan_parameters
+        self.scanner_parameters = scanner_parameters
         # self.model_dependencies = model_dependencies
 
         # converting to np array of correct type
@@ -961,7 +963,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
             # Cristina 09-05
             'EchoTime': AcquisitionParameters(
                 values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
-                lower_bound=New_minimal_echo_time(self.scan_parameters),
+                lower_bound=New_minimal_echo_time(self.scanner_parameters),
                 upper_bound=MAX_TE
             ),
             'B-Values': AcquisitionParameters(
@@ -975,7 +977,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
 
     @classmethod
     def random_shell_initialization(cls, n_shells: int, n_directions: int, model_dependencies: list,
-                                    scan_parameters: ScannerParameters = default_scanner):
+                                    scanner_parameters: ScannerParameters = default_scanner):
         """
         Defines random initialization of DiffusionAcquisitionScheme based on a series of pulse relations and
         boundaries per parameter.
@@ -988,7 +990,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
 
         # Randomize the class based on its initialization parameters and constraints established by the model
         random_scheme = random_parameter_definition(cls._required_parameters, model_dependencies,
-                                                    n_shells, n_directions, scan_parameters)
+                                                    n_shells, n_directions, scanner_parameters)
 
         return cls(gradient_directions=gradient_directions,
                    b_values=random_scheme['b_values'],
@@ -1042,7 +1044,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
         """
         An array of N pulse widths in seconds.
         """
-        delta, _ = delta_Delta_from_TE(self.echo_times, self.scan_parameters)
+        delta, _ = delta_Delta_from_TE(self.echo_times, self.scanner_parameters)
 
         return delta
 
@@ -1051,7 +1053,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
         """
         An array of N pulse intervals in seconds.
         """
-        _, Delta = delta_Delta_from_TE(self.echo_times, self.scan_parameters)
+        _, Delta = delta_Delta_from_TE(self.echo_times, self.scanner_parameters)
 
         return Delta
 
@@ -1117,10 +1119,10 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
             echo_times = self._copy_and_update_parameter("EchoTime", x)  # [s]???  TODO: check this
 
             # In this case compute deltas from optimized echo_time
-            delta, Delta = delta_Delta_from_TE(echo_times, self.scan_parameters)
+            delta, Delta = delta_Delta_from_TE(echo_times, self.scanner_parameters)
 
             # This computation is based on maximal G
-            b_from_te = b_val_from_delta_Delta(delta, Delta, self.scan_parameters.G_max, self.scan_parameters)
+            b_from_te = b_val_from_delta_Delta(delta, Delta, self.scanner_parameters.g_max, self.scanner_parameters)
 
             return b_values - b_from_te
 
@@ -1280,7 +1282,7 @@ class ReducedDiffusionScheme(AcquisitionScheme):
 
 
 def random_parameter_definition(required_params: List, randomization_constraints: List, n_shells: int,
-                                n_directions: int, scan_parameters: default_scanner) -> dict:
+                                n_directions: int, scanner_parameters: default_scanner) -> dict:
     # to '1/mT . 1/ms'
     gamma = GAMMA * 1e-3
     
@@ -1296,8 +1298,8 @@ def random_parameter_definition(required_params: List, randomization_constraints
             scheme_params[param] = np.random.uniform(bounds[0], bounds[1], size=n_shells)
   
     # Repeat randomization for values that do not follow the constraint
-    while not np.all(constrained_dependencies(randomization_constraints, scheme_params, scan_parameters)):
-        mask = ~constrained_dependencies(randomization_constraints, scheme_params, scan_parameters)        
+    while not np.all(constrained_dependencies(randomization_constraints, scheme_params, scanner_parameters)):
+        mask = ~constrained_dependencies(randomization_constraints, scheme_params, scanner_parameters)        
         
         # Based on B-Value dependency uniquely
         if 'DiffusionPulseWidth' and 'DiffusionPulseInterval' not in randomization_constraints:
@@ -1307,7 +1309,7 @@ def random_parameter_definition(required_params: List, randomization_constraints
             
         elif 'DiffusionPulseWidth' and 'DiffusionPulseInterval' in randomization_constraints:
             
-            # scheme_params['gradient_magnitudes'][mask] = np.random.uniform(0, default_scanner.G_max,
+            # scheme_params['gradient_magnitudes'][mask] = np.random.uniform(0, default_scanner.g_max,
             #                                                     size=np.sum(mask))
             scheme_params['echo_times'][mask] = np.random.uniform(New_minimal_echo_time(default_scanner), MAX_TE,
                                                                   size=np.sum(mask))
@@ -1320,8 +1322,8 @@ def random_parameter_definition(required_params: List, randomization_constraints
                     gamma**2 * (
                         scheme_params['pulse_widths'][mask]**2 *
                         (scheme_params['pulse_intervals'][mask] - scheme_params['pulse_widths'][mask] / 3) +
-                        (scan_parameters.t_ramp**3) / 30 -
-                        (scheme_params['pulse_widths'][mask] * scan_parameters.t_ramp**2) / 6)
+                        (scanner_parameters.t_ramp**3) / 30 -
+                        (scheme_params['pulse_widths'][mask] * scanner_parameters.t_ramp**2) / 6)
                 )
             )
         print('New randomization')

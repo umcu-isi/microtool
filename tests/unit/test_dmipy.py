@@ -5,6 +5,7 @@ from dmipy.signal_models import cylinder_models
 
 from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, convert_diffusion_scheme2dmipy_scheme, \
     DmipyMultiTissueModel
+from microtool.utils.unit_registry import unit
 
 
 def test_scheme_conversion():
@@ -36,10 +37,10 @@ def test_scheme_conversion():
 
 class TestFractions:
     mu = (np.pi / 2., np.pi / 2.)  # in radians
-    lambda_par = 1.7e-9  # in m^2/s
+    lambda_par = 1.7e-9 * unit('m²/s')  # in m^2/s
     stick1 = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
 
-    lambda_par = 0
+    lambda_par = 0 * unit('m²/s')  # in m^2/s
     stick2 = cylinder_models.C1Stick(mu=mu, lambda_par=lambda_par)
 
     # Create single- and multi-tissue models.

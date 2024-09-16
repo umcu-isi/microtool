@@ -15,6 +15,7 @@ from .acquisition_scheme import DiffusionAcquisitionScheme, \
 from .constants import BASE_SIGNAL_KEY
 from .scanner_parameters import ScannerParameters, default_scanner
 from .tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
+from .utils.unit_registry import unit
 
 # dmipy wants b0 measurements but we are happy to handle schemes without b0 measuerements
 warnings.filterwarnings('ignore', 'No b0 measurements were detected.*')
@@ -130,18 +131,18 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme,
         raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DmipyAcquisitionScheme}")
 
     # convert to s/mm^2 from s/m^2
-    b_values = scheme.bvalues * 1e-6
+    b_values = scheme.bvalues * 1e-6 * unit('s/mm²')
     b_vectors = scheme.gradient_directions
 
-    pulse_widths = scheme.delta
-    pulse_intervals = scheme.Delta
-    echo_times = scheme.TE
-    if echo_times is None:
+    pulse_widths = scheme.delta * unit('s')
+    pulse_intervals = scheme.Delta * unit('s')
+    if scheme.TE is None:
         return DiffusionAcquisitionScheme.from_bvals(b_values, b_vectors, pulse_widths, pulse_intervals,
-                                                     scan_parameters=scanner_parameters)
+                                                     scanner_parameters=scanner_parameters)
     else:
+        echo_times = scheme.TE * unit('s')
         return DiffusionAcquisitionScheme.from_bvals(b_values, b_vectors, pulse_widths, pulse_intervals,
-                                                     echo_times, scan_parameters=scanner_parameters)
+                                                     echo_times, scanner_parameters=scanner_parameters)
 
 
 class DmipyMultiTissueModel(TissueModel):

@@ -1,11 +1,14 @@
+from typing import Optional
+
 import numpy as np
 
+from .constants import GAMMA
 from .scanner_parameters import ScannerParameters
 
 
 # TODO update docstrings
 
-def get_gradients(gamma, b, Delta, delta, scanner_parameters: ScannerParameters):
+def get_gradients(b, Delta, delta, scanner_parameters: ScannerParameters):
     """
 
     :param gamma: 1/mT/s
@@ -16,45 +19,40 @@ def get_gradients(gamma, b, Delta, delta, scanner_parameters: ScannerParameters)
     :return: numpy array with gradient magnitudes
     """
     t_r = scanner_parameters.t_rise
-    d = gamma ** 2 * (delta ** 2 * (Delta - delta / 3) + (1 / 30) * t_r ** 3 - (delta * t_r ** 2) / 6)
+    d = GAMMA ** 2 * (delta ** 2 * (Delta - delta / 3) + (1 / 30) * t_r ** 3 - (delta * t_r ** 2) / 6)
     return np.sqrt(b / d)
 
 
-def get_b_value_simplified(gamma, G, Delta, delta):
+def compute_b_values(gradient_magnitude: np.ndarray, pulse_interval: np.ndarray, pulse_width: np.ndarray,
+                     scanner_parameters: Optional[ScannerParameters] = None):
     """
-    :param G: T/m
-    :param Delta: s
-    :param delta: s
-    :return: b value in s/mm^2
+    Compute b-values from pulse intervals (∆) and pulse widths (δ). Optionally, scanner parameters can be provided for
+     a more precise result.
+
+    :param gradient_magnitude: Gradient magnitudes [mT/mm]
+    :param pulse_interval: Pulse intervals [s]
+    :param pulse_width: Pulse widths [s]
+    :param scanner_parameters: scanner parameter definition
+    :return: b-values [s/mm²]
     """
-    b_val = ((gamma * G * delta) ** 2) * (Delta - (delta / 3))
-    return b_val
+    if scanner_parameters is None:
+        return ((GAMMA * gradient_magnitude * pulse_width)**2) * (pulse_interval - (pulse_width / 3))
+    else:
+        # See the 'Advanced Discussion' on https://mriquestions.com/what-is-the-b-value.html
+        t_rise = compute_t_rise(gradient_magnitude, scanner_parameters)
+        prefactor = (GAMMA * gradient_magnitude)**2
+        term1 = pulse_width**2 * (pulse_interval - pulse_width / 3)
+        term2 = t_rise**3 / 30
+        term3 = -(pulse_width * t_rise**2) / 6
+        return prefactor * (term1 + term2 + term3)
 
 
-def get_b_value_complete(gamma, G: np.ndarray, Delta: np.ndarray, delta: np.ndarray,
-                         scanner_parameters: ScannerParameters):
-    """
-
-    :param G: mT/mm
-    :param Delta: s
-    :param delta: s
-    :return: b value in s/mm^2
-    """
-    t_rise = compute_t_rise(G, scanner_parameters)
-    prefactor = gamma ** 2 * G ** 2
-    term1 = delta ** 2 * (Delta - delta / 3)
-    term2 = (1 / 30) * t_rise ** 3
-    term3 = - (delta / 6) * t_rise ** 2
-    return prefactor * (term1 + term2 + term3)
-
-
-def compute_t_rise(G: np.ndarray, scanner_parameters: ScannerParameters):
+def compute_t_rise(g: np.ndarray, scanner_parameters: ScannerParameters):
     """
 
-    :param G: mT/mm
+    :param g: mT/mm
     :param scanner_parameters: scanner parameter definition
     :return: The rise time in s
     """
-    s_max = scanner_parameters.S_max  # mT/mm/ms
-    tr_ms = G / s_max
-    return tr_ms * 1e-3
+    s_max = scanner_parameters.s_max  # Maximum slew rate in [mT/mm/s]
+    return g / s_max

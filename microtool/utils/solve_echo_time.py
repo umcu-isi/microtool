@@ -6,6 +6,7 @@ from typing import Union
 
 import numpy as np
 
+from .unit_registry import unit
 from ..constants import GAMMA
 from ..scanner_parameters import ScannerParameters
 
@@ -27,10 +28,10 @@ def New_minimal_echo_time(scanner_parameters: ScannerParameters):
     scan_parameter_to_ms(scanner_parameters)
     
     # extracting the scan parameters
-    g_max = scanner_parameters.G_max
+    g_max = scanner_parameters.g_max
     t90 = scanner_parameters.t_90
     t180 = scanner_parameters.t_180
-    s_max = scanner_parameters.S_max
+    s_max = scanner_parameters.s_max
     
     t_ramp = g_max / s_max  # ramp time
     
@@ -52,7 +53,7 @@ def minimal_echo_time(b, scanner_parameters: ScannerParameters):
 
     # for the zero b-values we just take the b = 50 s/mm^2 since it will be a suitable constraint
     # Avoids singularity in minimal echo time computation
-    b[b == 0] = 5.0
+    b[b == 0] = 5.0 * unit('s/mm²')
 
     # converting units to milliseconds/millimeters^2
     b *= 1e3
@@ -67,23 +68,24 @@ def minimal_echo_time(b, scanner_parameters: ScannerParameters):
     return TE_min * 1e-3
 
 
+# TODO: remove this function
 def scan_parameter_to_ms(scanner_parameters: ScannerParameters):
     # time parameters
     scanner_parameters.t_90 *= 1e3
     scanner_parameters.t_half *= 1e3
     scanner_parameters.t_180 *= 1e3
     # inverse time parameter
-    scanner_parameters.S_max *= 1e-3
+    scanner_parameters.s_max *= 1e-3
 
 
 def echo_time(delta, b, scanner_parameters: ScannerParameters):
     # extracting the scan parameters
-    G_max = scanner_parameters.G_max
+    g_max = scanner_parameters.g_max
     t_rise = scanner_parameters.t_rise
     t90 = scanner_parameters.t_90
     t_half = scanner_parameters.t_half
     # surrogate parameter for readability
-    B = b / (gamma_different_unit ** 2 * G_max ** 2)
+    B = b / (gamma_different_unit ** 2 * g_max ** 2)
 
     Delta = (1 / delta ** 2) * (B - (1 / 30) * t_rise ** 3) + delta / 3 + (1 / (6 * delta)) * t_rise ** 2
     return 0.5 * t90 + Delta + delta + t_rise + t_half
@@ -94,7 +96,7 @@ def compute_delta_max(b, scanner_parameters: ScannerParameters):
     t90 = scanner_parameters.t_90
     t_rise = scanner_parameters.t_rise
     t_half = scanner_parameters.t_half
-    G_max = scanner_parameters.G_max
+    g_max = scanner_parameters.g_max
 
     def compute_delta_max_1():
         """
@@ -109,7 +111,7 @@ def compute_delta_max(b, scanner_parameters: ScannerParameters):
         p = t180 - 0.5 * t90 + t_rise + t_half
         a2 = (3 / 2) * p
         a1 = -t_rise / 4
-        a0 = (-3 / 2) * (b / (gamma_different_unit ** 2 * G_max ** 2)) + t_rise / 20
+        a0 = (-3 / 2) * (b / (gamma_different_unit ** 2 * g_max ** 2)) + t_rise / 20  # TODO: Left side of the addition has units s³, whereas the right side s! In the echo_time function, t_rise³ is subtracted from B.
         return largest_real_cbrt(a2, a1, a0)
 
     def compute_delta_max_2():
@@ -121,7 +123,7 @@ def compute_delta_max(b, scanner_parameters: ScannerParameters):
         T1 = 0.5 * t90 + 0.5 * t180 + t_rise
         T2 = 0.5 * t90 + t_rise + t_half
 
-        B = b / (gamma_different_unit ** 2 * G_max ** 2)
+        B = b / (gamma_different_unit ** 2 * g_max ** 2)  # TODO: B has units s³, but a few lines below are seconds subtracted. In the echo_time function, t_rise³ is subtracted from B.
 
         a2 = -3 * (0.5 * T2 - T1)
         a1 = -0.25 * t_rise

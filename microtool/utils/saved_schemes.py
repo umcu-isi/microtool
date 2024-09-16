@@ -21,7 +21,7 @@ def alexander_b0_measurement(eps_time: float = 1e-3, eps_gradient: float = 1e-2)
                                                                                                     pulse_widths)
 
     scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
-                                        scan_parameters=default_scanner)
+                                        scanner_parameters=default_scanner)
 
     scheme.fix_b0_measurements()
     fix_echo_times(N_pulses, scheme)
@@ -41,7 +41,7 @@ def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e
                                                                                                               eps_time)
 
     scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
-                                        scan_parameters=default_scanner)
+                                        scanner_parameters=default_scanner)
     fix_echo_times(N_pulses, scheme)
 
     # mark the repeated parameters
@@ -59,7 +59,7 @@ def alexander_initial_random() -> DiffusionAcquisitionScheme:
                                                                                                            N_pulses)
 
     scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
-                                        scan_parameters=default_scanner)
+                                        scanner_parameters=default_scanner)
 
     # fix echo time to max values
     fix_echo_times(N_pulses, scheme)
@@ -104,10 +104,10 @@ def insert_b0_measurement(gradient_directions, gradient_magnitudes, pulse_interv
 
 
 def get_scanner_parameters():
-    G_max = 0.2  # T m^-1
-    default_scanner.G_max = G_max
+    g_max = 0.2  # T m^-1
+    default_scanner.g_max = g_max
     # Alexander assumes zero rise time of infinite slewrate
-    default_scanner.S_max = np.inf
+    default_scanner.s_max = np.inf
     default_scanner.t_180 = 0.005
     return default_scanner
 
@@ -122,8 +122,8 @@ def get_scheme_parameters_perturbed(M, N, eps_gradient, eps_time):
 
 
 def get_scheme_parameters_random(M, N, N_pulses):
-    G_max = 0.2
-    gradient_magnitudes = np.random.uniform(0.0, G_max, N_pulses)
+    g_max = 0.2
+    gradient_magnitudes = np.random.uniform(0.0, g_max, N_pulses)
     gradient_directions = np.tile(sample_uniform_half_sphere(N), (M, 1))
     pulse_intervals = np.linspace(PULSE_TIMING_LB, 0.02, N_pulses) + 0.01
     pulse_widths = np.linspace(PULSE_TIMING_LB, 0.01, N_pulses)

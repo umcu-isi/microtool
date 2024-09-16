@@ -5,22 +5,25 @@ from typing import Union, List
 import numpy as np
 from scipy.optimize import LinearConstraint, NonlinearConstraint
 
+from .utils.unit_registry import unit
+
+
 # Base units that results in numeric values of order magnitude 1.
-GAMMA = 42.57747892 * 2 * np.pi * 1e3
-GAMMA_UNIT = '1/mT/s'
+GAMMA = 42.57747892 * 2 * np.pi * 1e3 * unit('1/mT/s')  # Proton gyromagnetic ratio [1/mT/s].
 
 B_UNIT = 's/mm²'
-B_VAL_LB = 0.0
-B_VAL_UB = 3e3
-B_VAL_SCALE = 1e3
-B_MAX = 6000 #s/mm2  # TODO: what's the difference in usage with B_VAL_UB?
+B_VAL_LB = 0.0  # [s/mm²]
+B_VAL_UB = 3e3  # [s/mm²]
+B_VAL_SCALE = 1e3  # [s/mm²]
+B_MAX = 6000  # [s/mm²]  # TODO: what's the difference in usage with B_VAL_UB?
 
 GRADIENT_UNIT = 'mT/mm'
+
 PULSE_TIMING_UNIT = 's'
-PULSE_TIMING_LB = 1e-3
-PULSE_TIMING_UB = 100e-3
-PULSE_TIMING_SCALE = 1e-2
-MAX_TE = 0.05 #s 
+PULSE_TIMING_LB = 1e-3  # [s]
+PULSE_TIMING_UB = 100e-3  # [s]
+PULSE_TIMING_SCALE = 1e-2  # [s]
+MAX_TE = 0.05  # [s]
 
 SLEW_RATE_UNIT = 'mT/mm/s'
 

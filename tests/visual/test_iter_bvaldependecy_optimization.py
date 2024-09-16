@@ -53,13 +53,13 @@ echo_times_optimal = optimal_scheme.echo_times
 from microtool.utils.solve_echo_time import New_minimal_echo_time
 from microtool.bval_delta_pulse_relations import delta_Delta_from_TE, b_val_from_delta_Delta
 
-scan_parameters = default_scanner
-minTE = New_minimal_echo_time(scan_parameters)
+scanner_parameters = default_scanner
+minTE = New_minimal_echo_time(scanner_parameters)
 maxTE = 0.05  # Maximum TE
 step = 0.001  # Step size
 TEs = np.arange(minTE, maxTE, step)
-delta, Delta = delta_Delta_from_TE(TEs, scan_parameters)
-bs = b_val_from_delta_Delta(delta, Delta, scan_parameters.G_max, scan_parameters)
+delta, Delta = delta_Delta_from_TE(TEs, scanner_parameters)
+bs = b_val_from_delta_Delta(delta, Delta, scanner_parameters.g_max, scanner_parameters)
 
 plt.figure()
 # Scatter plot of xall_(:,2) vs xall_(:,1)
