@@ -11,7 +11,6 @@ from .scanner_parameters import ScannerParameters
 def get_gradients(b, Delta, delta, scanner_parameters: ScannerParameters):
     """
 
-    :param gamma: 1/mT/s
     :param b: b-value in s/mm²
     :param Delta: s
     :param delta: s

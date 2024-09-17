@@ -1,5 +1,6 @@
 import numpy as np
 
+from .unit_registry import unit
 from ..acquisition_scheme import InversionRecoveryAcquisitionScheme, DiffusionAcquisitionScheme
 from ..constants import PULSE_TIMING_LB, PULSE_TIMING_UB
 from ..gradient_sampling import sample_uniform_half_sphere
@@ -20,7 +21,10 @@ def alexander_b0_measurement(eps_time: float = 1e-3, eps_gradient: float = 1e-2)
                                                                                                     pulse_intervals,
                                                                                                     pulse_widths)
 
-    scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
+    scheme = DiffusionAcquisitionScheme(gradient_magnitudes * unit('mT/mm'),
+                                        gradient_directions,
+                                        pulse_widths * unit('s'),
+                                        pulse_intervals * unit('s'),
                                         scanner_parameters=default_scanner)
 
     scheme.fix_b0_measurements()
@@ -40,7 +44,10 @@ def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e
                                                                                                               eps_gradient,
                                                                                                               eps_time)
 
-    scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
+    scheme = DiffusionAcquisitionScheme(gradient_magnitudes * unit('mT/mm'),
+                                        gradient_directions,
+                                        pulse_widths * unit('s'),
+                                        pulse_intervals * unit('s'),
                                         scanner_parameters=default_scanner)
     fix_echo_times(N_pulses, scheme)
 
@@ -58,7 +65,10 @@ def alexander_initial_random() -> DiffusionAcquisitionScheme:
     gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths = get_scheme_parameters_random(M, N,
                                                                                                            N_pulses)
 
-    scheme = DiffusionAcquisitionScheme(gradient_magnitudes, gradient_directions, pulse_widths, pulse_intervals,
+    scheme = DiffusionAcquisitionScheme(gradient_magnitudes * unit('s'),
+                                        gradient_directions,
+                                        pulse_widths * unit('s'),
+                                        pulse_intervals * unit('s'),
                                         scanner_parameters=default_scanner)
 
     # fix echo time to max values
@@ -76,9 +86,9 @@ def ir_scheme_repeated_parameters(n_pulses: int) -> InversionRecoveryAcquisition
     :param n_pulses:
     :return: A not so decent IR acquisition scheme
     """
-    tr = np.repeat(500, n_pulses)
-    te = np.repeat(20, n_pulses)
-    ti = np.repeat(400, n_pulses)
+    tr = np.repeat(500, n_pulses) * unit('s')
+    te = np.repeat(20, n_pulses) * unit('s')
+    ti = np.repeat(400, n_pulses) * unit('s')
     return InversionRecoveryAcquisitionScheme(tr, te, ti)
 
 
@@ -89,9 +99,9 @@ def ir_scheme_increasing_parameters(n_pulses: int) -> InversionRecoveryAcquisiti
     :param n_pulses:
     :return: A decent IR acquisition scheme
     """
-    tr = np.repeat(500, n_pulses)
-    te = np.linspace(10, 20, n_pulses)
-    ti = np.linspace(50, 400, n_pulses)
+    tr = np.repeat(500, n_pulses) * unit('s')
+    te = np.linspace(10, 20, n_pulses) * unit('s')
+    ti = np.linspace(50, 400, n_pulses) * unit('s')
     return InversionRecoveryAcquisitionScheme(tr, te, ti)
 
 
@@ -104,11 +114,11 @@ def insert_b0_measurement(gradient_directions, gradient_magnitudes, pulse_interv
 
 
 def get_scanner_parameters():
-    g_max = 0.2  # T m^-1
+    g_max = 0.2 * unit('mT/mm')  # T m^-1
     default_scanner.g_max = g_max
     # Alexander assumes zero rise time of infinite slewrate
-    default_scanner.s_max = np.inf
-    default_scanner.t_180 = 0.005
+    default_scanner.s_max = np.inf * unit('mT/mm/s')
+    default_scanner.t_180 = 0.005 * unit('s')
     return default_scanner
 
 
@@ -132,7 +142,7 @@ def get_scheme_parameters_random(M, N, N_pulses):
 
 def fix_echo_times(N_pulses, scheme):
     # fix echo time to max values
-    scheme["EchoTime"].values = np.repeat(PULSE_TIMING_UB, N_pulses)
+    scheme["EchoTime"].values = np.repeat(PULSE_TIMING_UB, N_pulses) * unit('s')
     scheme["EchoTime"].set_fixed_mask(np.array([True]*N_pulses))
 
 

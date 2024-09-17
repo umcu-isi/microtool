@@ -187,8 +187,7 @@ def scipy_loss(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noi
     :return: The loss value associated with parameters above.
     """
     # updating the scheme with the optimizers search values
-    acquisition_parameter_scales = scheme.free_parameter_scales
-    scheme.set_free_parameter_vector(x * acquisition_parameter_scales)
+    scheme.set_scaled_free_parameter_vector(x)
     return scaling_factor * compute_loss(scheme, model, noise_variance, loss)
 
 

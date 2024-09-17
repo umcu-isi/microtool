@@ -1,7 +1,6 @@
 """
 All the times in this module are computed in ms. so we scale them at the final function.
 """
-from copy import copy
 from typing import Tuple
 
 import numpy as np
@@ -23,7 +22,7 @@ def constrained_dependencies(dependency: list, parameters: dict, scanner_paramet
     if 'DiffusionPulseWidth' not in dependency or 'DiffusionPulseInterval' not in dependency:
         # Constrain b-values to TE. This computation is based on maximal G.
         delta, Delta = delta_Delta_from_TE(parameters['echo_times'], scanner_parameters)
-        b_from_te = b_val_from_delta_Delta(delta, Delta, scanner_parameters._max, scanner_parameters)
+        b_from_te = b_val_from_delta_Delta(delta, Delta, scanner_parameters.g_max, scanner_parameters)
         constraints &= parameters['b_values'] < b_from_te
 
     else:

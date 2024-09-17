@@ -27,6 +27,7 @@ from microtool.constants import BASE_SIGNAL_KEY
 from microtool.dmipy import CascadeFitDmipy, get_microtool_parameters
 from microtool.dmipy import convert_dmipy_scheme2diffusion_scheme, DmipyMultiTissueModel
 from microtool.utils import saved_models, saved_schemes
+from microtool.utils.unit_registry import unit
 
 
 class AnalyticBall(DmipyMultiTissueModel):
@@ -39,10 +40,10 @@ class AnalyticBall(DmipyMultiTissueModel):
         super().__init__(model)
 
     def jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
-        bvals = copy(scheme.b_values) * 1e6  # convert to SI units
+        bvals = copy(scheme.b_values) * (1000 * unit('mm/m'))**2  # convert to SI units
 
         s0 = self[BASE_SIGNAL_KEY].value
-        d_iso = self['G1Ball_1_lambda_iso'].value
+        d_iso = self['G1Ball_1_lambda_iso'].value * unit('m²/s')
 
         # the signal S = S_0 * e^{-T_E / T_2} * e^{-b * D}
         s = s0 * np.exp(-bvals * d_iso)

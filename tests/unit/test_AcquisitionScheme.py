@@ -42,12 +42,11 @@ class TestLessSimpleScheme:
     scheme["Space"].set_fixed_mask(np.array([True, False, False]))
 
     def test_set_free_parameter_vector(self):
-        new_free_vector = np.array([7, 8])
-
+        new_free_vector = np.array([70, 80])  # [7, 8] scaled by 0.1
         expected_values_space = np.array([4, 7, 8])
 
-        self.scheme.set_free_parameter_vector(new_free_vector)
-        np.testing.assert_equal(self.scheme.free_parameter_vector, new_free_vector)
+        self.scheme.set_scaled_free_parameter_vector(new_free_vector)
+        np.testing.assert_equal(self.scheme.scaled_free_parameter_vector, new_free_vector)
 
         np.testing.assert_equal(self.scheme["Space"].values, expected_values_space)
 
@@ -72,12 +71,12 @@ class TestSimpleAcquisitionScheme:
         new_free_parameter_values = np.array([0.6, 0.7])
         expected_parameter_vector = np.array([1., 0.6, 0.7])
 
-        self.scheme.set_free_parameter_vector(new_free_parameter_values)
-        np.testing.assert_equal(self.scheme.free_parameter_vector, new_free_parameter_values)
+        self.scheme.set_scaled_free_parameter_vector(new_free_parameter_values)
+        np.testing.assert_equal(self.scheme.scaled_free_parameter_vector, new_free_parameter_values)
 
         np.testing.assert_equal(self.scheme["Time"].values, expected_parameter_vector)
 
         # using too many values should raise error
         new_free_parameter_values = np.array([0.5, 0.6, 0.7])
         with pytest.raises(ValueError):
-            self.scheme.set_free_parameter_vector(new_free_parameter_values)
+            self.scheme.set_scaled_free_parameter_vector(new_free_parameter_values)

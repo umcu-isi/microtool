@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from typing import Union, List
 
-import numpy as np
 from scipy.optimize import LinearConstraint, NonlinearConstraint
 
 from .utils.unit_registry import unit
 
 
-# Base units that results in numeric values of order magnitude 1.
-GAMMA = 42.57747892 * 2 * np.pi * 1e3 * unit('1/mT/s')  # Proton gyromagnetic ratio [1/mT/s].
+GAMMA = 267.5987e3 * unit('1/mT/s')  # Proton gyromagnetic ratio [rad/mT/s].
 
 B_UNIT = 's/mm²'
 B_VAL_LB = 0.0  # [s/mm²]

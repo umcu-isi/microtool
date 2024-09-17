@@ -11,7 +11,7 @@ from ..constants import GAMMA
 from ..scanner_parameters import ScannerParameters
 
 # to '1/mT . 1/ms'
-gamma_different_unit = 1e-3 * GAMMA
+gamma_different_unit = GAMMA * 1e-3 * unit('s') / unit('ms')
 
 
 #Computations as in Matlab code: G:[mT/um], time: [ms], S: [mT/um/ms]
@@ -56,26 +56,26 @@ def minimal_echo_time(b, scanner_parameters: ScannerParameters):
     b[b == 0] = 5.0 * unit('s/mm²')
 
     # converting units to milliseconds/millimeters^2
-    b *= 1e3
+    b *= 1e3 * unit('ms') / unit('s')
     scanner_parameters = copy(scanner_parameters)
     scan_parameter_to_ms(scanner_parameters)
 
     delta_max = compute_delta_max(b, scanner_parameters)
-    domain = np.linspace(1e-6, delta_max, num=1000)
+    domain = np.linspace(1e-6, delta_max, num=1000) * unit('ms')
     TE_min = np.min(echo_time(domain, b, scanner_parameters), axis=0)
 
     # echo time convert back to seconds
-    return TE_min * 1e-3
+    return TE_min * 1e-3 * unit('s') / unit('ms')
 
 
 # TODO: remove this function
 def scan_parameter_to_ms(scanner_parameters: ScannerParameters):
     # time parameters
-    scanner_parameters.t_90 *= 1e3
-    scanner_parameters.t_half *= 1e3
-    scanner_parameters.t_180 *= 1e3
+    scanner_parameters.t_90 *= 1e3 * unit('ms') / unit('s')
+    scanner_parameters.t_half *= 1e3 * unit('ms') / unit('s')
+    scanner_parameters.t_180 *= 1e3 * unit('ms') / unit('s')
     # inverse time parameter
-    scanner_parameters.s_max *= 1e-3
+    scanner_parameters.s_max *= 1e-3 * unit('s') / unit('ms')
 
 
 def echo_time(delta, b, scanner_parameters: ScannerParameters):
@@ -110,8 +110,10 @@ def compute_delta_max(b, scanner_parameters: ScannerParameters):
         # The coefficients of the cubic equations a_i belongs to the term of delta^i
         p = t180 - 0.5 * t90 + t_rise + t_half
         a2 = (3 / 2) * p
-        a1 = -t_rise / 4
-        a0 = (-3 / 2) * (b / (gamma_different_unit ** 2 * g_max ** 2)) + t_rise / 20  # TODO: Left side of the addition has units s³, whereas the right side s! In the echo_time function, t_rise³ is subtracted from B.
+        # a1 = -t_rise / 4  # TODO: Units should be s²?
+        a1 = -t_rise**2 / 4  # TODO: This is probably wrong, but a quick fix for the units.
+        # a0 = (-3 / 2) * (b / (gamma_different_unit ** 2 * g_max ** 2)) + t_rise / 20  # TODO: Left side of the addition has units s³, whereas the right side s! In the echo_time function, t_rise³ is subtracted from B.
+        a0 = (-3 / 2) * (b / (gamma_different_unit ** 2 * g_max ** 2)) + t_rise**3 / 30  # TODO: This is probably wrong, but a quick fix for the units.
         return largest_real_cbrt(a2, a1, a0)
 
     def compute_delta_max_2():
@@ -125,9 +127,12 @@ def compute_delta_max(b, scanner_parameters: ScannerParameters):
 
         B = b / (gamma_different_unit ** 2 * g_max ** 2)  # TODO: B has units s³, but a few lines below are seconds subtracted. In the echo_time function, t_rise³ is subtracted from B.
 
+        # TODO: this is the same as above, apart from t_rise/30 vs t_rise/20, which is a typo I think.
         a2 = -3 * (0.5 * T2 - T1)
-        a1 = -0.25 * t_rise
-        a0 = -1.5 * (B - t_rise / 30)
+        # a1 = -0.25 * t_rise  # TODO: Units should be s²?
+        a1 = -0.25 * t_rise**2  # TODO: This is probably wrong, but a quick fix for the units.
+        # a0 = -1.5 * (B - t_rise / 30)  # TODO: Units should be s³?
+        a0 = -1.5 * (B - t_rise**3 / 30)  # TODO: This is probably wrong, but a quick fix for the units.
         return largest_real_cbrt(a2, a1, a0)
 
     delta_max_1 = compute_delta_max_1()

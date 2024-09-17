@@ -108,11 +108,12 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
                                DiffusionAcquisitionScheme_delta_dependency)):
         raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DiffusionAcquisitionScheme}")
     # note that dmipy has a different notion of echo times so they are not included in the conversion
+    # Downcast pint-wrapped arrays to plain numpy arrays (during testing).
     return acquisition_scheme_from_bvalues(
-        scheme.b_values * 1e6,  # Convert from s/mm² to s/m².
-        scheme.b_vectors,
-        scheme.pulse_widths,
-        scheme.pulse_intervals,
+        np.array(scheme.b_values) * 1e6,  # Convert from s/mm² to s/m².
+        np.array(scheme.b_vectors),
+        np.array(scheme.pulse_widths),
+        np.array(scheme.pulse_intervals),
     )
 
 

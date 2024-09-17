@@ -18,6 +18,7 @@ from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT,
     PULSE_TIMING_SCALE,  B_VAL_LB, B_VAL_UB, B_VAL_SCALE, MAX_TE, B_MAX
 from .pulse_relations import compute_b_values, get_gradients
 from .bval_delta_pulse_relations import delta_Delta_from_TE, b_val_from_delta_Delta, constrained_dependencies
+from .utils.unit_registry import unit
 
 
 class AcquisitionParameters:
@@ -37,7 +38,7 @@ class AcquisitionParameters:
     """
 
     def __init__(self,
-                 values: Union[Sequence[float], np.ndarray],
+                 values: np.ndarray,
                  unit: str,
                  scale: float,
                  symbol: Optional[str] = None,
@@ -45,7 +46,7 @@ class AcquisitionParameters:
                  upper_bound: Optional[float] = None,
                  fixed: bool = False):
 
-        self.values = np.array(values).ravel()  # Makes a copy and ensures that the values are a 1D vector.
+        self.values = values.astype(float, copy=True).ravel()  # Makes a copy and ensures it is a 1D float array.
         self.unit = unit
         self.scale = scale
         self.symbol = symbol
@@ -214,21 +215,25 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         return {key: self[key].free_values for key in self.free_parameter_keys}
 
     @property
-    def free_parameter_vector(self) -> np.ndarray:
+    def scaled_free_parameter_vector(self) -> np.ndarray:
         """
-        Returns all the free parameters as a flattened vector.
+        Returns all the scaled free parameters as a flattened vector.
         :return: All free parameter values
         """
-        return np.concatenate([val.free_values for val in self.values()])
+        # Note: Since parameter.free_values and parameter.scale both have the same unit, the result will be
+        # dimensionless.
+        return np.concatenate([parameter.free_values / parameter.scale for parameter in self.values()])
 
-    def set_free_parameter_vector(self, vector: np.ndarray) -> None:
+    def set_scaled_free_parameter_vector(self, vector: np.ndarray) -> None:
         """
-        A setter function for the free parameters.
+        A setter function for the scaled free parameters.
 
         :param vector: The parameter vector you wish to assign to the scheme
         """
+        # Note: Since parameter.free_values and parameter.scale both have the same unit, the parameter vector is
+        # dimensionless.
         vector = vector.ravel()
-        if self.free_parameter_vector.size != vector.size:
+        if self.scaled_free_parameter_vector.size != vector.size:
             raise ValueError(
                 "New free parameter vector does not contain the same number of values as there are free parameters.")
 
@@ -236,7 +241,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         i = 0
         for key in self.free_parameter_keys:
             stride = self[key].free_values.size
-            self[key].free_values = vector[i:(i + stride)]
+            self[key].free_values = vector[i:(i + stride)] * self[key].scale
 
             # Update repeated measurements
             self[key].update_repeated_values()
@@ -274,15 +279,6 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
             self[key].upper_bound = bounds[i][1]
 
     @property
-    def free_parameter_scales(self) -> np.ndarray:
-        """
-        Getter for the scale of the free parameters repeated for the number of pulses.
-
-        :return: The scale of the free parameters
-        """
-        return np.repeat([p.scale for p in self.values()], [p.free_values.size for p in self.values()])
-
-    @property
     def free_parameter_bounds_scaled(self) -> List[Tuple[Optional[float], Optional[float]]]:
         """
         :return: The free parameters bounds divided by their scales. List of min max pairs
@@ -311,7 +307,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         first_parameter = list(self.values())[0]
         return first_parameter.values.size
 
-    def get_parameter_from_parameter_vector(self, parameter: str, x: np.ndarray) -> np.ndarray:
+    def get_parameter_from_scaled_parameter_vector(self, parameter: str, x: np.ndarray) -> np.ndarray:
         """
         This function helps to get a free parameter from a numpy array. Useful for building constraints on specific
         parameters. Be warned the function does not check if the parameter you require is actually a free parameter!!
@@ -345,13 +341,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
     def constraint_list(self) -> List[ConstraintTypes]:
         return list(self.constraints.values())
 
-    @property
-    def x0(self):
-        scales = self.free_parameter_scales
-        vector = self.free_parameter_vector
-        return vector / scales
-
-    def _copy_and_update_parameter(self, parameter: str, x: np.ndarray):
+    def _copy_and_update_scaled_parameter(self, parameter: str, x: np.ndarray):
         """
         Makes a copy from Acquisition parameter values and inserts the values suggested by the optimizer in
         x. This allows us to extract the parameter values for all pulses in a single array also if the parameter was
@@ -364,7 +354,7 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         if self[parameter].fixed:
             return copy(self[parameter].values)
 
-        update_values = self.get_parameter_from_parameter_vector(parameter, x)
+        update_values = self.get_parameter_from_scaled_parameter_vector(parameter, x)
         value_array = copy(self[parameter].values)
         value_array[self[parameter].optimize_mask] = update_values
         return value_array
@@ -386,7 +376,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
     """
 
     def __init__(self,
-                 gradient_magnitudes: Union[List[float], np.ndarray],  # [T/m]
+                 gradient_magnitudes: Union[List[float], np.ndarray],  # [mT/mm]
                  gradient_directions: Union[List[Tuple[float, float, float]], np.ndarray],  # [-]
                  pulse_widths: Union[List[float], np.ndarray],  # [s]
                  pulse_intervals: Union[List[float], np.ndarray],  # [s]
@@ -400,7 +390,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         # set default echo times to minimal echo time based on scan parameters and b values
         if echo_times is None:
             # offset to prevent being to close to actual minimal echo times
-            offset = 1e-6
+            offset = 1e-6 * unit('s')
             echo_times = minimal_echo_time(b_values, self.scanner_parameters) + offset
 
         # converting to np array of correct type
@@ -413,8 +403,10 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         self._check_b_vectors(b_values, gradient_directions)
 
         super().__init__({
+            # TODO: Change DiffusionPulseMagnitude scale to 1000 or 10000?
             'DiffusionPulseMagnitude': AcquisitionParameters(
-                values=gradient_magnitudes, unit=GRADIENT_UNIT, scale=1., symbol="|G|", lower_bound=0.0, upper_bound=5e3
+                values=gradient_magnitudes, unit=GRADIENT_UNIT, scale=1. * unit('mT/mm'), symbol="|G|", lower_bound=0.0,
+                upper_bound=5e3 * unit('mT/mm')
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -423,20 +415,23 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 values=theta, unit='rad', scale=1., symbol=r"$\theta$", lower_bound=None, fixed=True
             ),
             'DiffusionPulseWidth': AcquisitionParameters(
-                values=pulse_widths, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$\delta$", fixed=False,
-                lower_bound=PULSE_TIMING_LB,
-                upper_bound=PULSE_TIMING_UB
+                values=pulse_widths, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE * unit('s'), symbol=r"$\delta$",
+                fixed=False,
+                lower_bound=PULSE_TIMING_LB * unit('s'),
+                upper_bound=PULSE_TIMING_UB * unit('s')
             ),
             'DiffusionPulseInterval': AcquisitionParameters(
-                values=pulse_intervals, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$\Delta$",
+                values=pulse_intervals, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE * unit('s'),
+                symbol=r"$\Delta$",
                 fixed=False,
-                lower_bound=PULSE_TIMING_LB,
-                upper_bound=PULSE_TIMING_UB
+                lower_bound=PULSE_TIMING_LB * unit('s'),
+                upper_bound=PULSE_TIMING_UB * unit('s')
             ),
             'EchoTime': AcquisitionParameters(
-                values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
-                lower_bound=PULSE_TIMING_LB,
-                upper_bound=PULSE_TIMING_UB
+                values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE * unit('s'), symbol=r"$T_E$",
+                fixed=False,
+                lower_bound=PULSE_TIMING_LB * unit('s'),
+                upper_bound=PULSE_TIMING_UB * unit('s')
             )
         })
 
@@ -480,7 +475,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
 
     def _check_constraints(self):
         for desc, constraint in self.constraints.items():
-            fun_val = constraint.fun(self.x0)
+            fun_val = constraint.fun(self.scaled_free_parameter_vector)
 
             lower_than_lb = is_smaller_than_with_tolerance(fun_val, constraint.lb)
             higher_than_ub = is_higher_than_with_tolerance(fun_val, constraint.ub)
@@ -558,11 +553,11 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             def delta_constraint_fun(x: np.ndarray):
                 """ Should be larger than zero """
                 # TODO: What is the purpose of updating the parameters here?
-                pulse_width = self._copy_and_update_parameter('DiffusionPulseWidth', x)
-                pulse_interval = self._copy_and_update_parameter('DiffusionPulseInterval', x)
+                pulse_width = self._copy_and_update_scaled_parameter('DiffusionPulseWidth', x)
+                pulse_interval = self._copy_and_update_scaled_parameter('DiffusionPulseInterval', x)
                 t_rise = self.scanner_parameters.t_rise
                 t_180 = self.scanner_parameters.t_180
-                return pulse_interval - (pulse_width + t_rise + t_180)
+                return (pulse_interval - (pulse_width + t_rise + t_180)) / self['DiffusionPulseInterval'].scale
 
             # TODO: This seems like a linear constraint.
             delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
@@ -571,9 +566,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         if not self['DiffusionPulseMagnitude'].fixed:
             def gradient_constraint_fun(x: np.ndarray):
                 # TODO: What is the purpose of updating the parameters here?
-                g = self._copy_and_update_parameter('DiffusionPulseMagnitude', x)
+                g = self._copy_and_update_scaled_parameter('DiffusionPulseMagnitude', x)
                 g_max = self.scanner_parameters.g_max
-                return g_max - g
+                return (g_max - g) / self['DiffusionPulseMagnitude'].scale
 
             # TODO: This seems like a linear constraint.
             g_constraint = NonlinearConstraint(gradient_constraint_fun, 0.0, np.inf, keep_feasible=True)
@@ -582,11 +577,11 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         if not (self['DiffusionPulseWidth'].fixed and self['DiffusionPulseInterval'].fixed and self['EchoTime'].fixed):
             def echo_constraint_fun(x: np.ndarray):
                 # TODO: What is the purpose of updating the parameters here?
-                self.set_free_parameter_vector(x * self.free_parameter_scales)
-                echo_time = self._copy_and_update_parameter("EchoTime", x)
+                self.set_scaled_free_parameter_vector(x)
+                echo_time = self._copy_and_update_scaled_parameter("EchoTime", x)
                 t_min = minimal_echo_time(self.b_values, self.scanner_parameters)
 
-                return echo_time - t_min
+                return (echo_time - t_min) / self['EchoTime'].scale
 
             echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
@@ -753,7 +748,7 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
 
     def _check_constraints(self):
         for desc, constraint in self.constraints.items():
-            fun_val = constraint.fun(self.x0)
+            fun_val = constraint.fun(self.scaled_free_parameter_vector)
 
             lower_than_lb = is_smaller_than_with_tolerance(fun_val, constraint.lb)
             higher_than_ub = is_higher_than_with_tolerance(fun_val, constraint.ub)
@@ -870,35 +865,36 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
             """ Should be larger than zero """
             
             # In this case deltas are optimize and used directly to compute b_val
-            pulse_widths = self._copy_and_update_parameter('DiffusionPulseWidth', x)
-            pulse_intervals = self._copy_and_update_parameter('DiffusionPulseInterval', x)
+            pulse_widths = self._copy_and_update_scaled_parameter('DiffusionPulseWidth', x)
+            pulse_intervals = self._copy_and_update_scaled_parameter('DiffusionPulseInterval', x)
             
             t_rise = self.scanner_parameters.t_rise*1e3
             t_180 = self.scanner_parameters.t_180*1e3
             
-            return pulse_intervals - (pulse_widths + t_rise + t_180)
+            return (pulse_intervals - (pulse_widths + t_rise + t_180)) / self['DiffusionPulseInterval'].scale
 
         delta_constraint = NonlinearConstraint(delta_constraint_fun, 0.0, np.inf, keep_feasible=True)
         constraints["PulseIntervalLargerThanPulseWidth"] = delta_constraint
 
         def echo_constraint_fun(x: np.ndarray):
 
-            echo_time = self._copy_and_update_parameter("EchoTime", x)
+            echo_time = self._copy_and_update_scaled_parameter("EchoTime", x)
             
             t_min = New_minimal_echo_time(self.scanner_parameters)
             
-            return echo_time - t_min
+            return (echo_time - t_min) / self['EchoTime'].scale
 
         echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
         constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
                                
         def gradient_b_val_constraint_fun(x: np.ndarray):
             
-            g = self._copy_and_update_parameter('DiffusionPulseMagnitude', x)
-            pulse_widths = self._copy_and_update_parameter('DiffusionPulseWidth', x)
-            pulse_intervals = self._copy_and_update_parameter('DiffusionPulseInterval', x)               
-            
-            return B_MAX - b_val_from_delta_Delta(pulse_widths, pulse_intervals, g, self.scanner_parameters)
+            g = self._copy_and_update_scaled_parameter('DiffusionPulseMagnitude', x)
+            pulse_widths = self._copy_and_update_scaled_parameter('DiffusionPulseWidth', x)
+            pulse_intervals = self._copy_and_update_scaled_parameter('DiffusionPulseInterval', x)               
+            b_val = b_val_from_delta_Delta(pulse_widths, pulse_intervals, g, self.scanner_parameters)
+
+            return (B_MAX - b_val) / (1 * unit('s/mm²'))
 
         g_b_val_constraint = NonlinearConstraint(gradient_b_val_constraint_fun, 0.0, np.inf, keep_feasible=True)
         constraints["BValSmallerThanBMax"] = g_b_val_constraint
@@ -1011,7 +1007,7 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
 
     def _check_constraints(self):
         for desc, constraint in self.constraints.items():
-            fun_val = constraint.fun(self.x0)
+            fun_val = constraint.fun(self.scaled_free_parameter_vector)
 
             lower_than_lb = is_smaller_than_with_tolerance(fun_val, constraint.lb)
             higher_than_ub = is_higher_than_with_tolerance(fun_val, constraint.ub)
@@ -1115,8 +1111,8 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
         def bval_te_constraint_fun(x: np.ndarray):
             """ Should be larger than zero """
 
-            b_values = self._copy_and_update_parameter('B-Values', x)  # s/mm^2
-            echo_times = self._copy_and_update_parameter("EchoTime", x)  # [s]???  TODO: check this
+            b_values = self._copy_and_update_scaled_parameter('B-Values', x)  # s/mm^2
+            echo_times = self._copy_and_update_scaled_parameter("EchoTime", x)  # [s]???  TODO: check this
 
             # In this case compute deltas from optimized echo_time
             delta, Delta = delta_Delta_from_TE(echo_times, self.scanner_parameters)
@@ -1124,9 +1120,9 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
             # This computation is based on maximal G
             b_from_te = b_val_from_delta_Delta(delta, Delta, self.scanner_parameters.g_max, self.scanner_parameters)
 
-            return b_values - b_from_te
+            return (b_values - b_from_te) / self['B-Values'].scale
 
-        bval_te_constraint = NonlinearConstraint(bval_te_constraint_fun, - np.inf, 0.0, keep_feasible=True)
+        bval_te_constraint = NonlinearConstraint(bval_te_constraint_fun, -np.inf, 0.0, keep_feasible=True)
         constraints["BValueDependentOnTE"] = bval_te_constraint
 
         return constraints
@@ -1207,10 +1203,10 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
 
         def time_constraint_fun(x: np.ndarray):
             # require return value larger than zero to enforce constraint TR > TE + TI
-            ti = self._copy_and_update_parameter('InversionTime', x)
-            te = self._copy_and_update_parameter('EchoTime', x)
-            tr = self._copy_and_update_parameter('RepetitionTimeExcitation', x)
-            return tr - te - ti
+            ti = self._copy_and_update_scaled_parameter('InversionTime', x)
+            te = self._copy_and_update_scaled_parameter('EchoTime', x)
+            tr = self._copy_and_update_scaled_parameter('RepetitionTimeExcitation', x)
+            return (tr - te - ti) / self['EchoTime'].scale
 
         return {"RepetitionTime_larger_than_Echotime_plus_InversionTime": NonlinearConstraint(time_constraint_fun, 0.0,
                                                                                               np.inf)}
@@ -1266,17 +1262,17 @@ class ReducedDiffusionScheme(AcquisitionScheme):
     def constraints(self) -> Dict[str, NonlinearConstraint]:
         def fun(x: np.ndarray) -> np.ndarray:
             # get b-values from x
-            b = self.get_parameter_from_parameter_vector('DiffusionBvalue', x)
+            b = self.get_parameter_from_scaled_parameter_vector('DiffusionBvalue', x)
             # note that b is in s/mm² but all other time dimensions are ms.
             # so we convert to ms/mm²
             b *= 1e3
             # get echotimes from x, (units are # ms)
-            te = self.get_parameter_from_parameter_vector('EchoTime', x)
+            te = self.get_parameter_from_scaled_parameter_vector('EchoTime', x)
             # compute the minimal echotimes associated with b-values and other parameters
             te_min = minimal_echo_time(b, self.scanner_parameters)
 
             # The constraint is satisfied if actual TE is higher than minimal TE
-            return te - te_min
+            return (te - te_min) / self['EchoTime'].scale
 
         return {'Minimum TE': NonlinearConstraint(fun, 0.0, np.inf)}
 

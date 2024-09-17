@@ -2,7 +2,6 @@
 Insert useful information
 """
 import numpy as np
-import pytest
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme
 from microtool.gradient_sampling import sample_uniform
@@ -33,13 +32,13 @@ class TestDiffusionAcquisitionSchemeConstruction:
 
         scheme = DiffusionAcquisitionScheme(self.gradient_magnitudes, self.gradient_vectors, self.delta, self.Delta,
                                             scanner_parameters=self.scanner_parameters)
-        assert scheme.b_values == pytest.approx(self.expected_b_values, rel=0.1)
+        assert np.allclose(scheme.b_values, self.expected_b_values, rtol=0.1)
         assert scheme.b_values.units == self.expected_b_values.units
 
     def test_b_value_constructor(self):
         scheme = DiffusionAcquisitionScheme.from_bvals(self.expected_b_values, self.gradient_vectors, self.delta,
                                                        self.Delta, scanner_parameters=self.scanner_parameters)
-        assert scheme.pulse_magnitude == pytest.approx(self.gradient_magnitudes, rel=.1)
+        assert np.allclose(scheme.pulse_magnitude, self.gradient_magnitudes, rtol=0.1)
         assert scheme.pulse_magnitude.units == self.gradient_magnitudes.units
 
 

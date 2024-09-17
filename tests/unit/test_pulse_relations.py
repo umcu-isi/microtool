@@ -16,7 +16,7 @@ s_max = 1300 * unit('mT/mm/s')  # typical is 1300 T/m/s = 1300 mT/mm/s
 scanner_parameters = ScannerParameters(t_90, t_180, t_half, g_max, s_max)
 
 expected_t_rise = 0.153846e-3 * unit('s')
-expected_b = 20.9933e3 * unit('s/mm²')  # TODO: why was it 20087 before? Where did that number come from?
+expected_b = 21.0053e3 * unit('s/mm²')  # TODO: why was it 20087 before? Where did that number come from?
 # expected_b = 20087 * unit('s/mm²')
 
 # other pulse parameters

@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 
 from microtool.gradient_sampling import sample_uniform
@@ -34,8 +33,8 @@ class TestDelta_delta_PulseRelation:
     def test_delta_echo_relation(self):
         delta, Delta = delta_Delta_from_TE(self.echo_times, self.scanner_parameters)
         
-        assert delta == pytest.approx(self.expected_delta, rel=1e-4)
-        assert Delta == pytest.approx(self.expected_Delta, rel=1e-4)
+        assert np.allclose(delta, self.expected_delta, rtol=1e-4)
+        assert np.allclose(Delta, self.expected_Delta, rtol=1e-4)
             
 
 class TestB_val_PulseRelation:
@@ -59,10 +58,10 @@ class TestB_val_PulseRelation:
         """
                     
         computed_b = b_val_from_delta_Delta(self.delta, self.Delta, self.G_magnitude, self.scanner_parameters)
-        assert computed_b == pytest.approx(self.expected_b, abs=1e3)
+        assert np.allclose(computed_b, self.expected_b, atol=1e3)
         assert computed_b.units == self.expected_b.units
 
         computed_b_old = compute_b_values(self.G_magnitude, self.Delta, self.delta,
                                           scanner_parameters=self.scanner_parameters)
-        assert computed_b_old == pytest.approx(computed_b, rel=1e-6)
+        assert np.allclose(computed_b_old, computed_b, rtol=1e-6)
         assert computed_b_old.units == self.expected_b.units

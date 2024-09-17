@@ -108,7 +108,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
     scheme_copy = deepcopy(scheme)
 
     # getting all the parameters needed for scipy optimization
-    x0 = scheme_copy.x0
+    x0 = scheme_copy.scaled_free_parameter_vector
 
     scaled_bounds = scheme_copy.free_parameter_bounds_scaled
     scipy_bounds = bounds_tuple2scipy(scaled_bounds)
@@ -141,7 +141,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
     # update the scheme_copy to the result found by the optimizer
     if 'x' in result:
         x = result['x']
-        scheme_copy.set_free_parameter_vector(result['x'] * scheme_copy.free_parameter_scales)
+        scheme_copy.set_scaled_free_parameter_vector(result['x'])
     else:
         raise RuntimeError("No suitable solution was found?")
 
@@ -202,7 +202,7 @@ def make_local_callback(scheme: AcquisitionScheme,
             iteration = intermediate_result.nit
             jac = intermediate_result.jac
 
-            scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
+            scheme.set_scaled_free_parameter_vector(x_current)
             crlb = compute_crlb(scheme, model, noise_var, loss)
             log_callback(iteration, x_current, fun, more_info={"Scaled CRLBs": f"{crlb}", "Jacobian": f"{jac}"})
 
@@ -225,7 +225,7 @@ def make_de_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: f
 
     def callback(x_current, *_args, **_kwargs):
         iteration_tracker[0] += 1
-        scheme.set_free_parameter_vector(x_current * scheme.free_parameter_scales)
+        scheme.set_scaled_free_parameter_vector(x_current)
         fun = compute_loss(scheme, model, noise_var, loss)
         crlb = compute_crlb(scheme, model, noise_var, loss)
         log_callback(iteration_tracker[0], x_current, fun, {"Scaled CRLBs": f"{crlb}"})
