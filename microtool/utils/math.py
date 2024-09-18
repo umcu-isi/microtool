@@ -62,3 +62,39 @@ def diagonal(square: np.ndarray) -> np.ndarray:
         out[i] = square[i, i]
 
     return out
+
+
+def largest_real_cbrt(a2: Union[float, np.ndarray], a1: Union[float, np.ndarray], a0: Union[float, np.ndarray]) -> \
+        Union[float, np.ndarray]:
+    """
+    Returns the largest real root of the cubic equation x³ + a2 * x² + a1 * x + a0 = 0.
+
+    See https://mathworld.wolfram.com/CubicFormula.html for details on solving the cubic analytically.
+
+    :param a2: Coefficient(s) of the quadratic term
+    :param a1: Coefficient(s) of the linear term
+    :param a0: Constant(s)
+    :return: The largest real root(s) or NaN if there is no solution.
+    """
+    q = (3 * a1 - a2 ** 2) / 9
+    r = (9 * a2 * a1 - 27 * a0 - 2 * a2 ** 3) / 54
+    sqrt_d = np.sqrt(q ** 3 + r ** 2 + 0j)  # adding 0j to allow for computation with complex numbers
+    s = (r + sqrt_d) ** (1 / 3)
+    t = (r - sqrt_d) ** (1 / 3)
+
+    a = -(1 / 3) * a2
+    b = -0.5 * (s + t)
+    c = 0.5j * np.sqrt(3) * (s - t)
+
+    z1 = a + (s + t)
+    z2 = a + b + c
+    z3 = a + b - c
+
+    roots = np.stack([z1, z2, z3])
+
+    # we consider numbers real if imaginary part is zero to some tolerance.
+    real_roots = np.isclose(roots.imag, np.zeros(roots.shape))
+    roots[~real_roots] = -np.nan
+    largest_real_roots = np.nanmax(roots.real, axis=0)
+
+    return largest_real_roots
