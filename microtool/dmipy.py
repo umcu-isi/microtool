@@ -110,10 +110,10 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     # note that dmipy has a different notion of echo times so they are not included in the conversion
     # Downcast pint-wrapped arrays to plain numpy arrays (during testing).
     return acquisition_scheme_from_bvalues(
-        np.array(scheme.b_values) * 1e6,  # Convert from s/mm² to s/m².
-        np.array(scheme.b_vectors),
-        np.array(scheme.pulse_widths),
-        np.array(scheme.pulse_intervals),
+        np.array(scheme.b_values, copy=False) * 1e6,  # Convert from s/mm² to s/m².
+        np.array(scheme.b_vectors, copy=False),
+        np.array(scheme.pulse_widths, copy=False),
+        np.array(scheme.pulse_intervals, copy=False),
     )
 
 

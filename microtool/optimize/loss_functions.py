@@ -149,8 +149,8 @@ def compute_loss(scheme: AcquisitionScheme,
     :param loss: The loss function
     :return: The loss value associated with this model and scheme
     """
-    jac = model.scaled_jacobian(scheme)
-    signal = model(scheme)
+    jac = np.array(model.scaled_jacobian(scheme), copy=False)
+    signal = np.array(model(scheme), copy=False)
     return loss(jac, signal, noise_var)
 
 
@@ -167,8 +167,8 @@ def compute_crlb(scheme: AcquisitionScheme,
     :param loss: The loss function
     :return: The loss value associated with this model and scheme
     """
-    jac = model.scaled_jacobian(scheme)
-    signal = model(scheme)
+    jac = np.array(model.scaled_jacobian(scheme), copy=False)
+    signal = np.array(model(scheme), copy=False)
     return loss.crlb(jac, signal, noise_var)
 
 
