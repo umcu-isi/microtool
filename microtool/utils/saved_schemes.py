@@ -12,18 +12,18 @@ def alexander_b0_measurement(eps_time: float = 1e-3, eps_gradient: float = 1e-2)
     M = 4  # "measurements" i.e. unique acquisition parameter combinations
     N_pulses = (N * M + 1)
     default_scanner = get_scanner_parameters()
-    gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths = get_scheme_parameters_perturbed(M, N,
+    gradient_directions, pulse_magnitudes, pulse_intervals, pulse_durations = get_scheme_parameters_perturbed(M, N,
                                                                                                               eps_gradient,
                                                                                                               eps_time)
 
-    gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths = insert_b0_measurement(gradient_directions,
-                                                                                                    gradient_magnitudes,
+    gradient_directions, pulse_magnitudes, pulse_intervals, pulse_durations = insert_b0_measurement(gradient_directions,
+                                                                                                    pulse_magnitudes,
                                                                                                     pulse_intervals,
-                                                                                                    pulse_widths)
+                                                                                                    pulse_durations)
 
-    scheme = DiffusionAcquisitionScheme(gradient_magnitudes * unit('mT/mm'),
+    scheme = DiffusionAcquisitionScheme(pulse_magnitudes * unit('mT/mm'),
                                         gradient_directions,
-                                        pulse_widths * unit('s'),
+                                        pulse_durations * unit('s'),
                                         pulse_intervals * unit('s'),
                                         scanner_parameters=default_scanner)
 
@@ -40,13 +40,13 @@ def alexander_optimal_perturbed(eps_time: float = 1e-3, eps_gradient: float = 1e
     N_pulses = (N * M)
 
     default_scanner = get_scanner_parameters()
-    gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths = get_scheme_parameters_perturbed(M, N,
+    gradient_directions, pulse_magnitudes, pulse_intervals, pulse_durations = get_scheme_parameters_perturbed(M, N,
                                                                                                               eps_gradient,
                                                                                                               eps_time)
 
-    scheme = DiffusionAcquisitionScheme(gradient_magnitudes * unit('mT/mm'),
+    scheme = DiffusionAcquisitionScheme(pulse_magnitudes * unit('mT/mm'),
                                         gradient_directions,
-                                        pulse_widths * unit('s'),
+                                        pulse_durations * unit('s'),
                                         pulse_intervals * unit('s'),
                                         scanner_parameters=default_scanner)
     fix_echo_times(N_pulses, scheme)
@@ -62,12 +62,12 @@ def alexander_initial_random() -> DiffusionAcquisitionScheme:
     M = 4  # "measurements" i.e. unique acquisition parameter combinations
     N_pulses = N * M
     default_scanner = get_scanner_parameters()
-    gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths = get_scheme_parameters_random(M, N,
+    gradient_directions, pulse_magnitudes, pulse_intervals, pulse_durations = get_scheme_parameters_random(M, N,
                                                                                                            N_pulses)
 
-    scheme = DiffusionAcquisitionScheme(gradient_magnitudes * unit('s'),
+    scheme = DiffusionAcquisitionScheme(pulse_magnitudes * unit('s'),
                                         gradient_directions,
-                                        pulse_widths * unit('s'),
+                                        pulse_durations * unit('s'),
                                         pulse_intervals * unit('s'),
                                         scanner_parameters=default_scanner)
 
@@ -105,12 +105,12 @@ def ir_scheme_increasing_parameters(n_pulses: int) -> InversionRecoveryAcquisiti
     return InversionRecoveryAcquisitionScheme(tr, te, ti)
 
 
-def insert_b0_measurement(gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths):
-    gradient_magnitudes = np.insert(gradient_magnitudes, 0, 0.0)
-    pulse_widths = duplicate_first_measurement(pulse_widths)
+def insert_b0_measurement(gradient_directions, pulse_magnitudes, pulse_intervals, pulse_durations):
+    pulse_magnitudes = np.insert(pulse_magnitudes, 0, 0.0)
+    pulse_durations = duplicate_first_measurement(pulse_durations)
     pulse_intervals = duplicate_first_measurement(pulse_intervals)
     gradient_directions = duplicate_first_measurement(gradient_directions)
-    return gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths
+    return gradient_directions, pulse_magnitudes, pulse_intervals, pulse_durations
 
 
 def get_scanner_parameters():
@@ -123,21 +123,21 @@ def get_scanner_parameters():
 
 
 def get_scheme_parameters_perturbed(M, N, eps_gradient, eps_time):
-    gradient_magnitudes = make_repeated_measurements([0.2, 0.2, 0.121, 0.2], N) - eps_gradient
+    pulse_magnitudes = make_repeated_measurements([0.2, 0.2, 0.121, 0.2], N) - eps_gradient
     # prepending a b0 measurement
     gradient_directions = np.tile(sample_uniform_half_sphere(N), (M, 1))
     pulse_intervals = make_repeated_measurements([0.025, 0.026, 0.029, 0.013], N) + eps_time
-    pulse_widths = make_repeated_measurements([0.020, 0.018, 0.016, 0.0079999], N) - eps_time
-    return gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths
+    pulse_durations = make_repeated_measurements([0.020, 0.018, 0.016, 0.0079999], N) - eps_time
+    return gradient_directions, pulse_magnitudes, pulse_intervals, pulse_durations
 
 
 def get_scheme_parameters_random(M, N, N_pulses):
     g_max = 0.2
-    gradient_magnitudes = np.random.uniform(0.0, g_max, N_pulses)
+    pulse_magnitudes = np.random.uniform(0.0, g_max, N_pulses)
     gradient_directions = np.tile(sample_uniform_half_sphere(N), (M, 1))
     pulse_intervals = np.linspace(PULSE_TIMING_LB, 0.02, N_pulses) + 0.01
-    pulse_widths = np.linspace(PULSE_TIMING_LB, 0.01, N_pulses)
-    return gradient_directions, gradient_magnitudes, pulse_intervals, pulse_widths
+    pulse_durations = np.linspace(PULSE_TIMING_LB, 0.01, N_pulses)
+    return gradient_directions, pulse_magnitudes, pulse_intervals, pulse_durations
 
 
 def fix_echo_times(N_pulses, scheme):
@@ -147,7 +147,7 @@ def fix_echo_times(N_pulses, scheme):
 
 
 def handle_repeated_parameters(N, scheme):
-    repeated_parameters = ['DiffusionPulseMagnitude', 'DiffusionPulseWidth', 'DiffusionPulseInterval']
+    repeated_parameters = ['DiffusionPulseMagnitude', 'DiffusionPulseDuration', 'DiffusionPulseInterval']
     for parameter in repeated_parameters:
         scheme[parameter].set_repetition_period(N)
 

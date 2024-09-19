@@ -35,10 +35,10 @@ print(diffusion_model)
 
 b_values = np.array([0, 500, 1000, 1500, 2000, 2500, 3000])  # [s/mm²]
 b_vectors = np.array([[0, 1, 0], [1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]])
-pulse_widths = np.full(b_values.shape, 10e-3)  # [s]
+pulse_durations = np.full(b_values.shape, 10e-3)  # [s]
 pulse_intervals = np.full(b_values.shape, 30e-3)  # [s]
 
-diffusion_scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_widths, pulse_intervals)
+diffusion_scheme = DiffusionAcquisitionScheme(b_values, b_vectors, pulse_durations, pulse_intervals)
 print(diffusion_scheme)
 
 # ## 4. Optimize the acquisition scheme

@@ -29,11 +29,11 @@ M = 10
 N = 30
 
 b_vals = np.concatenate([np.repeat(0, M), np.repeat(1000, M), np.repeat(3000, M)]) * unit('s/mm²')
-pulse_widths = np.concatenate([np.repeat(0.019, M), np.repeat(0.016, M), np.repeat(0.007, M)]) * unit('s')
+pulse_durations = np.concatenate([np.repeat(0.019, M), np.repeat(0.016, M), np.repeat(0.007, M)]) * unit('s')
 pulse_intervals = np.concatenate([np.repeat(0.030, M), np.repeat(0.027, M), np.repeat(0.020, M)]) * unit('s')
 
 directions = sample_uniform_half_sphere(N)
-initial_scheme = DiffusionAcquisitionScheme.from_bvals(b_values=b_vals, b_vectors=directions, pulse_widths=pulse_widths,
+initial_scheme = DiffusionAcquisitionScheme.from_bvals(b_values=b_vals, b_vectors=directions, pulse_durations=pulse_durations,
                                                        pulse_intervals=pulse_intervals)
 
 

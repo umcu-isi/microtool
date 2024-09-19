@@ -47,7 +47,7 @@ def minimal_echo_time(b, scanner_parameters: ScannerParameters):
     return te_min
 
 
-def echo_time(delta, b, scanner_parameters: ScannerParameters):
+def echo_time(pulse_duration, b, scanner_parameters: ScannerParameters):
     # extracting the scan parameters
     g_max = scanner_parameters.g_max
     t_rise = scanner_parameters.t_rise
@@ -57,8 +57,9 @@ def echo_time(delta, b, scanner_parameters: ScannerParameters):
     # surrogate parameter for readability
     b_g = b / (GAMMA ** 2 * g_max ** 2)
 
-    Delta = (1 / delta ** 2) * (b_g - (1 / 30) * t_rise ** 3) + delta / 3 + (1 / (6 * delta)) * t_rise ** 2
-    return 0.5 * t90 + Delta + delta + t_rise + t_half
+    pulse_interval = ((1 / pulse_duration ** 2) * (b_g - (1 / 30) * t_rise ** 3) +
+                      pulse_duration / 3 + (1 / (6 * pulse_duration)) * t_rise ** 2)
+    return 0.5 * t90 + pulse_interval + pulse_duration + t_rise + t_half
 
 
 def compute_delta_max(b, scanner_parameters: ScannerParameters):

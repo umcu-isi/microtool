@@ -21,8 +21,8 @@ expected_b = 21.0053e3 * unit('s/mm²')  # TODO: why was it 20087 before? Where 
 
 # other pulse parameters
 pulse_interval = 25e-3 * unit('s')
-pulse_width = 20e-3 * unit('s')
-g_magnitude = 200e-3 * unit('mT/mm')
+pulse_duration = 20e-3 * unit('s')
+pulse_magnitude = 200e-3 * unit('mT/mm')
 
 
 def test_simple_pulse_relation():
@@ -31,7 +31,7 @@ def test_simple_pulse_relation():
     :return:
     """
 
-    computed_b = compute_b_values(g_magnitude, pulse_interval, pulse_width)
+    computed_b = compute_b_values(pulse_duration, pulse_interval, pulse_magnitude)
 
     assert computed_b.units == expected_b.units
     assert computed_b.magnitude == pytest.approx(expected_b.magnitude, rel=1e-5)
@@ -39,23 +39,23 @@ def test_simple_pulse_relation():
 
 class TestFullPulseRelation:
     def test_t_rise(self):
-        t_r = compute_t_rise(g_magnitude, scanner_parameters)
+        t_r = compute_t_rise(pulse_magnitude, scanner_parameters)
         assert t_r.units == expected_t_rise.units
         assert t_r.magnitude == pytest.approx(expected_t_rise.magnitude, rel=1e-5)
 
     def test_b_value(self):
-        b = compute_b_values(g_magnitude, pulse_interval, pulse_width, scanner_parameters=scanner_parameters)
+        b = compute_b_values(pulse_duration, pulse_interval, pulse_magnitude, scanner_parameters=scanner_parameters)
         assert b.units == expected_b.units
         assert b.magnitude == pytest.approx(expected_b.magnitude, rel=1e-5)
 
         # Test approximate b-values (without scanner parameters).
         # TODO: is the difference between the full version and the approximation indeed that small?
-        b = compute_b_values(g_magnitude, pulse_interval, pulse_width)
+        b = compute_b_values(pulse_duration, pulse_interval, pulse_magnitude)
         assert b.units == expected_b.units
         assert b.magnitude == pytest.approx(expected_b.magnitude, rel=1e-5)
 
 
 def test_get_gradients():
-    g = get_gradients(expected_b, pulse_interval, pulse_width, scanner_parameters)
-    assert g.units == g_magnitude.units
-    assert g.magnitude == pytest.approx(g_magnitude.magnitude, rel=1e-5)
+    g = get_gradients(expected_b, pulse_duration, pulse_interval, scanner_parameters)
+    assert g.units == pulse_magnitude.units
+    assert g.magnitude == pytest.approx(pulse_magnitude.magnitude, rel=1e-5)

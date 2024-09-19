@@ -11,7 +11,7 @@ from dmipy.core.modeling_framework import ModelProperties as SingleDmipyModel
 from dmipy.core.modeling_framework import MultiCompartmentModel
 
 from .acquisition_scheme import DiffusionAcquisitionScheme, \
-    DiffusionAcquisitionScheme_bval_dependency, DiffusionAcquisitionScheme_delta_dependency
+    DiffusionAcquisitionSchemeBValue, DiffusionAcquisitionSchemeDelta
 from .constants import BASE_SIGNAL_KEY
 from .scanner_parameters import ScannerParameters, default_scanner
 from .tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
@@ -23,7 +23,7 @@ warnings.filterwarnings('ignore', 'No b0 measurements were detected.*')
 
 dmipy_to_microtool_name = {
     "bvalues": "B-Values",
-    "delta": "DiffusionPulseWidth",
+    "delta": "DiffusionPulseDuration",
     "Delta": "DiffusionPulseInterval",
     "gradient_directions": "b-vectors",
     "gradient_strengths": "DiffusionPulseMagnitude",
@@ -104,15 +104,15 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     :param scheme: DiffusionAcquisitionScheme
     :return: DmipyAcquisitionScheme
     """
-    if not isinstance(scheme, (DiffusionAcquisitionScheme, DiffusionAcquisitionScheme_bval_dependency, 
-                               DiffusionAcquisitionScheme_delta_dependency)):
+    if not isinstance(scheme, (DiffusionAcquisitionScheme, DiffusionAcquisitionSchemeBValue, 
+                               DiffusionAcquisitionSchemeDelta)):
         raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DiffusionAcquisitionScheme}")
     # note that dmipy has a different notion of echo times so they are not included in the conversion
     # Downcast pint-wrapped arrays to plain numpy arrays (during testing).
     return acquisition_scheme_from_bvalues(
         cast_to_ndarray(scheme.b_values, unit_str='s/mm²') * 1e6,  # Convert from s/mm² to s/m².
         cast_to_ndarray(scheme.b_vectors, unit_str='dimensionless'),
-        cast_to_ndarray(scheme.pulse_widths, unit_str='s'),
+        cast_to_ndarray(scheme.pulse_durations, unit_str='s'),
         cast_to_ndarray(scheme.pulse_intervals, unit_str='s'),
     )
 
@@ -131,18 +131,16 @@ def convert_dmipy_scheme2diffusion_scheme(scheme: DmipyAcquisitionScheme,
     if not isinstance(scheme, DmipyAcquisitionScheme):
         raise TypeError(f"scheme is of type {type(scheme)}, we expected an {DmipyAcquisitionScheme}")
 
-    # convert to s/mm^2 from s/m^2
-    b_values = scheme.bvalues * 1e-6 * unit('s/mm²')
+    b_values = scheme.bvalues * 1e-6 * unit('s/mm²')  # convert to s/mm² from s/m²
     b_vectors = scheme.gradient_directions
-
-    pulse_widths = scheme.delta * unit('s')
+    pulse_durations = scheme.delta * unit('s')
     pulse_intervals = scheme.Delta * unit('s')
     if scheme.TE is None:
-        return DiffusionAcquisitionScheme.from_bvals(b_values, b_vectors, pulse_widths, pulse_intervals,
+        return DiffusionAcquisitionScheme.from_bvals(b_values, b_vectors, pulse_durations, pulse_intervals,
                                                      scanner_parameters=scanner_parameters)
     else:
         echo_times = scheme.TE * unit('s')
-        return DiffusionAcquisitionScheme.from_bvals(b_values, b_vectors, pulse_widths, pulse_intervals,
+        return DiffusionAcquisitionScheme.from_bvals(b_values, b_vectors, pulse_durations, pulse_intervals,
                                                      echo_times, scanner_parameters=scanner_parameters)
 
 

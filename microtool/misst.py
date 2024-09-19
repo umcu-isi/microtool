@@ -56,7 +56,7 @@ def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> Dict[str, 
         'pulseseq': 'PGSE',  # Standard pulsed-gradient spin-echo. TODO: support more through DiffusionAcquisitionScheme
         'G': double((scheme.pulse_magnitude * 1e-3).tolist()),  # Convert from [mT/m] to [mT/mm].
         'grad_dirs': double(scheme.b_vectors.tolist()),
-        'smalldel': double(scheme.pulse_widths.tolist()),  # [s]
+        'smalldel': double(scheme.pulse_durations.tolist()),  # [s]
         'delta': double(scheme.pulse_intervals.tolist()),  # [s]
         'tau': 1e-4,  # Time interval for waveform discretization in seconds.
     }
