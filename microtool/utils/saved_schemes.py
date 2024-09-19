@@ -142,8 +142,8 @@ def get_scheme_parameters_random(M, N, N_pulses):
 
 def fix_echo_times(N_pulses, scheme):
     # fix echo time to max values
-    scheme["EchoTime"].values = np.repeat(PULSE_TIMING_UB, N_pulses) * unit('s')
-    scheme["EchoTime"].set_fixed_mask(np.array([True]*N_pulses))
+    scheme["EchoTime"].values = np.ones(N_pulses) * PULSE_TIMING_UB
+    scheme["EchoTime"].set_fixed_mask(np.ones(N_pulses, dtype=bool))
 
 
 def handle_repeated_parameters(N, scheme):

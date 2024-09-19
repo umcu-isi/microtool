@@ -31,9 +31,7 @@ if __name__ == "__main__":
     print('\n')
 
     fit_model = deepcopy(multi_model)
-    fit_model.set_fit_parameters(mtm_result.fitted_parameters)
-
-    multi_model.print_comparison(fit_model)
+    fit_model.set_scaled_fit_parameters(mtm_result.scaled_fitted_parameters)
 
     plt.figure("residuals MTM")
     plt.plot(fit_model(scheme) - actual_signal, '.')

@@ -18,7 +18,7 @@ from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT,
     PULSE_TIMING_SCALE,  B_VAL_LB, B_VAL_UB, B_VAL_SCALE, MAX_TE, B_MAX
 from .pulse_relations import compute_b_values, get_gradients
 from .bval_delta_pulse_relations import delta_Delta_from_TE, b_val_from_delta_Delta, constrained_dependencies
-from .utils.unit_registry import unit
+from .utils.unit_registry import unit, cast_to_ndarray
 
 
 class AcquisitionParameters:
@@ -222,7 +222,8 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         """
         # Note: Since parameter.free_values and parameter.scale both have the same unit, the result will be
         # dimensionless.
-        return np.concatenate([parameter.free_values / parameter.scale for parameter in self.values()])
+        vec = np.concatenate([parameter.free_values / parameter.scale for parameter in self.values()])
+        return cast_to_ndarray(vec)  # Make sure the result is a dimensionless numpy array.
 
     def set_scaled_free_parameter_vector(self, vector: np.ndarray) -> None:
         """
@@ -415,23 +416,23 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 values=theta, unit='rad', scale=1., symbol=r"$\theta$", lower_bound=None, fixed=True
             ),
             'DiffusionPulseWidth': AcquisitionParameters(
-                values=pulse_widths, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE * unit('s'), symbol=r"$\delta$",
+                values=pulse_widths, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$\delta$",
                 fixed=False,
-                lower_bound=PULSE_TIMING_LB * unit('s'),
-                upper_bound=PULSE_TIMING_UB * unit('s')
+                lower_bound=PULSE_TIMING_LB,
+                upper_bound=PULSE_TIMING_UB
             ),
             'DiffusionPulseInterval': AcquisitionParameters(
-                values=pulse_intervals, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE * unit('s'),
+                values=pulse_intervals, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE,
                 symbol=r"$\Delta$",
                 fixed=False,
-                lower_bound=PULSE_TIMING_LB * unit('s'),
-                upper_bound=PULSE_TIMING_UB * unit('s')
+                lower_bound=PULSE_TIMING_LB,
+                upper_bound=PULSE_TIMING_UB
             ),
             'EchoTime': AcquisitionParameters(
-                values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE * unit('s'), symbol=r"$T_E$",
+                values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$",
                 fixed=False,
-                lower_bound=PULSE_TIMING_LB * unit('s'),
-                upper_bound=PULSE_TIMING_UB * unit('s')
+                lower_bound=PULSE_TIMING_LB,
+                upper_bound=PULSE_TIMING_UB
             )
         })
 
@@ -868,8 +869,8 @@ class DiffusionAcquisitionScheme_delta_dependency(AcquisitionScheme):
             pulse_widths = self._copy_and_update_scaled_parameter('DiffusionPulseWidth', x)
             pulse_intervals = self._copy_and_update_scaled_parameter('DiffusionPulseInterval', x)
             
-            t_rise = self.scanner_parameters.t_rise*1e3
-            t_180 = self.scanner_parameters.t_180*1e3
+            t_rise = self.scanner_parameters.t_rise
+            t_180 = self.scanner_parameters.t_180
             
             return (pulse_intervals - (pulse_widths + t_rise + t_180)) / self['DiffusionPulseInterval'].scale
 
@@ -1111,8 +1112,8 @@ class DiffusionAcquisitionScheme_bval_dependency(AcquisitionScheme):
         def bval_te_constraint_fun(x: np.ndarray):
             """ Should be larger than zero """
 
-            b_values = self._copy_and_update_scaled_parameter('B-Values', x)  # s/mm^2
-            echo_times = self._copy_and_update_scaled_parameter("EchoTime", x)  # [s]???  TODO: check this
+            b_values = self._copy_and_update_scaled_parameter('B-Values', x)  # [s/mm²]
+            echo_times = self._copy_and_update_scaled_parameter("EchoTime", x)  # [s]
 
             # In this case compute deltas from optimized echo_time
             delta, Delta = delta_Delta_from_TE(echo_times, self.scanner_parameters)
@@ -1148,9 +1149,9 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
     Defines an inversion-recovery MR acquisition scheme.
 
-    :param repetition_times: A list or numpy array of repetition times TR in milliseconds.
-    :param echo_times: A list or numpy array of echo times TE in milliseconds.
-    :param inversion_times: A list or numpy array of inversion times TI in milliseconds.
+    :param repetition_times: A list or numpy array of repetition times TR in seconds.
+    :param echo_times: A list or numpy array of echo times TE in seconds.
+    :param inversion_times: A list or numpy array of inversion times TI in seconds.
     :raise ValueError: Lists have unequal length.
     """
 
@@ -1166,12 +1167,14 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
         super().__init__(
             {
                 'RepetitionTimeExcitation': AcquisitionParameters(
-                    values=repetition_times, unit='ms', scale=100., symbol=r"$T_R$", lower_bound=10.0, upper_bound=1e4),
+                    values=repetition_times, unit='s', scale=0.1 * unit('s'), symbol=r"$T_R$",
+                    lower_bound=0.01 * unit('s'), upper_bound=10 * unit('s')),
                 'EchoTime': AcquisitionParameters(
-                    values=echo_times, unit='ms', scale=10., symbol=r"$T_E$", fixed=True, lower_bound=.1,
-                    upper_bound=1e3),
+                    values=echo_times, unit='s', scale=0.01 * unit('s'), symbol=r"$T_E$", fixed=True,
+                    lower_bound=0.1e-3 * unit('s'), upper_bound=1 * unit('s')),
                 'InversionTime': AcquisitionParameters(
-                    values=inversion_times, unit='ms', scale=100., symbol=r"$T_I$", lower_bound=10.0, upper_bound=1e4)
+                    values=inversion_times, unit='s', scale=0.1 * unit('s'), symbol=r"$T_I$",
+                    lower_bound=0.01 * unit('s'), upper_bound=10 * unit('s'))
             })
 
     @property
@@ -1215,8 +1218,8 @@ class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
 class EchoScheme(AcquisitionScheme):
     def __init__(self, te: Union[Sequence[float], np.array]):
         super().__init__({
-            'EchoTime': AcquisitionParameters(values=np.array(te), unit='ms', scale=1.0, symbol=r"$T_E$",
-                                              lower_bound=1.0, upper_bound=200.0)
+            'EchoTime': AcquisitionParameters(values=te, unit='s', scale=1e-3 * unit('s'), symbol=r"$T_E$",
+                                              lower_bound=1e-3 * unit('s'), upper_bound=0.2 * unit('s'))
         })
 
     @property
@@ -1234,19 +1237,21 @@ class ReducedDiffusionScheme(AcquisitionScheme):
                  scanner_parameters: ScannerParameters = default_scanner
                  ):
         """
-        :param b_values: the b values in s/mm²
-        :param echo_times: The echo times in ms
-        :param scanner_parameters: the parameters defined by the scanners settings and or hardware capabilities
+        :param b_values: the b values in s/mm².
+        :param echo_times: The echo times in seconds.
+        :param scanner_parameters: the parameters defined by the scanners settings and or hardware capabilities.
         """
         self.scanner_parameters = scanner_parameters
         # Check for b0 values? make sure initial scheme satisfies constraints.
 
         super().__init__({
             'DiffusionBvalue': AcquisitionParameters(
-                values=b_values, unit='s/mm²', scale=1000., symbol=r"$b$", lower_bound=0.0, upper_bound=3e4
+                values=b_values, unit='s/mm²', scale=1000 * unit('s/mm²'), symbol=r"$b$", lower_bound=0 * unit('s/mm²'),
+                upper_bound=3e4 * unit('s/mm²')
             ),
             'EchoTime': AcquisitionParameters(
-                values=echo_times, unit='ms', scale=10., symbol=r"$T_E$", lower_bound=0., upper_bound=1e3
+                values=echo_times, unit='s', scale=0.01 * unit('s'), symbol=r"$T_E$", lower_bound=0 * unit('s'),
+                upper_bound=1 * unit('s')
             )
         })
 
@@ -1263,10 +1268,7 @@ class ReducedDiffusionScheme(AcquisitionScheme):
         def fun(x: np.ndarray) -> np.ndarray:
             # get b-values from x
             b = self.get_parameter_from_scaled_parameter_vector('DiffusionBvalue', x)
-            # note that b is in s/mm² but all other time dimensions are ms.
-            # so we convert to ms/mm²
-            b *= 1e3
-            # get echotimes from x, (units are # ms)
+            # get echotimes from x
             te = self.get_parameter_from_scaled_parameter_vector('EchoTime', x)
             # compute the minimal echotimes associated with b-values and other parameters
             te_min = minimal_echo_time(b, self.scanner_parameters)
@@ -1279,9 +1281,6 @@ class ReducedDiffusionScheme(AcquisitionScheme):
 
 def random_parameter_definition(required_params: List, randomization_constraints: List, n_shells: int,
                                 n_directions: int, scanner_parameters: default_scanner) -> dict:
-    # to '1/mT . 1/ms'
-    gamma = GAMMA * 1e-3
-    
     # Get random values for n_shells and duplicate those for n_directions per shell.
     
     scheme_params = {}
@@ -1315,7 +1314,7 @@ def random_parameter_definition(required_params: List, randomization_constraints
     
             scheme_params['gradient_magnitudes'][mask] = np.sqrt(
                 B_VAL_UB / (
-                    gamma**2 * (
+                    GAMMA**2 * (
                         scheme_params['pulse_widths'][mask]**2 *
                         (scheme_params['pulse_intervals'][mask] - scheme_params['pulse_widths'][mask] / 3) +
                         (scanner_parameters.t_ramp**3) / 30 -
@@ -1337,7 +1336,7 @@ def param_initialization_bounds(parameter: str):
         'b_values': [B_VAL_LB, B_VAL_UB],
         'pulse_intervals': [PULSE_TIMING_LB, PULSE_TIMING_UB],
         'pulse_widths': [PULSE_TIMING_LB, PULSE_TIMING_UB],
-        'gradient_magnitudes': [0, 265e-3]
+        'gradient_magnitudes': [0 * unit('mT/mm'), 265e-3 * unit('mT/mm')]
         }
     
     bounds = parameter_bound_dict[parameter]

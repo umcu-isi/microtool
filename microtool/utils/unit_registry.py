@@ -1,4 +1,19 @@
 import sys
+from typing import Any
+
+import numpy as np
+
+
+class Identity:
+    def __mul__(self, other):
+        return other
+
+    def __rmul__(self, other):
+        return other
+
+    def __rtruediv__(self, other):
+        return other
+
 
 if "pytest" in sys.modules:
     from pint import UnitRegistry
@@ -15,17 +30,33 @@ if "pytest" in sys.modules:
     unit.define('millimeter = [millimeter] = mm')
     unit.define('second = [second] = s')
     unit.define('millisecond = [millisecond] = ms')
+    unit.define('Tesla = [Tesla] = T')
     unit.define('milliTesla = [milliTesla] = mT')
     unit.define('radian = [radian] = rad')
-else:
-    class Dimensionless:
-        def __rmul__(self, other):
-            return other
 
+    def cast_to_ndarray(x: Any, unit_str: str = 'dimensionless') -> np.ndarray:
+        # Check if the array is dimensionless before casting it to a numpy array.
+        if isinstance(x, unit.Quantity) and x.units != unit(unit_str):
+            raise ValueError(f"Casted array has units '{x.units}', but expected '{unit_str}'")
+        elif isinstance(x, (list, tuple)):
+            for elem in x:
+                if isinstance(elem, unit.Quantity) and elem.units != unit(unit_str):
+                    raise ValueError(f"Casted array has units '{elem.units}', but expected '{unit_str}'")
+
+        return np.array(x, copy=False)
+
+else:
     def unit(_: str):
         """
         When pytest is loaded, this is a pint UnitRegistry() object and calling it returns a Unit() object.
-        When pytest is not loaded, the function returns Dimensionless(). Dimensionless() only allows right-hand
-         multiplication and returns the object it is multiplied by.
+        When pytest is not loaded, the function returns Identity(). This object allows multiplication and division,
+        in which it behaves like 1.
         """
-        return Dimensionless()
+        return Identity()
+
+    def cast_to_ndarray(x, _unit_str: str = 'dimensionless'):
+        """
+        When pytest is loaded, this function will check if the argument has the proper units before (down)casting
+         it to a numpy array.
+        """
+        return np.array(x, copy=False)

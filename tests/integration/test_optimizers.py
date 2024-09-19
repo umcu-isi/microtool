@@ -1,9 +1,11 @@
 # Test compatibility with SOMA and all scipy optimizers.
+import numpy as np
+
 from microtool.acquisition_scheme import EchoScheme
 from microtool.optimize import optimize_scheme
 from microtool.optimize.loss_functions import compute_loss, gauss_loss
 from microtool.tissue_model import ExponentialTissueModel
-
+from microtool.utils.unit_registry import unit
 
 # List of optimizers available in SciPy 1.10
 optimizers = [
@@ -27,8 +29,8 @@ optimizers = [
 
 def test_optimize():
     # Define a very simple model and acquisition scheme.
-    model = ExponentialTissueModel(t2=20)  # T2 = 20 ms
-    scheme = EchoScheme(te=[60, 80, 100])  # TE = 60, 80, 100 ms
+    model = ExponentialTissueModel(t2=0.02 * unit('s'))  # T2 = 20 ms
+    scheme = EchoScheme(te=np.array([0.06, 0.08, 0.1]) * unit('s'))  # TE = 60, 80, 100 ms
     noise_variance = 1.0
 
     # Initial loss.

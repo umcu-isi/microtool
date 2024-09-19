@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
     result = multi_model.fit(acq_wrapped, signal, method="basinhopping")
     print(multi_model)
-    multi_model.set_fit_parameters(result.fitted_parameters)
+    multi_model.set_scaled_fit_parameters(result.scaled_fitted_parameters)
     print(multi_model)
     print(result.fitted_parameters)
     result.print_fit_information()

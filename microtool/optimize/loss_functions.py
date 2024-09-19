@@ -6,6 +6,7 @@ from numba import njit
 from ..acquisition_scheme import AcquisitionScheme
 from ..tissue_model import TissueModel
 from ..utils.math import cartesian_product, diagonal
+from ..utils.unit_registry import cast_to_ndarray
 
 # As a rule of thumb, if the condition number is 10^k, then you may lose up to k digits of accuracy on top of what would
 # be lost to the numerical method. Allow loosing 1% of 32-bit floating point precision (approx. 5 of 7 digits
@@ -36,7 +37,7 @@ def fisher_information_gauss(jac: np.ndarray, _signal: np.ndarray, noise_var: fl
 @njit
 def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
     """
-    Calculates the fisher information matrix assuming Rician noise.The integral term can be approximated up to 
+    Calculates the Fisher information matrix assuming Rician noise.The integral term can be approximated up to
     4% as reported in https://doi.org/10.1109/TIT.1967.1054037 (eq. 8)
 
     :param jac: An N×M Jacobian matrix, where N is the number of measurements and M is the number of parameters.
@@ -88,7 +89,7 @@ class LossFunction:
 
 class CrlbLoss(LossFunction):
     """
-    Base class for CRLB-based loss functions. This bass class is made because checking of the fisher information matrix
+    Base class for CRLB-based loss functions. This bass class is made because checking of the Fisher information matrix
     is the same for all crlb based loss functions. We ensure that derived classes can actually
     compute crlb by abstractmethod.
     """
@@ -104,7 +105,7 @@ class CrlbLoss(LossFunction):
     def __call__(self, jac: np.ndarray, signal: np.ndarray, noise_var: float) -> float:
         """
         Computes the sum of the Cramer-Rao lower bounds of the parameters using eigenvalue computation.
-        If the fisher information matrix is ill conditioned, ILL_LOSS is returned.
+        If the Fisher information matrix is ill conditioned, ILL_LOSS is returned.
 
         :param jac: An N×M Jacobian matrix, where N is the number of measurements and M is the number of parameters.
         :param signal: An N-element measurement vector.
@@ -149,8 +150,8 @@ def compute_loss(scheme: AcquisitionScheme,
     :param loss: The loss function
     :return: The loss value associated with this model and scheme
     """
-    jac = np.array(model.scaled_jacobian(scheme), copy=False)
-    signal = np.array(model(scheme), copy=False)
+    jac = cast_to_ndarray(model.scaled_jacobian(scheme))  # Make sure the result is a dimensionless numpy array.
+    signal = cast_to_ndarray(model(scheme))  # Make sure the result is a dimensionless numpy array.
     return loss(jac, signal, noise_var)
 
 

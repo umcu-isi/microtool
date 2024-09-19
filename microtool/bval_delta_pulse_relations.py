@@ -1,6 +1,3 @@
-"""
-All the times in this module are computed in ms. so we scale them at the final function.
-"""
 from typing import Tuple
 
 import numpy as np

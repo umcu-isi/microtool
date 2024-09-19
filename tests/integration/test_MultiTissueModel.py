@@ -24,8 +24,8 @@ def test_set_parameter_vector():
     multi_model = MultiTissueModel([stick_wrapped, zeppelin_wrapped], [.5, .5])
 
     expected = np.ones(len(multi_model))
-    multi_model.set_parameters_from_vector(expected)
-    actual = multi_model.parameter_vector
+    multi_model.set_scaled_parameters(expected)
+    actual = multi_model.scaled_parameter_vector
     np.testing.assert_equal(expected, actual)
 
 

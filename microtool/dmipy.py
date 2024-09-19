@@ -15,7 +15,7 @@ from .acquisition_scheme import DiffusionAcquisitionScheme, \
 from .constants import BASE_SIGNAL_KEY
 from .scanner_parameters import ScannerParameters, default_scanner
 from .tissue_model import TissueModel, TissueParameter, TissueModelDecorator, FittedModel
-from .utils.unit_registry import unit
+from .utils.unit_registry import unit, cast_to_ndarray
 
 # dmipy wants b0 measurements but we are happy to handle schemes without b0 measuerements
 warnings.filterwarnings('ignore', 'No b0 measurements were detected.*')
@@ -37,7 +37,7 @@ def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParame
     These are wrapped in the microtool TissueParameter wrapper. Parameter linking and optimization flags are extracted.
 
     :param multi_model: A dmipy multi-compartment model.
-    :return: A dictionary of tissueparameters
+    :return: A dictionary of tissue parameters
     """
 
     # Iterate over all tissue models in the MultiCompartmentModel.
@@ -51,7 +51,7 @@ def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParame
             bounds = model.parameter_ranges[parameter_name]
 
             scaled_bounds = get_scaled_bounds(bounds, scales)
-            # Determine if the parameter is fixed in the multicompartment model before wrapping
+            # Determine if the parameter is fixed in the multi-compartment model before wrapping
             linked_or_fixed = False
 
             # dmipy removes any fixed or linked parameters from MultiCompartentModel names.
@@ -110,10 +110,10 @@ def convert_diffusion_scheme2dmipy_scheme(scheme: DiffusionAcquisitionScheme) ->
     # note that dmipy has a different notion of echo times so they are not included in the conversion
     # Downcast pint-wrapped arrays to plain numpy arrays (during testing).
     return acquisition_scheme_from_bvalues(
-        np.array(scheme.b_values, copy=False) * 1e6,  # Convert from s/mm² to s/m².
-        np.array(scheme.b_vectors, copy=False),
-        np.array(scheme.pulse_widths, copy=False),
-        np.array(scheme.pulse_intervals, copy=False),
+        cast_to_ndarray(scheme.b_values, unit_str='s/mm²') * 1e6,  # Convert from s/mm² to s/m².
+        cast_to_ndarray(scheme.b_vectors, unit_str='dimensionless'),
+        cast_to_ndarray(scheme.pulse_widths, unit_str='s'),
+        cast_to_ndarray(scheme.pulse_intervals, unit_str='s'),
     )
 
 
@@ -206,25 +206,39 @@ class DmipyMultiTissueModel(TissueModel):
             # getting partial volumes as array
             partial_volumes = np.array([self[pv_name].value for pv_name in self._model.partial_volume_names])
 
-        # multiply the computed signals of individual compartments by the T2-decay AND partial volumes!
+        # multiply the computed signals of individual compartments by the partial volumes and s0.
         return self[BASE_SIGNAL_KEY].value * np.sum(partial_volumes * signals, axis=-1)
 
     @property
     def dmipy_model(self) -> MultiCompartmentModel:
         return self._model
 
-    def set_parameters_from_vector(self, new_parameter_values: np.ndarray) -> None:
-        # doing the microtool update
-        super().set_parameters_from_vector(new_parameter_values)
-        self._dmipy_set_parameters(new_parameter_values)
+    def set_scaled_parameters(self, new_parameter_values: np.ndarray) -> None:
+        super().set_scaled_parameters(new_parameter_values)
 
-    def set_fit_parameters(self, new_values: Union[np.ndarray, dict]) -> None:
-        super().set_fit_parameters(new_values)
-        # Also we need to set the parameters on the dmipy model for the signal simulation to work
-        full_vector = self.parameter_vector
-        full_vector[self.include_fit] = new_values
-        # idee: maak een volledige vector waarbij de oude waarden gekopieerd worden voor dit object.
-        self._dmipy_set_parameters(full_vector[:-self._model.N_models])
+        k = 0
+        for model, model_name in zip(self._model.models, self._model.model_names):
+            for parameter_name in model.parameter_names:
+                par_size = model.parameter_cardinality[parameter_name]
+                setattr(model, parameter_name,
+                        new_parameter_values[k:(k + par_size)] * model.parameter_scales[parameter_name])
+                k += par_size
+
+    def set_scaled_fit_parameters(self, new_values: np.ndarray) -> None:
+        super().set_scaled_fit_parameters(new_values)
+
+        j = 0
+        k = 0
+        for model, model_name in zip(self._model.models, self._model.model_names):
+            for parameter_name in model.parameter_names:
+                par_size = model.parameter_cardinality[parameter_name]
+                if self.include_fit[k]:
+                    value = new_values[j:(j + par_size)]
+                    if value.size == 0:
+                        raise ValueError("Insufficient parameters in vector")
+                    setattr(model, parameter_name, value * model.parameter_scales[parameter_name])
+                    j += par_size
+                k += par_size
 
     def fit(self, scheme: DiffusionAcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedDmipyModel:
         dmipy_scheme = convert_diffusion_scheme2dmipy_scheme(scheme)
@@ -243,20 +257,6 @@ class DmipyMultiTissueModel(TissueModel):
         for name, value in parameters.items():
             if name in self._model.parameter_names:
                 self._model.set_initial_guess_parameter(name, value)
-
-    def _dmipy_set_parameters(self, vector: np.ndarray) -> None:
-        """
-        Sets the correct value for the dmipy parameters on the underlying dmipy model
-
-        :param vector: the vector of the dmipy parameters only!
-        :return: nothing
-        """
-        k = 0
-        for model, model_name in zip(self._model.models, self._model.model_names):
-            for parameter_name in model.parameter_names:
-                par_size = model.parameter_cardinality[parameter_name]
-                setattr(model, parameter_name, vector[k:(k + par_size)])
-                k += par_size
 
     def _dmipy_fix_parameters(self, fix_parameter: str, fix_value: float) -> None:
         """

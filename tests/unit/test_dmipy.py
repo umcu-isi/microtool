@@ -79,9 +79,9 @@ class TestFractions:
 
     def test_jacobian(self):
         # Check if the Jacobian of the multi-tissue model matches the scaled Jacobians of the single-tissue models.
-        jac1 = self.model1.jacobian(self.scheme)
-        jac2 = self.model2.jacobian(self.scheme)
-        jac12 = self.model12.jacobian(self.scheme)
+        jac1 = self.model1.scaled_jacobian(self.scheme)
+        jac2 = self.model2.scaled_jacobian(self.scheme)
+        jac12 = self.model12.scaled_jacobian(self.scheme)
         assert jac12[:, :3] == pytest.approx(self.vf1 * jac1, rel=1e-6)
         assert jac12[:, 3:6] == pytest.approx(self.vf2 * jac2, rel=1e-6)
 

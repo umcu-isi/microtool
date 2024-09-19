@@ -59,9 +59,7 @@ class TestB_val_PulseRelation:
                     
         computed_b = b_val_from_delta_Delta(self.delta, self.Delta, self.G_magnitude, self.scanner_parameters)
         assert np.allclose(computed_b, self.expected_b, atol=1e3)
-        assert computed_b.units == self.expected_b.units
 
         computed_b_old = compute_b_values(self.G_magnitude, self.Delta, self.delta,
                                           scanner_parameters=self.scanner_parameters)
         assert np.allclose(computed_b_old, computed_b, rtol=1e-6)
-        assert computed_b_old.units == self.expected_b.units

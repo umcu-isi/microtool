@@ -54,10 +54,10 @@ def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> Dict[str, 
     # Create a MISST acquisition scheme.
     return {
         'pulseseq': 'PGSE',  # Standard pulsed-gradient spin-echo. TODO: support more through DiffusionAcquisitionScheme
-        'G': double((scheme.pulse_magnitude * 1e-3).tolist()),  # Convert from mT/m to T/m.
+        'G': double((scheme.pulse_magnitude * 1e-3).tolist()),  # Convert from [mT/m] to [mT/mm].
         'grad_dirs': double(scheme.b_vectors.tolist()),
-        'smalldel': double((scheme.pulse_widths * 1e-3).tolist()),  # Convert from ms to s.
-        'delta': double((scheme.pulse_intervals * 1e-3).tolist()),  # Convert from ms to s.
+        'smalldel': double(scheme.pulse_widths.tolist()),  # [s]
+        'delta': double(scheme.pulse_intervals.tolist()),  # [s]
         'tau': 1e-4,  # Time interval for waveform discretization in seconds.
     }
 
@@ -95,7 +95,7 @@ class MisstTissueModel(TissueModel):
         s0 = self['S0'].value
         return s0 * np.array(engine.SynthMeas(self._model, protocol)).ravel()
 
-    def jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+    def scaled_jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         engine = _get_matlab_engine()
         misst_scheme = convert_acquisition_scheme(scheme)
 
@@ -117,6 +117,7 @@ class MisstTissueModel(TissueModel):
         signal, jac = engine.SynthMeas(self._model, protocol, nargout=2)
 
         # Add the derivative to S0 (the signal itself).
+        # Note: parameter scales are all 1.0
         return np.concatenate([s0 * np.array(jac), signal], axis=1)[:, self.include_optimize]
 
     # TODO: Implement fit method

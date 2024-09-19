@@ -255,13 +255,13 @@ def warn_early_termination(result: OptimizeResult):
 def check_ill_conditioned(loss_value: float):
     if loss_value == ILL_LOSS:
         raise RuntimeError(
-            "Initial AcquisitionScheme error: the initial acquisition scheme results in ill conditioned fisher "
+            "Initial AcquisitionScheme error: the initial acquisition scheme results in an ill conditioned Fisher "
             "information matrix, possibly due to model degeneracy. "
             "Try a different initial AcquisitionScheme, or alternatively simplify your TissueModel.")
 
 
 def check_insensitive(scheme: AcquisitionScheme, model: TissueModel):
-    jac = model.jacobian(scheme)
+    jac = model.scaled_jacobian(scheme)
     # the parameters we included for optimization but to which the signal is insensitive
     # (jac is signal derivative for all parameters)
     insensitive_parameters = np.all(jac == 0, axis=0)

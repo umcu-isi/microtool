@@ -39,7 +39,7 @@ class AnalyticBall(DmipyMultiTissueModel):
         model = G1Ball(lambda_iso)
         super().__init__(model)
 
-    def jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+    def scaled_jacobian_analytic(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         bvals = copy(scheme.b_values) * (1000 * unit('mm/m'))**2  # convert to SI units
 
         s0 = self[BASE_SIGNAL_KEY].value
@@ -50,7 +50,10 @@ class AnalyticBall(DmipyMultiTissueModel):
         s_diso = -bvals * s
 
         # d S / d D_iso , d S / d S_0
-        jac = np.array([s_diso, s]).T
+        jac = np.array([
+            s_diso * self['G1Ball_1_lambda_iso'].scale,
+            s * self[BASE_SIGNAL_KEY].scale]
+        ).T
         return jac[:, self.include_optimize]
 
 
@@ -94,8 +97,8 @@ class TestModelSchemeIntegration:
         dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
         mt_scheme = convert_dmipy_scheme2diffusion_scheme(dmipy_scheme)
 
-        jac_analytic = analytic_ball.jacobian_analytic(mt_scheme)
-        jac_numeric = analytic_ball.jacobian(mt_scheme)
+        jac_analytic = analytic_ball.scaled_jacobian_analytic(mt_scheme)
+        jac_numeric = analytic_ball.scaled_jacobian(mt_scheme)
         # There are some rounding errors but we can reach a relative tolerance 1e-5 which should be enough.
         np.testing.assert_allclose(jac_numeric, jac_analytic, rtol=1e-5)
 
