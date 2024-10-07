@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, List, Sequence
 
 import numpy as np
 from numba import njit
@@ -94,7 +94,92 @@ def largest_real_cbrt(a2: Union[float, np.ndarray], a1: Union[float, np.ndarray]
 
     # we consider numbers real if imaginary part is zero to some tolerance.
     real_roots = np.isclose(roots.imag, np.zeros(roots.shape))
-    roots[~real_roots] = -np.nan
+    roots[~real_roots] = np.nan
     largest_real_roots = np.nanmax(roots.real, axis=0)
 
     return largest_real_roots
+
+
+def real_cbrt(a2: Union[float, np.ndarray], a1: Union[float, np.ndarray], a0: Union[float, np.ndarray]) -> \
+        np.ndarray:
+    """
+    Returns the real root of the cubic equation x³ + a2 * x² + a1 * x + a0 = 0, assuming that there is only one real
+     root.
+
+    See https://mathworld.wolfram.com/CubicFormula.html for details on solving the cubic analytically.
+
+    :param a2: Coefficient(s) of the quadratic term
+    :param a1: Coefficient(s) of the linear term
+    :param a0: Constant(s)
+    :return: The real root or NaN if there is no solution.
+    """
+    q = (3 * a1 - a2 ** 2) / 9
+    r = (9 * a2 * a1 - 27 * a0 - 2 * a2 ** 3) / 54
+    sqrt_d = np.sqrt(q ** 3 + r ** 2 + 0j)  # adding 0j to allow for computation with complex numbers
+    s = (r + sqrt_d) ** (1 / 3)
+    t = (r - sqrt_d) ** (1 / 3)
+
+    root = -(1 / 3) * a2 + s + t
+
+    # We consider numbers real if imaginary part is zero to some tolerance.
+    real = np.isclose(root.imag, np.zeros_like(root))
+    root = np.where(real, root.real, np.nan)
+
+    return root
+
+
+def eval_polynomial(c: List[Union[float, np.ndarray]], x: Union[float, np.ndarray]):
+    """
+    Evaluates the polynomial y = c[0] + c[1] x + c[2] x² + ...
+
+     :param c: List of coefficients or coefficient vectors.
+     :param x: x
+     :return: y
+    """
+    y = None
+    for i, coefficients in enumerate(c):
+        if coefficients is not None:
+            if y is None:
+                y = coefficients * x**i
+            else:
+                y += coefficients * x**i
+
+    return y
+
+
+def newton_polynomial_root(c: List[Union[float, np.ndarray]],
+                           x0: Union[float, np.ndarray],
+                           n: int = 8) -> np.ndarray:
+    """
+    Uses Newton's method to find a root of a polynomial with coefficients c, starting at x = x0:
+     0 = c[0] + c[1] x + c[2] x² + ...
+
+     :param c: List of coefficients or coefficient vectors. Use None instead of 0 to exclude a term.
+     :param x0: Initial guess.
+     :param n: Number of iterations.
+     :return: Result of Newton's method after n iterations.
+    """
+    # Calculate the coefficients for the derivative of the polynomial.
+    d = [None if x is None else i * x for i, x in enumerate(c[1:], 1)]
+
+    x = x0 * np.array([1.])  # Make sure x is an array (without casting, which would make the tests fail).
+    for _ in range(n):
+        y = eval_polynomial(c, x)
+        dy = eval_polynomial(d, x)
+        nonzero = dy != 0
+        x[nonzero] -= y[nonzero] / dy[nonzero]
+
+    return x
+
+
+def random_uniform(lower_bound: float = 0, upper_bound: float = 1, size: Union[int, Sequence] = 1) -> np.ndarray:
+    """
+    A pint-compatible version of np.random.uniform. Allows us to generate random numbers with units during testing.
+
+     :param lower_bound: Lower bound of the uniform distribution.
+     :param upper_bound: Upper bound of the uniform distribution.
+     :param size: Size of each dimension.
+     :return: Array of random numbers.
+    """
+    shape = (size,) if isinstance(size, int) else size
+    return lower_bound + np.random.rand(*shape) * (upper_bound - lower_bound)

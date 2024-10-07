@@ -18,7 +18,7 @@ def test_scheme_conversion():
     # going over all attributes that are python native or numpy native and asserting equality
     # Standard acquisition scheme from dmipy.data
     dmipy_scheme = saved_acquisition_schemes.wu_minn_hcp_acquisition_scheme()
-    # Micrtool scheme wrapper
+    # Microtool scheme wrapper
     microtool_scheme = convert_dmipy_scheme2diffusion_scheme(dmipy_scheme)
     # Microtool scheme converter
     converted_microtool_scheme = convert_diffusion_scheme2dmipy_scheme(microtool_scheme)

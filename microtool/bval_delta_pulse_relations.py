@@ -2,8 +2,9 @@ from typing import Tuple
 
 import numpy as np
 
+from .pulse_relations import b_value_from_diffusion_pulse, diffusion_pulse_from_echo_time
 from .scanner_parameters import ScannerParameters
-from .constants import GAMMA, B_VAL_UB
+from .constants import B_VAL_UB
 
 
 def constrained_dependencies(dependency: list, parameters: dict, scanner_parameters: ScannerParameters):
@@ -18,19 +19,19 @@ def constrained_dependencies(dependency: list, parameters: dict, scanner_paramet
     # Based on B-Value dependency uniquely
     if 'DiffusionPulseDuration' not in dependency or 'DiffusionPulseInterval' not in dependency:
         # Constrain b-values to TE. This computation is based on maximal G.
-        pulse_duration, pulse_interval = diffusion_pulse_from_echotime(parameters['echo_times'], scanner_parameters)
-        b_from_te = b_value_from_diffusion_pulse(pulse_duration, pulse_interval, scanner_parameters.g_max,
-                                                 scanner_parameters)
+        pulse_duration, pulse_interval, pulse_magnitude = diffusion_pulse_from_echo_time(
+            parameters['echo_times'], scanner_parameters)
+        b_from_te = b_value_from_diffusion_pulse(pulse_duration, pulse_interval, pulse_magnitude, scanner_parameters)
         constraints &= parameters['b_values'] < b_from_te
 
     else:
         # Constrain deltas to TE.
         # In this case deltas are optimize and used directly to compute b_val.
 
-        pulse_duration_from_te, pulse_interval_from_te = diffusion_pulse_from_echotime(parameters['echo_times'],
-                                                                                       scanner_parameters)
-        constraints &= parameters['pulse_durations'] < pulse_duration_from_te
-        constraints &= parameters['pulse_intervals'] < pulse_interval_from_te
+        pulse_duration, pulse_interval, pulse_magnitude = diffusion_pulse_from_echo_time(
+            parameters['echo_times'], scanner_parameters)
+        constraints &= parameters['pulse_durations'] < pulse_duration
+        constraints &= parameters['pulse_intervals'] < pulse_interval
 
         b_values = b_value_from_diffusion_pulse(parameters['pulse_durations'],
                                                 parameters['pulse_intervals'],
@@ -55,26 +56,27 @@ def diffusion_pulse_from_echotime(echo_times: np.array,
         tau1 = 0.5 * t90
         tau2 = tau1
         
-    t_ramp = scanner_parameters.g_max / scanner_parameters.s_max
+    t_rise = scanner_parameters.g_max / scanner_parameters.s_max
         
-    pulse_durations = echo_times / 2 - t180 / 2 - tau1 - t_ramp
-    pulse_intervals = pulse_durations + t_ramp + t180 + tau2          
+    pulse_durations = echo_times / 2 - t180 / 2 - tau1 - t_rise
+    pulse_intervals = pulse_durations + t_rise + t180 + tau2          
     
     return pulse_durations, pulse_intervals
 
 
-# TODO: the same as compute_b_values?
-def b_value_from_diffusion_pulse(pulse_duration, pulse_interval, pulse_magnitude,
-                                 scanner_parameters: ScannerParameters) -> np.array:
-    g_max = scanner_parameters.g_max
-    s_max = scanner_parameters.s_max
-    
-    t_ramp = g_max / s_max
-
-    b_vals = GAMMA**2 * pulse_magnitude**2 * (
-            pulse_duration**2 * (pulse_interval - pulse_duration / 3) +
-            (t_ramp**3) / 30 -
-            (pulse_duration * t_ramp**2) / 6
-    )
-
-    return b_vals
+# # TODO: the same as compute_b_values?
+# # TODO: use pulse_magnitude instead of g_max?
+# def b_value_from_diffusion_pulse(pulse_duration, pulse_interval, pulse_magnitude,
+#                                  scanner_parameters: ScannerParameters) -> np.array:
+#     g_max = scanner_parameters.g_max
+#     s_max = scanner_parameters.s_max
+#
+#     t_rise = g_max / s_max
+#
+#     b_vals = GAMMA**2 * pulse_magnitude**2 * (
+#             pulse_duration**2 * (pulse_interval - pulse_duration / 3) +
+#             (t_rise**3) / 30 -
+#             (pulse_duration * t_rise**2) / 6
+#     )
+#
+#     return b_vals

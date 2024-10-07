@@ -23,7 +23,7 @@ class TestDiffusionAcquisitionSchemeConstruction:
         4.e-3 * unit('s'),
         14.e-3 * unit('s'),
         400e-3 * unit('mT/mm'),
-        np.inf * unit('mT/mm/s'))
+        1300 * unit('mT/mm/s'))
 
     def test_default_constructor(self):
         """

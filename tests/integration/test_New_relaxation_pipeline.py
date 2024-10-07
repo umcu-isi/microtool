@@ -45,7 +45,10 @@ initial_scheme["EchoTime"].fixed = True
 
 from microtool.optimize import optimize_scheme
 
-optimal_scheme, _ = optimize_scheme(initial_scheme, model, noise_variance=0.02, method="trust-constr", 
+# TODO: Initial AcquisitionScheme error: the initial acquisition scheme results in an ill conditioned Fisher information
+#  matrix, possibly due to model degeneracy. Try a different initial AcquisitionScheme, or alternatively simplify your
+#  TissueModel.
+optimal_scheme, _ = optimize_scheme(initial_scheme, model, noise_variance=0.02, method="trust-constr",
                                     solver_options={"verbose": 2, "maxiter": 10})
 
 

@@ -1,13 +1,14 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 from dmipy.signal_models.gaussian_models import G2Zeppelin
-from microtool.dmipy import DmipyMultiTissueModel
 
+from microtool.dmipy import DmipyMultiTissueModel
 from microtool.acquisition_scheme import DiffusionAcquisitionSchemeBValue
 from microtool.optimize.optimize import iterative_shell_optimization
+from microtool.pulse_relations import diffusion_pulse_from_echo_time, b_value_from_diffusion_pulse
 from microtool.scanner_parameters import default_scanner
 from microtool.tissue_model import RelaxationTissueModel
-
+from microtool.utils.unit_registry import unit
 
 model_dmipy = G2Zeppelin(mu=[0.5, 0.5], lambda_par=0.5e-09, lambda_perp=0.2e-09)
 
@@ -18,7 +19,7 @@ model._dmipy_fix_parameters('G2Zeppelin_1_lambda_perp', 0.2e-09)
 
 # TODO: The comment says T2 in s, but the docstring reads T2: Transverse relaxation time constant T2 in milliseconds.
 #  Which one is correct?
-model_relaxed = RelaxationTissueModel(model, T2=0.020)  # T2 in s, 20 ms in MATLAB
+model_relaxed = RelaxationTissueModel(model, t2=0.020 * unit('s'))  # T2 in s, 20 ms in MATLAB
 
 n_shells = 4
 n_directions = 15
@@ -43,27 +44,22 @@ optimal_scheme = iterative_shell_optimization(
 )
 
 
-#PLOT RESULTS --------------------------------------------------------------------
-
-import matplotlib.pyplot as plt
+# PLOT RESULTS --------------------------------------------------------------------
 
 b_vals_optimal = optimal_scheme.b_values 
 echo_times_optimal = optimal_scheme.echo_times
 
-from microtool.utils.solve_echo_time import New_minimal_echo_time
-from microtool.bval_delta_pulse_relations import diffusion_pulse_from_echotime, b_value_from_diffusion_pulse
-
 scanner_parameters = default_scanner
-minTE = New_minimal_echo_time(scanner_parameters)
-maxTE = 0.05  # Maximum TE
-step = 0.001  # Step size
+minTE = max(2 * scanner_parameters.t_half, scanner_parameters.t_90) + scanner_parameters.t_180
+maxTE = 0.05 * unit('s')  # Maximum TE
+step = 0.001 * unit('s')  # Step size
 TEs = np.arange(minTE, maxTE, step)
-pulse_duration, pulse_interval = diffusion_pulse_from_echotime(TEs, scanner_parameters)
-bs = b_value_from_diffusion_pulse(pulse_duration, pulse_interval, scanner_parameters.g_max, scanner_parameters)
+pulse_duration, pulse_interval, pulse_magnitude = diffusion_pulse_from_echo_time(TEs, scanner_parameters)
+bs = b_value_from_diffusion_pulse(pulse_duration, pulse_interval, pulse_magnitude, scanner_parameters)
 
 plt.figure()
 # Scatter plot of xall_(:,2) vs xall_(:,1)
-plt.scatter(echo_times_optimal, b_vals_optimal, color='red') #Optimal scheme
+plt.scatter(echo_times_optimal, b_vals_optimal, color='red')  # Optimal scheme
 # Plot b-values
 plt.plot(TEs, bs)
 

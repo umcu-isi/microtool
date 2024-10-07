@@ -5,6 +5,7 @@ import numpy as np
 
 
 class Identity:
+    # A dummy class that allows multiplication and division, in which it behaves like 1.
     def __mul__(self, other):
         return other
 
@@ -35,7 +36,7 @@ if "pytest" in sys.modules:
     unit.define('radian = [radian] = rad')
 
     def cast_to_ndarray(x: Any, unit_str: str = 'dimensionless') -> np.ndarray:
-        # Check if the array is dimensionless before casting it to a numpy array.
+        # Check if the array has the proper units before casting it to a numpy array.
         if isinstance(x, unit.Quantity) and x.units != unit(unit_str):
             raise ValueError(f"Casted array has units '{x.units}', but expected '{unit_str}'")
         elif isinstance(x, (list, tuple)):

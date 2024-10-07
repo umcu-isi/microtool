@@ -20,8 +20,8 @@ from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differen
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
-    ReducedDiffusionScheme, DiffusionAcquisitionScheme, DiffusionAcquisitionScheme_bval_dependency, \
-    DiffusionAcquisitionScheme_delta_dependency
+    ReducedDiffusionScheme, DiffusionAcquisitionScheme, DiffusionAcquisitionSchemeBValue, \
+    DiffusionAcquisitionSchemeDelta
 from .constants import VOLUME_FRACTION_PREFIX, MODEL_PREFIX, BASE_SIGNAL_KEY, T2_KEY, T1_KEY, \
     DIFFUSIVITY_KEY, RELAXATION_BOUNDS, ConstraintTypes
 from .utils.unit_registry import unit, cast_to_ndarray
@@ -486,8 +486,8 @@ class RelaxationTissueModel(TissueModel):
             model_signal = self._model(scheme)
      
         if isinstance(scheme, (DiffusionAcquisitionScheme, 
-                               DiffusionAcquisitionScheme_bval_dependency, 
-                               DiffusionAcquisitionScheme_delta_dependency)):
+                               DiffusionAcquisitionSchemeBValue, 
+                               DiffusionAcquisitionSchemeDelta)):
             te = scheme.echo_times  # [s]
             t2 = self[T2_KEY].value
             te_t2 = np.exp(- te / t2)

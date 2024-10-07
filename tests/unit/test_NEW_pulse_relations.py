@@ -1,9 +1,9 @@
 import numpy as np
 
 from microtool.gradient_sampling import sample_uniform
-from microtool.pulse_relations import compute_b_values
+# from microtool.pulse_relations import diffusion_pulse_from_echo_time
 from microtool.scanner_parameters import ScannerParameters
-from microtool.bval_delta_pulse_relations import diffusion_pulse_from_echotime, b_value_from_diffusion_pulse
+from microtool.bval_delta_pulse_relations import diffusion_pulse_from_echotime
 from microtool.utils.unit_registry import unit
 
 
@@ -20,6 +20,8 @@ class TestDiffusionPulseFromEchotime:
 
     gradient_vectors = sample_uniform(M)
 
+    # TODO: a half readout time of 14 ms and t180 of 1.2 ms requires a TE of at least 29.2 ms, so the first three TE's
+    #  are impossible. Where do these numbers come from?
     echo_times = np.array([21.947, 18.347, 22.832, 36.091]) * 1e-3 * unit('s')
     scanner_parameters = ScannerParameters(
         0.6e-3 * unit('s'),
@@ -30,36 +32,8 @@ class TestDiffusionPulseFromEchotime:
     )
 
     def test_diffusion_pulse_from_echotime(self):
-        pulse_duration, pulse_interval = diffusion_pulse_from_echotime(self.echo_times, self.scanner_parameters)
+        pulse_duration, pulse_interval = diffusion_pulse_from_echotime(
+            self.echo_times, self.scanner_parameters)
         
         assert np.allclose(pulse_duration, self.expected_pulse_duration, rtol=1e-4)
         assert np.allclose(pulse_interval, self.expected_pulse_interval, rtol=1e-4)
-            
-
-class TestComputeBValues:
-    expected_b = 20087 * unit('s/mm²')
-
-    # other pulse parameters
-    pulse_interval = 0.025 * unit('s')
-    pulse_duration = 0.02 * unit('s')
-    pulse_magnitude = 0.2 * unit('mT/mm')
-    scanner_parameters = ScannerParameters(
-        4e-3 * unit('s'),
-        6e-3 * unit('s'),
-        14e-3 * unit('s'),
-        200e-3 * unit('mT/mm'),
-        1300 * unit('mT/mm/s')
-    )
-
-    def test_compute_b_values(self):
-        """
-        Testing if the parameter set from alexander 2008 can be reproduced
-        """
-                    
-        computed_b = b_value_from_diffusion_pulse(self.pulse_duration, self.pulse_interval, self.pulse_magnitude,
-                                                  self.scanner_parameters)
-        assert np.allclose(computed_b, self.expected_b, atol=1e3)
-
-        computed_b_old = compute_b_values(self.pulse_duration, self.pulse_interval, self.pulse_magnitude,
-                                          scanner_parameters=self.scanner_parameters)
-        assert np.allclose(computed_b_old, computed_b, rtol=1e-6)

@@ -86,9 +86,9 @@ def ir_scheme_repeated_parameters(n_pulses: int) -> InversionRecoveryAcquisition
     :param n_pulses:
     :return: A not so decent IR acquisition scheme
     """
-    tr = np.repeat(500, n_pulses) * unit('s')
-    te = np.repeat(20, n_pulses) * unit('s')
-    ti = np.repeat(400, n_pulses) * unit('s')
+    tr = np.repeat(0.5, n_pulses) * unit('s')
+    te = np.repeat(0.02, n_pulses) * unit('s')
+    ti = np.repeat(0.4, n_pulses) * unit('s')
     return InversionRecoveryAcquisitionScheme(tr, te, ti)
 
 
@@ -99,9 +99,9 @@ def ir_scheme_increasing_parameters(n_pulses: int) -> InversionRecoveryAcquisiti
     :param n_pulses:
     :return: A decent IR acquisition scheme
     """
-    tr = np.repeat(500, n_pulses) * unit('s')
-    te = np.linspace(10, 20, n_pulses) * unit('s')
-    ti = np.linspace(50, 400, n_pulses) * unit('s')
+    tr = np.repeat(0.5, n_pulses) * unit('s')
+    te = np.linspace(0.01, 0.02, n_pulses) * unit('s')
+    ti = np.linspace(0.05, 0.4, n_pulses) * unit('s')
     return InversionRecoveryAcquisitionScheme(tr, te, ti)
 
 

@@ -19,9 +19,9 @@ def New_minimal_echo_time(scanner_parameters: ScannerParameters):
     t180 = scanner_parameters.t_180
     s_max = scanner_parameters.s_max
     
-    t_ramp = g_max / s_max  # ramp time
+    t_rise = g_max / s_max  # rise time
     
-    te_min = t90 + t180 + 4 * t_ramp
+    te_min = t90 + t180 + 4 * t_rise
 
     return te_min
 
@@ -48,10 +48,13 @@ def minimal_echo_time(b, scanner_parameters: ScannerParameters):
 
 
 def echo_time(pulse_duration, b, scanner_parameters: ScannerParameters):
+    # TODO: This function assumes G = Gmax, which is not always the case.
+
     # extracting the scan parameters
     g_max = scanner_parameters.g_max
-    t_rise = scanner_parameters.t_rise
+    t_rise = scanner_parameters.t_rise_max
     t90 = scanner_parameters.t_90
+    t180 = scanner_parameters.t_180
     t_half = scanner_parameters.t_half
 
     # surrogate parameter for readability
@@ -59,13 +62,19 @@ def echo_time(pulse_duration, b, scanner_parameters: ScannerParameters):
 
     pulse_interval = ((1 / pulse_duration ** 2) * (b_g - (1 / 30) * t_rise ** 3) +
                       pulse_duration / 3 + (1 / (6 * pulse_duration)) * t_rise ** 2)
-    return 0.5 * t90 + pulse_interval + pulse_duration + t_rise + t_half
+    #return 0.5 * t90 + pulse_interval + pulse_duration + t_rise + t_half  # TODO: Does t_90 affect the echo time?
+
+    # The echo time is limited by the pulse interval (long interval) or by the readout time (short interval).
+    te_interval = t90 / 2 + pulse_interval + pulse_duration + t_rise + t_half
+    te_readout = 2 * (t180 / 2 + pulse_duration + t_rise + t_half)
+
+    return np.maximum(te_interval, te_readout)
 
 
 def compute_delta_max(b, scanner_parameters: ScannerParameters):
     t180 = scanner_parameters.t_180
     t90 = scanner_parameters.t_90
-    t_rise = scanner_parameters.t_rise
+    t_rise = scanner_parameters.t_rise_max
     t_half = scanner_parameters.t_half
     g_max = scanner_parameters.g_max
 

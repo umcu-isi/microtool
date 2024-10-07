@@ -168,8 +168,8 @@ def compute_crlb(scheme: AcquisitionScheme,
     :param loss: The loss function
     :return: The loss value associated with this model and scheme
     """
-    jac = np.array(model.scaled_jacobian(scheme), copy=False)
-    signal = np.array(model(scheme), copy=False)
+    jac = cast_to_ndarray(model.scaled_jacobian(scheme))  # Make sure the result is a dimensionless numpy array.
+    signal = cast_to_ndarray(model(scheme))  # Make sure the result is a dimensionless numpy array.
     return loss.crlb(jac, signal, noise_var)
 
 
