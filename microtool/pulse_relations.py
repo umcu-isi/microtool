@@ -39,7 +39,8 @@ def pulse_magnitude_from_b_value(b: np.ndarray, pulse_duration: np.ndarray, puls
     c4 = - GAMMA ** 2 * pulse_duration / (6 * s_max ** 2)  # [Eq 5]
     c2 = (GAMMA * pulse_duration) ** 2 * (pulse_interval - pulse_duration / 3)  # [Eq 4]
     c0 = -b
-    x0 = np.nan_to_num(np.sqrt((np.sqrt(c2 ** 2 + 4 * c4 * b) - c2) / (2 * c4)))  # Square root of [Eq 3]
+    x0 = np.nan_to_num(
+        np.sqrt((np.sqrt(c2 ** 2 + 4 * c4 * b) - c2) / (2 * c4)), nan=0)  # Square root of [Eq 3]. x0 = 0 for δ = 0.
 
     pulse_magnitude = newton_polynomial_root([c0, None, c2, None, c4, c5], x0, n=3)  # 3 iterations are sufficient
 
@@ -162,13 +163,10 @@ def diffusion_pulse_from_b_value(b: np.ndarray, scanner_parameters: ScannerParam
         pulse_duration[invalid] = t_rise
         pulse_magnitude[invalid] = t_rise * s_max
 
-        # Calculate the pulse interval. Prevent division by t_rise = 0, in which case Δ = u.
-        zeros = t_rise == 0
-        t_rise[zeros] = u  # Dummy value, anything other than 0 is fine.
+        # Calculate the pulse interval.
         c = (b[invalid] / (GAMMA * t_rise * s_max) ** 2 - t_rise ** 3 / 30)  # [Eq 2]
-        interval = c / t_rise ** 2 + t_rise / 3 + t_rise ** 2 / (6 * t_rise)  # [Eq 1]
-        interval[zeros] = u  # Δ = u where t_rise = 0
-        pulse_interval[invalid] = interval
+        pulse_interval[invalid] = np.nan_to_num(
+            c / t_rise ** 2 + t_rise / 3 + t_rise ** 2 / (6 * t_rise), nan=u)  # [Eq 1], Δ = u for t_rise = 0
 
     return pulse_duration, pulse_interval, pulse_magnitude
 

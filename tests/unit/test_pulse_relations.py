@@ -61,7 +61,7 @@ def test_echo_time_too_short():
 
 def test_chained_pulse_relations():
     for g_max in np.array([0.01, 0.04, 0.4]) * unit('mT/mm'):  # Test different maximum gradient magnitudes.
-        for t_half in np.array([0.001, 0.014, 0.1]) * unit('s'):  # Test different half readout times (<> t_90).
+        for t_half in np.array([0.0005, 0.014, 0.1]) * unit('s'):  # Test different half readout times (<> t_90).
             for s_max in np.array([15, 150, 1500]) * unit('mT/mm/s'):  # Test different slew rates.
                 scanner_parameters = ScannerParameters(
                     t_90=4e-3 * unit('s'),
@@ -82,6 +82,12 @@ def test_chained_pulse_relations():
                 # Test if the computed b-values are as expected.
                 b = b_value_from_diffusion_pulse(pulse_duration, pulse_interval, pulse_magnitude, scanner_parameters)
                 assert np.allclose(b, b_init, rtol=1e-9)  # Default relative tolerance is 1e-5
+
+                # Test if the computed intervals are as expected.
+                incl = b_init > 0  # Exclude b=0
+                interval = pulse_interval_from_duration(
+                    pulse_duration[incl], pulse_magnitude[incl], b_init[incl], scanner_parameters)
+                assert np.allclose(interval, pulse_interval[incl], rtol=1e-9)  # Default relative tolerance is 1e-5
 
                 # Test if the computed magnitudes are as expected.
                 g = pulse_magnitude_from_b_value(b_init, pulse_duration, pulse_interval, scanner_parameters)
@@ -107,7 +113,6 @@ def test_chained_pulse_relations():
                 assert np.allclose(pulse_magnitude_te, pulse_magnitude, rtol=1e-9)  # Default relative tolerance is 1e-5
 
                 # Shorter pulse durations require longer intervals to reach the same b-value or they are impossible.
-                incl = b_init > 0  # Exclude b=0 in the next tests.
                 h = 1e-6  # Relative difference in pulse duration.
                 duration_other = (1 - h) * pulse_duration[incl]  # Slightly shorter duration
                 try:
@@ -126,6 +131,7 @@ def test_chained_pulse_relations():
                     assert np.allclose(b, b_init[incl], rtol=1e-9)  # Default relative tolerance is 1e-5
 
                 except ValueError:
+                    # It may happen that shorter pulse durations are impossible. This is expected.
                     pass
 
                 # Longer pulse durations require shorter intervals to reach the same b-value.
