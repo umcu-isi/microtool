@@ -9,8 +9,8 @@ from microtool.utils.unit_registry import unit
 
 
 scanner_parameters = ScannerParameters(
-    t_90=4e-3 * unit('s'),
-    t_180=6e-3 * unit('s'),
+    t_90=2e-3 * unit('s'),
+    t_180=4e-3 * unit('s'),
     t_half=14e-3 * unit('s'),
     g_max=200e-3 * unit('mT/mm'),  # From Alexander (2008), Table 1. [DOI: 10.1002/mrm.21646]
     s_max=1300 * unit('mT/mm/s'),  # typical is 1300 T/m/s (small bore)
@@ -36,14 +36,14 @@ def test_get_gradients():
     assert g.magnitude == pytest.approx(pulse_magnitude.magnitude, rel=1e-5)
 
 
-class TestDiffusionPulseFromEchotime:
-    expected_pulse_interval = np.array([18.0, 18.25, 26.0, 101.0]) * 1e-3 * unit('s')
-    expected_pulse_duration = np.array([0.0, 0.125, 7.84615, 82.84615]) * 1e-3 * unit('s')
+class TestDiffusionPulseFromEchoTime:
+    expected_pulse_interval = np.array([17.0, 17.25, 26.0, 101.0]) * 1e-3 * unit('s')
+    expected_pulse_duration = np.array([0.0, 0.125, 8.84615, 83.84615]) * 1e-3 * unit('s')
     expected_pulse_magnitude = np.array([0.0, 162.5, 200.0, 200.0]) * 1e-3 * unit('mT/mm')
 
-    echo_times = np.array([34.0, 34.5, 50.0, 200.0]) * 1e-3 * unit('s')
+    echo_times = np.array([32.0, 32.5, 50.0, 200.0]) * 1e-3 * unit('s')
 
-    def test_diffusion_pulse_from_echotime(self):
+    def test_diffusion_pulse_from_echo_time(self):
         pulse_duration, pulse_interval, pulse_magnitude = diffusion_pulse_from_echo_time(
             self.echo_times, scanner_parameters)
 
@@ -52,9 +52,9 @@ class TestDiffusionPulseFromEchotime:
         assert np.allclose(pulse_magnitude, self.expected_pulse_magnitude, rtol=1e-9)
 
 
-def test_echotime_too_short():
-    # 2×t_half + t_180 = 34 ms, so TE = 33 ms is impossible.
-    echo_times = np.array([33.0]) * 1e-3 * unit('s')
+def test_echo_time_too_short():
+    # 2×t_half + t_180 = 32 ms, so TE = 31 ms is impossible.
+    echo_times = np.array([31.0]) * 1e-3 * unit('s')
     with pytest.raises(ValueError):
         diffusion_pulse_from_echo_time(echo_times, scanner_parameters)
 
@@ -106,23 +106,27 @@ def test_chained_pulse_relations():
                 assert np.allclose(pulse_interval_te, pulse_interval, rtol=1e-9)  # Default relative tolerance is 1e-5
                 assert np.allclose(pulse_magnitude_te, pulse_magnitude, rtol=1e-9)  # Default relative tolerance is 1e-5
 
-                # Shorter pulse durations require longer intervals to reach the same b-value.
+                # Shorter pulse durations require longer intervals to reach the same b-value or they are impossible.
                 incl = b_init > 0  # Exclude b=0 in the next tests.
                 h = 1e-6  # Relative difference in pulse duration.
                 duration_other = (1 - h) * pulse_duration[incl]  # Slightly shorter duration
-                interval_other = pulse_interval_from_duration(duration_other, pulse_magnitude[incl], b_init[incl],
+                try:
+                    interval_other = pulse_interval_from_duration(duration_other, pulse_magnitude[incl], b_init[incl],
+                                                                  scanner_parameters)
+                    assert np.all((interval_other > pulse_interval[incl]))
+
+                    # Shorter (suboptimal) pulse durations result in longer echo times.
+                    te_other = echo_time_from_diffusion_pulse(duration_other, interval_other, pulse_magnitude[incl],
                                                               scanner_parameters)
-                assert np.all((interval_other > pulse_interval[incl]))
+                    assert np.all(te_other > te[incl])
 
-                # Shorter (suboptimal) pulse durations result in longer echo times.
-                te_other = echo_time_from_diffusion_pulse(duration_other, interval_other, pulse_magnitude[incl],
-                                                          scanner_parameters)
-                assert np.all(te_other > te[incl])
+                    # But the b-values should be the same.
+                    b = b_value_from_diffusion_pulse(duration_other, interval_other, pulse_magnitude[incl],
+                                                     scanner_parameters)
+                    assert np.allclose(b, b_init[incl], rtol=1e-9)  # Default relative tolerance is 1e-5
 
-                # But the b-values should be the same.
-                b = b_value_from_diffusion_pulse(duration_other, interval_other, pulse_magnitude[incl],
-                                                 scanner_parameters)
-                assert np.allclose(b, b_init[incl], rtol=1e-9)  # Default relative tolerance is 1e-5
+                except ValueError:
+                    pass
 
                 # Longer pulse durations require shorter intervals to reach the same b-value.
                 duration_other = (1 + h) * pulse_duration[incl]  # Slightly longer duration

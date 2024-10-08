@@ -7,6 +7,9 @@ from .scanner_parameters import ScannerParameters
 from .utils.math import real_cbrt, newton_polynomial_root
 
 
+EPSILON = 1 + 1e-12  # Δ and δ are multiplied by this value in sanity checks.
+
+
 def pulse_magnitude_from_b_value(b: np.ndarray, pulse_duration: np.ndarray, pulse_interval: np.ndarray,
                                  scanner_parameters: ScannerParameters) -> np.ndarray:
     """
@@ -36,11 +39,18 @@ def pulse_magnitude_from_b_value(b: np.ndarray, pulse_duration: np.ndarray, puls
     c4 = - GAMMA ** 2 * pulse_duration / (6 * s_max ** 2)  # [Eq 5]
     c2 = (GAMMA * pulse_duration) ** 2 * (pulse_interval - pulse_duration / 3)  # [Eq 4]
     c0 = -b
-    x0 = np.sqrt((np.sqrt(c2 ** 2 + 4 * c4 * b) - c2) / (2 * c4))  # Square root of [Eq 3]
+    x0 = np.nan_to_num(np.sqrt((np.sqrt(c2 ** 2 + 4 * c4 * b) - c2) / (2 * c4)))  # Square root of [Eq 3]
 
-    g = newton_polynomial_root([c0, None, c2, None, c4, c5], x0, n=3)  # 3 iterations give sufficient precision
+    pulse_magnitude = newton_polynomial_root([c0, None, c2, None, c4, c5], x0, n=3)  # 3 iterations are sufficient
 
-    return g
+    t_rise = pulse_magnitude / s_max
+
+    if np.any(EPSILON * pulse_duration < t_rise):
+        raise ValueError("Pulse duration shorter than rise time.")
+    if np.any(EPSILON * pulse_interval < pulse_duration + t_rise + scanner_parameters.t_180):
+        raise ValueError("b-value too low, pulse interval too short, or pulse duration too long.")
+
+    return pulse_magnitude
 
 
 def b_value_from_diffusion_pulse(pulse_duration: Union[np.ndarray, float],
@@ -57,6 +67,11 @@ def b_value_from_diffusion_pulse(pulse_duration: Union[np.ndarray, float],
     :return: b-values [s/mm²]
     """
     t_rise = pulse_magnitude / scanner_parameters.s_max
+
+    if np.any(EPSILON * pulse_duration < t_rise):
+        raise ValueError("Pulse duration shorter than rise time.")
+    if np.any(EPSILON * pulse_interval < pulse_duration + t_rise + scanner_parameters.t_180):
+        raise ValueError("Pulse interval too short or pulse duration too long.")
 
     # For trapezoidal gradient pulses, b = γ²G²(δ²(Δ − δ/3) + ξ³/30 − δ ξ²/6), where ξ is the rise time.
     # See the 'Advanced Discussion' on https://mriquestions.com/what-is-the-b-value.html
@@ -125,9 +140,7 @@ def diffusion_pulse_from_b_value(b: np.ndarray, scanner_parameters: ScannerParam
     # Identify solutions that violate the constraint δ >= ξ
     invalid = ~(pulse_duration >= t_rise)  # δ might be NaN, hence the ~(δ >= ξ) instead of (δ < ξ).
 
-    if any(invalid):
-        eps = 1e-12 * t_rise  # Epsilon to prevent division by zero.
-
+    if np.any(invalid):
         # Use δ = ξ, ξ = G / s_max (triangular pulse with maximum slew rate) and Δ(δ) = 2ξ + u to calculate the pulse
         # magnitude G resulting in b.
         # Solving b = γ²G²(δ²(Δ − δ/3) + ξ³/30 − δ ξ²/6) for ξ with those definitions gives a fifth order polynomial:
@@ -146,11 +159,16 @@ def diffusion_pulse_from_b_value(b: np.ndarray, scanner_parameters: ScannerParam
         x0 = (c0 / u) ** 0.25  # [Eq 7]
         t_rise = newton_polynomial_root([c0, None, None, None, c4, c5], x0, n=5)
 
-        t_rise += eps
-        c = (b[invalid] / (GAMMA * t_rise * s_max) ** 2 - t_rise ** 3 / 30)  # [Eq 2]
         pulse_duration[invalid] = t_rise
-        pulse_interval[invalid] = np.maximum(c / t_rise ** 2 + t_rise / 3 + t_rise ** 2 / (6 * t_rise), u)  # [Eq 1]
         pulse_magnitude[invalid] = t_rise * s_max
+
+        # Calculate the pulse interval. Prevent division by t_rise = 0, in which case Δ = u.
+        zeros = t_rise == 0
+        t_rise[zeros] = u  # Dummy value, anything other than 0 is fine.
+        c = (b[invalid] / (GAMMA * t_rise * s_max) ** 2 - t_rise ** 3 / 30)  # [Eq 2]
+        interval = c / t_rise ** 2 + t_rise / 3 + t_rise ** 2 / (6 * t_rise)  # [Eq 1]
+        interval[zeros] = u  # Δ = u where t_rise = 0
+        pulse_interval[invalid] = interval
 
     return pulse_duration, pulse_interval, pulse_magnitude
 
@@ -162,8 +180,17 @@ def pulse_interval_from_duration(pulse_duration: np.ndarray, pulse_magnitude: np
     #   [Eq 1]  Δ(δ) = c/δ² + δ/3 + 1/6 ξ²/δ , where
     #   [Eq 2]     c = b/(γG)² - ξ³/30
     t_rise = pulse_magnitude / scanner_parameters.s_max
+
+    if np.any(EPSILON * pulse_duration < t_rise):
+        raise ValueError("Pulse duration shorter than rise time.")
+
     c = (b / (GAMMA * pulse_magnitude) ** 2 - t_rise ** 3 / 30)  # [Eq 2]
-    return c / pulse_duration ** 2 + pulse_duration / 3 + t_rise ** 2 / (6 * pulse_duration)  # [Eq 1]
+    pulse_interval = c / pulse_duration ** 2 + pulse_duration / 3 + t_rise ** 2 / (6 * pulse_duration)  # [Eq 1]
+
+    if np.any(EPSILON * pulse_interval < pulse_duration + t_rise + scanner_parameters.t_180):
+        raise ValueError("Pulse duration too long or b-value too low.")
+
+    return pulse_interval
 
 
 def echo_time_from_diffusion_pulse(pulse_duration: np.ndarray, pulse_interval: np.ndarray, pulse_magnitude: np.ndarray,
@@ -182,6 +209,11 @@ def echo_time_from_diffusion_pulse(pulse_duration: np.ndarray, pulse_interval: n
     t_180 = scanner_parameters.t_180
     t_half = scanner_parameters.t_half
     t_rise = pulse_magnitude / scanner_parameters.s_max
+
+    if np.any(EPSILON * pulse_duration < t_rise):
+        raise ValueError("Pulse duration shorter than rise time.")
+    if np.any(EPSILON * pulse_interval < pulse_duration + t_rise + t_180):
+        raise ValueError("Pulse interval too short or pulse duration too long.")
 
     # The minimum echo time is either limited by the pulse interval (long interval) or by the pulse duration (short
     # interval).
@@ -243,13 +275,14 @@ def diffusion_pulse_from_echo_time(echo_time: np.ndarray, scanner_parameters: Sc
     # Identify durations that violate the constraint δ >= ξ
     invalid = ~(pulse_duration >= t_rise)  # δ might be NaN, hence the ~(δ >= ξ) instead of (δ < ξ).
 
-    if any(invalid):
+    if np.any(invalid):
         # Substituting δ = ξ in Eq 4 gives δ = (TE - u - t_half - t_90 / 2) / 4
-        pulse_duration[invalid] = 0.25 * (echo_time[invalid] - u - t_half - 0.5 * t_90)
+        # Due to floating point arithmetic, only TE - (u + t_half + t_90 / 2) equals 0 when TE = u + t_half + t_90 / 2.
+        pulse_duration[invalid] = 0.25 * (echo_time[invalid] - (u + t_half + 0.5 * t_90))
         pulse_interval[invalid] = 2 * pulse_duration[invalid] + u
         pulse_magnitude[invalid] = pulse_duration[invalid] * s_max
 
-    if any(pulse_duration < 0):
+    if np.any(pulse_duration < 0):
         # The echo time is less than max(2×t_half, t_90) + t_180, which is impossible.
         raise ValueError("Echo time too short.")
 

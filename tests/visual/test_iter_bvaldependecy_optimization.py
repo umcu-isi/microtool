@@ -17,8 +17,6 @@ model._dmipy_fix_parameters('G2Zeppelin_1_mu', [0.5, 0.5])
 model._dmipy_fix_parameters('G2Zeppelin_1_lambda_par', 0.5e-09)
 model._dmipy_fix_parameters('G2Zeppelin_1_lambda_perp', 0.2e-09)
 
-# TODO: The comment says T2 in s, but the docstring reads T2: Transverse relaxation time constant T2 in milliseconds.
-#  Which one is correct?
 model_relaxed = RelaxationTissueModel(model, t2=0.020 * unit('s'))  # T2 in s, 20 ms in MATLAB
 
 n_shells = 4
