@@ -1,4 +1,4 @@
-import sys
+import os
 from typing import Any
 
 import numpy as np
@@ -6,6 +6,13 @@ import numpy as np
 
 class Identity:
     # A dummy class that allows multiplication and division, in which it behaves like 1.
+    def __array_ufunc__(self, ufunc, _method, *inputs, **_kwargs):
+        # Support numpy array multiplication.
+        if ufunc == np.multiply:
+            return inputs[0]
+        else:
+            raise NotImplementedError
+
     def __mul__(self, other):
         return other
 
@@ -16,7 +23,7 @@ class Identity:
         return other
 
 
-if "pytest" in sys.modules:
+if os.environ.get('MICROTOOL_USE_UNITS') == '1':
     from pint import UnitRegistry
 
     # Create an empty UnitRegistry and add the units that we use explicitly.
