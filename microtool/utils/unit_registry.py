@@ -62,7 +62,7 @@ else:
         """
         return Identity()
 
-    def cast_to_ndarray(x, _unit_str: str = 'dimensionless'):
+    def cast_to_ndarray(x, unit_str: str = 'dimensionless'):
         """
         When pytest is loaded, this function will check if the argument has the proper units before (down)casting
          it to a numpy array.
