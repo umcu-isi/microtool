@@ -575,8 +575,7 @@ class ExponentialTissueModel(TissueModel):
 
         # the base signal
         s = s0 * np.exp(-te / t2)
-        # return np.array([-TE * S, 1]).T.
-        jac = cast_to_ndarray([(te / t2 ** 2) * self[T2_KEY].scale, s / s0 * self[BASE_SIGNAL_KEY].scale]).T
+        jac = cast_to_ndarray([s * te / t2**2 * self[T2_KEY].scale, s / s0 * self[BASE_SIGNAL_KEY].scale]).T
         return jac[:, self.include_optimize]
 
     def fit(self, scheme: EchoScheme, signal: np.ndarray, **fit_options) -> FittedModelCurveFit:
