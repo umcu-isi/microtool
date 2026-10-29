@@ -50,17 +50,62 @@ def set_misst_path(path: str):
         raise ValueError('The given path does not exist.')
 
 
-def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> Dict[str, Union[str, double, float]]:
-    # Create a MISST acquisition scheme.
-    return {
-        'pulseseq': 'PGSE',  # Standard pulsed-gradient spin-echo. TODO: support more through DiffusionAcquisitionScheme
-        'G': double((scheme.pulse_magnitude * 1e-3).tolist()),  # Convert from [mT/m] to [mT/mm].
-        'grad_dirs': double(scheme.b_vectors.tolist()),
-        'smalldel': double(scheme.pulse_durations.tolist()),  # [s]
-        'delta': double(scheme.pulse_intervals.tolist()),  # [s]
-        'tau': 1e-4,  # Time interval for waveform discretization in seconds.
+def convert_acquisition_scheme(scheme):
+    seq_name = scheme.name
+
+    g_vals = (
+        scheme["DiffusionPulseMagnitude"]
+        .values.astype(float).ravel().tolist()
+    )
+
+    smalldel_array = np.asarray(scheme.pulse_durations, dtype=float).ravel()
+    smalldel_vals = smalldel_array.tolist()
+
+    delta_vals = (
+        scheme["DiffusionPulseInterval"]
+        .values.astype(float).ravel().tolist()
+    )
+
+    grad_dirs = scheme.b_vectors.astype(float).tolist()
+
+    m_meas = len(g_vals)
+
+    protocol = {
+        "pulseseq": "TWOGSE" if seq_name == "OGSE" else seq_name,
+        "G": double(g_vals),
+        "grad_dirs": double(grad_dirs),
+        "smalldel": double(smalldel_vals),
+        "delta": double(delta_vals),
+        "tau": 1e-4,
     }
 
+    if seq_name == "OGSE":
+        # Derive frequency from N and pulse duration.
+        n_periods = np.asarray(scheme.n_periods, dtype=float).ravel()
+
+        if len(n_periods) != m_meas:
+            raise ValueError(
+                "n_periods must have one value per measurement."
+            )
+
+        if len(smalldel_array) != m_meas:
+            raise ValueError(
+                "pulse_durations must have one value per measurement."
+            )
+
+        # Avoid division by zero for b0 measurements.
+        freq = np.zeros(m_meas, dtype=float)
+        valid = smalldel_array > 0
+        freq[valid] = n_periods[valid] / smalldel_array[valid]
+
+        omega = 2.0 * np.pi * freq
+
+        protocol["omega"] = double(omega.tolist())
+        protocol["slew_rate"] = double([9200.0] * m_meas)
+        protocol["apodisedcos"] = 1
+        protocol["mirror"] = 0
+
+    return protocol
 
 class MisstTissueModel(TissueModel):
     def __init__(self, name: str, parameters: Dict[str, TissueParameter]):
