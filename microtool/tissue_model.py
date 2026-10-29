@@ -536,8 +536,28 @@ class RelaxationTissueModel(TissueModel):
                 warnings.warn("If T2 relaxation used for fitting, echo time should not be fixed.")
 
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
-        # TODO: Implement this?
-        raise NotImplementedError
+        if not isinstance(
+            scheme,
+            (
+                DiffusionAcquisitionScheme,
+                DiffusionAcquisitionSchemeBValue,
+                DiffusionAcquisitionSchemeDelta,
+            ),
+        ):
+            raise TypeError("RelaxationTissueModel.fit requires a diffusion acquisition scheme.")
+
+        signal = np.asarray(signal, dtype=float)
+        if signal.shape != scheme.echo_times.shape:
+            raise ValueError("signal must have one value for each measurement.")
+
+        # Undo the known factor exp(-TE/T2) before fitting the diffusion model.
+        decay = np.exp(-scheme.echo_times / self[T2_KEY].value)
+        if np.any(decay == 0):
+            raise ValueError("T2 attenuation underflowed to zero; the signal cannot be corrected.")
+
+        corrected_signal = signal / decay
+        #print("corrected_signal", corrected_signal)
+        return self._model.fit(scheme, corrected_signal, **fit_options)
 
 
 class ExponentialTissueModel(TissueModel):
