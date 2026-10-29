@@ -394,8 +394,8 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             # offset to prevent being to close to actual minimal echo times
             offset = 1e-6 * unit('s')
             echo_times = total_echo_time(self.scanner_parameters,
-                                    self.pulse_durations,
-                                    self.pulse_intervals)
+                                    pulse_durations,
+                                    pulse_intervals)
 
         # converting to np array of correct type
         gradient_directions = np.asarray(gradient_directions, dtype=np.float64)

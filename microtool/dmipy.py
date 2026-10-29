@@ -213,6 +213,13 @@ class DmipyMultiTissueModel(TissueModel):
 
     def set_scaled_parameters(self, new_parameter_values: np.ndarray) -> None:
         super().set_scaled_parameters(new_parameter_values)
+        
+        if self._model.N_models > 1:
+            vf_names = self._model.partial_volume_names
+            dependent_vf = vf_names[-1]
+            self[dependent_vf].value = 1.0 - sum(
+                self[name].value for name in vf_names[:-1]
+            )
 
         k = 0
         for model, model_name in zip(self._model.models, self._model.model_names):

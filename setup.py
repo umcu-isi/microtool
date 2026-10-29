@@ -13,7 +13,7 @@ setuptools.setup(
         "Operating System :: Microsoft :: Windows",
         "Development Status :: 3 - Alpha"
     ],
-    python_requires='==3.11.*',
+    python_requires='==3.8.*',
     install_requires=[
         'numpy~=1.24',
         'scipy~=1.9',
