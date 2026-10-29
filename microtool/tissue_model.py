@@ -534,6 +534,12 @@ class RelaxationTissueModel(TissueModel):
         else:
             if scheme['EchoTime'].fixed:
                 warnings.warn("If T2 relaxation used for fitting, echo time should not be fixed.")
+    
+    def set_scaled_parameters(self, new_parameter_values: Sequence[float]) -> None:
+        super().set_scaled_parameters(new_parameter_values)
+
+        # Push the updated wrapped-model parameters into dmipy itself.
+        self._model.set_scaled_parameters(self._model.scaled_parameter_vector)
 
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
         if not isinstance(
