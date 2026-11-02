@@ -36,6 +36,31 @@ def test_repeated_parameters():
     np.testing.assert_allclose(parameter.values, expected_value_array)
 
 
+def test_repeated_parameters_with_interleaved_fixed_measurements():
+    n_shells = 5
+    n_directions = 6
+    block_size = n_directions + 1
+    values = np.repeat(np.arange(n_shells, dtype=float), block_size)
+    b0_mask = np.arange(values.size) % block_size == 0
+    values[b0_mask] = 0.0
+    parameter = AcquisitionParameters(values=values, unit='mT/mm', scale=1.0)
+
+    parameter.set_fixed_mask(b0_mask)
+    parameter.set_repetition_period(n_directions)
+
+    expected_free_indices = np.arange(n_shells) * block_size + 1
+    np.testing.assert_array_equal(
+        np.flatnonzero(parameter.optimize_mask), expected_free_indices
+    )
+
+    parameter.free_values = np.arange(10.0, 10.0 + n_shells)
+    parameter.update_repeated_values()
+
+    expected_values = np.repeat(np.arange(10.0, 10.0 + n_shells), block_size)
+    expected_values[b0_mask] = 0.0
+    np.testing.assert_allclose(parameter.values, expected_values)
+
+
 class TestAcquisitionParameters:
     parameter = AcquisitionParameters(
         values=np.array([1., 2., 3.]), unit='m', scale=1.0

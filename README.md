@@ -27,12 +27,30 @@ Tissue model fitting to signal is computed through non-linear least-squares opti
 
 ## Installation
 
-MICROtool requires Python 3.8.
+MICROtool requires Python 3.11 or later.
 To install MICROtool in development-mode, run the following commands from this directory:
 
 ```shell
 pip install -r requirements.txt
 pip install -e .
+```
+
+To use the optional MicroTorch model wrapper, install the MicroTorch extra:
+
+```shell
+pip install -e ".[microtorch]"
+```
+
+Wrap a MicroTorch compartment or `ModelMaker` model with `MicrotorchTissueModel` to
+simulate it with a MICROtool diffusion acquisition scheme:
+
+```python
+from microtorch.signal_models.cylinder_models import Astrosticks
+from microtool.microtorch import MicrotorchTissueModel
+
+model = MicrotorchTissueModel(Astrosticks(fixed_D_par=1.7))
+# Pass a MICROtool DiffusionAcquisitionScheme to the wrapped model:
+# signal = model(acquisition_scheme)
 ```
 
 ## Testing

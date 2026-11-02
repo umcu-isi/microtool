@@ -55,6 +55,7 @@ class AcquisitionParameters:
         self._fixed = fixed
         self._optimize_mask = np.full(self.values.size, not self._fixed)
         self._repetition_period = 0
+        self._repetition_groups: Optional[np.ndarray] = None
 
         if ((self.lower_bound is not None and np.any(self.values < self.lower_bound)) or
                 (self.upper_bound is not None and np.any(self.values > self.upper_bound))):
@@ -124,37 +125,30 @@ class AcquisitionParameters:
 
         :param n: Length of the repeated sequence (period).
         """
-        n_total = np.sum(self.optimize_mask)
+        if n <= 0:
+            raise ValueError("The repetition period must be greater than zero.")
+
+        free_indices = np.flatnonzero(self.optimize_mask)
+        n_total = free_indices.size
         if n_total % n != 0:
             raise ValueError(
                 f"The repetition period ({n}) does not match with the number of free parameters ({n_total})")
         self._repetition_period = n
-
-        # Make a mask for the free parameters.
-        mask = np.zeros(shape=n_total, dtype=bool)
-        mask[::self._repetition_period] = True
-
-        # Apply the mask to the free parameters.
-        optimize_mask = self.optimize_mask
-        optimize_mask[self.optimize_mask] = mask
-        fixed_mask = np.logical_not(optimize_mask)
-
-        self.set_fixed_mask(fixed_mask)
+        self._repetition_groups = free_indices.reshape((-1, n))
+        self._optimize_mask = np.zeros_like(self._optimize_mask)
+        self._optimize_mask[self._repetition_groups[:, 0]] = True
+        self._fixed = not np.any(self._optimize_mask)
 
     def update_repeated_values(self):
         """
         Sets the parameter values from the first value after every repetition period, starting from the first free
         measurement.
         """
-        if self._repetition_period == 0:
+        if self._repetition_groups is None:
             return
 
-        period = self._repetition_period
-
-        # TODO: don't rely on argmax, but store the positions of the repeated parameters.
-        first_free_measurement = np.argmax(self.optimize_mask)
-        for i in range(first_free_measurement, len(self.values), period):
-            self.values[i + 1:i + period] = self.values[i]
+        for group in self._repetition_groups:
+            self.values[group[1:]] = self.values[group[0]]
 
 
 class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
@@ -410,7 +404,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             # TODO: Change DiffusionPulseMagnitude scale to 1000 or 10000?
             'DiffusionPulseMagnitude': AcquisitionParameters(
                 values=pulse_magnitudes, unit=GRADIENT_UNIT, scale=1. * unit('mT/mm'), symbol="|G|", lower_bound=0.0,
-                upper_bound=0.528 * unit('mT/mm')
+                upper_bound=0.065 * unit('mT/mm')
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -622,6 +616,21 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             )
 
             constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
+
+            def b_value_constraint_fun(x: np.ndarray):
+                self.set_scaled_free_parameter_vector(x)
+                # Only enforce on measurements that are intended to have diffusion weighting
+                non_b0_mask = self.b_values > 0
+                return self.b_values[non_b0_mask] / B_VAL_SCALE
+
+            # Match the bounds array shape to the sliced output
+            b_constraint = NonlinearConstraint(
+                b_value_constraint_fun,
+                lb=float(B_VAL_LB / B_VAL_SCALE),
+                ub=float(B_VAL_UB / B_VAL_SCALE),
+                keep_feasible=False  # Do not use keep_feasible=True with finite differences near boundaries
+            )
+            constraints["BValueWithinBounds"] = b_constraint
 
         return constraints
 
