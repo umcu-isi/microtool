@@ -269,7 +269,7 @@ def test_composition_rejects_negative_derived_fraction():
         wrapped.set_scaled_parameters(scaled_parameters)
 
 
-def test_composition_fit_evaluates_infeasible_optimizer_trials(install_microtorch):
+def test_composition_fit_keeps_optimizer_trials_feasible(install_microtorch):
     wrapped = MicrotorchTissueModel(
         DummyCompositeMicrotorchModel(),
         parameters={"diffusivity": 1.5, "f_0": 0.6, "f_1": 0.35, "f_2": 0.05},
@@ -283,10 +283,13 @@ def test_composition_fit_evaluates_infeasible_optimizer_trials(install_microtorc
     wrapped["f_1"].value = 0.35
     wrapped._synchronize_dependent_fraction()
 
-    fitted = wrapped.fit(scheme, signal, method="trust-constr")
+    fitted = wrapped.fit(scheme, signal, diff_step=1e-4)
 
     fractions = fitted.fitted_parameters
     assert fractions["f_0"] + fractions["f_1"] <= 1.0
+    assert fitted.model["f_2"].value >= 0.0
+    assert wrapped["f_0"].value == pytest.approx(0.6)
+    assert wrapped["f_1"].value == pytest.approx(0.35)
     assert fitted.result.success
 
 

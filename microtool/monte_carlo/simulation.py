@@ -5,8 +5,9 @@ and how the noise distribution affects the estimated tissueparameters.
 IMPORTANT: Always execute run inside a if name main clause! otherwise the parralel processing throws a cryptic error
 """
 import pathlib
-from typing import Union
+from typing import Optional, Union
 
+import numpy as np
 import pandas as pd
 from scipy import stats
 # scipy frozen distribution should be provided
@@ -22,7 +23,7 @@ class MonteCarloSimulation:
     _result = None
 
     def __init__(self, scheme: AcquisitionScheme, model: TissueModel, noise_distribution: rv_continuous_frozen,
-                 n_sim: int, fit_options: dict = None):
+                 n_sim: int, fit_options: dict = None, random_state: Optional[int] = None):
         """
         Handles the running and saving of a monte carlo simulation. Has setters for relevant parameters such that object
         can be reused for simulation with a different control parameter.
@@ -31,11 +32,13 @@ class MonteCarloSimulation:
         :param model: The TissueModel with which we generate signal AND that is used for fitting
         :param noise_distribution: The noise distribution from which we sample noise for every measurement
         :param n_sim: Number of fit repetitions
+        :param random_state: Optional seed for reproducible noise draws across simulations
         """
         self._scheme = scheme
         self._model = model
         self._n_sim = n_sim
         self._noise_distribution = noise_distribution
+        self._random_state = random_state
         if fit_options is None:
             self._fit_options = {}
         else:
@@ -88,7 +91,12 @@ class MonteCarloSimulation:
         result = []
         for _ in tqdm(range(n_sim), desc=f"Starting Monte Carlo with {n_sim} simulations"):
             # get the noise level by sampling the given distribution for all individual measurements
-            noise_level = sampler.rvs(size=len(signal))
+            if self._random_state is None:
+                noise_level = sampler.rvs(size=len(signal))
+            else:
+                if not hasattr(self, "_rng"):
+                    self._rng = np.random.default_rng(self._random_state)
+                noise_level = sampler.rvs(size=len(signal), random_state=self._rng)
 
             # add noise to the 'simulated' signal
             signal_bar = signal + noise_level

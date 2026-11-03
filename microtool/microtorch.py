@@ -5,7 +5,9 @@ from copy import deepcopy
 from typing import Dict, Optional, Sequence
 
 import numpy as np
-from scipy.optimize import NonlinearConstraint, minimize
+from scipy.optimize import NonlinearConstraint, minimize, least_squares
+from copy import deepcopy
+
 
 from .acquisition_scheme import (
     DiffusionAcquisitionScheme,
@@ -356,17 +358,29 @@ class MicrotorchTissueModel(TissueModel):
         self,
         scheme: DiffusionAcquisitionScheme,
         signal: np.ndarray,
-        method: str = "trust-constr",
+        method: str = "trf",
+        max_nfev: int = 150,
         **fit_options,
     ) -> FittedModelMinimize:
-        if not isinstance(scheme, _SUPPORTED_SCHEMES):
-            raise TypeError("MicrotorchTissueModel.fit requires a diffusion acquisition scheme.")
 
-        signal = np.asarray(signal, dtype=float)
+
+        if not isinstance(scheme, _SUPPORTED_SCHEMES):
+            raise TypeError(
+                "MicroTorchTissueModel.fit requires a diffusion acquisition scheme."
+            )
+
+        signal = np.asarray(signal, dtype=float).ravel()
+
         if signal.shape != (scheme.pulse_count,):
-            raise ValueError("signal must have one value for each measurement.")
+            raise ValueError(
+                "signal must have one value for each measurement."
+            )
+
         if not np.any(self.include_fit):
-            raise ValueError("At least one MicroTorch model parameter must be fit.")
+            raise ValueError(
+                "At least one MicroTorch model parameter must be fit."
+            )
+
         if (
             self._dependent_fraction_name is not None
             and self[self._dependent_fraction_name].fit_flag
@@ -377,58 +391,229 @@ class MicrotorchTissueModel(TissueModel):
                 "fit_flag to False."
             )
 
-        minimize_options = dict(fit_options)
-        constraints = list(minimize_options.pop("constraints", ()))
-        if self._fraction_parameter_names:
-            fitted_names = [
-                name for name, parameter in self.items() if parameter.fit_flag
-            ]
-            fraction_indices = [
-                index
-                for index, name in enumerate(fitted_names)
-                if name in self._fraction_parameter_names
-            ]
-            dependent = self[self._dependent_fraction_name]
-            fixed_fraction_sum = sum(
-                self[name].value
-                for name in self._fraction_parameter_names
-                if name != self._dependent_fraction_name
-                and name not in fitted_names
-            )
-            fraction_scales = np.asarray(
-                [self[fitted_names[index]].scale for index in fraction_indices],
-                dtype=float,
-            )
-            constraints.append(
-                NonlinearConstraint(
-                    lambda values: (
-                        np.dot(values[fraction_indices], fraction_scales)
-                        + fixed_fraction_sum
-                    ),
-                    1.0 - dependent.fit_bounds[1],
-                    1.0 - dependent.fit_bounds[0],
-                )
-            )
+        # Get fitted parameter names
+        fit_names = [
+            name for name, parameter in self.items()
+            if parameter.fit_flag
+        ]
 
-        def objective(fit_parameter_vector, observed_signal, fit_scheme, model):
-            model._set_scaled_fit_parameters_for_fit(fit_parameter_vector)
-            predicted_signal = model._predict_signal(
-                fit_scheme,
-                validate_composition=False,
-            )
-            square_diff = (observed_signal - predicted_signal) ** 2
-            return np.sum(square_diff)
-
-        result = minimize(
-            objective,
-            x0=self.scaled_fit_initial_guess,
-            args=(signal, scheme, deepcopy(self)),
-            bounds=self.scaled_fit_bounds_all,
-            method=method,
-            constraints=constraints,
-            **minimize_options,
+        # Parameter scaling
+        scales = np.array(
+            [self[name].scale for name in fit_names],
+            dtype=float,
         )
-        return FittedModelMinimize(self, result)
+
+        initial_values = np.array(
+            [self[name].value for name in fit_names],
+            dtype=float,
+        )
+
+        lower = np.array(
+            [self[name].fit_bounds[0] for name in fit_names],
+            dtype=float,
+        )
+
+        upper = np.array(
+            [self[name].fit_bounds[1] for name in fit_names],
+            dtype=float,
+        )
+
+        if np.any(~np.isfinite(scales)) or np.any(scales <= 0):
+            raise ValueError(
+                "All fitted parameter scales must be positive."
+            )
+
+        # Normalize parameters
+        x0 = initial_values / scales
+        bounds = (lower / scales, upper / scales)
+
+        fraction_fit_names = [
+            name for name in self._fraction_parameter_names
+            if self[name].fit_flag
+        ]
+        fraction_indices = {
+            name: fit_names.index(name) for name in fraction_fit_names
+        }
+        fraction_sum_lower = None
+        fraction_sum_upper = None
+        fraction_fixed_sum = 0.0
+        if fraction_fit_names:
+            dependent = self[self._dependent_fraction_name]
+            dependent_lower, dependent_upper = dependent.fit_bounds
+            fixed_fraction_names = [
+                name for name in self._fraction_parameter_names
+                if name != self._dependent_fraction_name
+                and name not in fraction_fit_names
+            ]
+            fraction_fixed_sum = sum(
+                self[name].value for name in fixed_fraction_names
+            )
+            fraction_sum_lower = max(
+                sum(self[name].fit_bounds[0] for name in fraction_fit_names),
+                1.0 - fraction_fixed_sum - dependent_upper,
+            )
+            fraction_sum_upper = min(
+                sum(self[name].fit_bounds[1] for name in fraction_fit_names),
+                1.0 - fraction_fixed_sum - dependent_lower,
+            )
+            if fraction_sum_lower > fraction_sum_upper:
+                raise ValueError(
+                    "MicroTorch fraction bounds have no feasible composition."
+                )
+
+            if any(
+                not np.isfinite(bound)
+                for name in fraction_fit_names
+                for bound in self[name].fit_bounds
+            ):
+                raise ValueError(
+                    "Fitted MicroTorch fraction bounds must be finite."
+                )
+
+            def feasible_fraction_interval(name, assigned_sum, remaining_names):
+                lower_bound, upper_bound = self[name].fit_bounds
+                remaining_lower = sum(
+                    self[remaining_name].fit_bounds[0]
+                    for remaining_name in remaining_names
+                )
+                remaining_upper = sum(
+                    self[remaining_name].fit_bounds[1]
+                    for remaining_name in remaining_names
+                )
+                lower_bound = max(
+                    lower_bound,
+                    fraction_sum_lower - assigned_sum - remaining_upper,
+                )
+                upper_bound = min(
+                    upper_bound,
+                    fraction_sum_upper - assigned_sum - remaining_lower,
+                )
+                if lower_bound > upper_bound + 1e-12:
+                    raise ValueError(
+                        "MicroTorch fraction bounds have no feasible composition."
+                    )
+                if lower_bound > upper_bound:
+                    upper_bound = lower_bound
+                return lower_bound, upper_bound
+
+            # Represent fitted fractions as bounded latent variables so every
+            # least-squares trial remains inside the valid simplex.
+            assigned_sum = 0.0
+            for index, name in enumerate(fraction_fit_names):
+                remaining_names = fraction_fit_names[index + 1 :]
+                fraction_lower, fraction_upper = feasible_fraction_interval(
+                    name, assigned_sum, remaining_names
+                )
+                initial_fraction = self[name].value
+                if not (
+                    fraction_lower - 1e-12
+                    <= initial_fraction
+                    <= fraction_upper + 1e-12
+                ):
+                    raise ValueError(
+                        f"Initial value for {name} is outside the feasible "
+                        "fraction composition."
+                    )
+                span = fraction_upper - fraction_lower
+                x0[fraction_indices[name]] = (
+                    0.0
+                    if span <= 1e-12
+                    else np.clip(
+                        (initial_fraction - fraction_lower) / span,
+                        0.0,
+                        1.0,
+                    )
+                )
+                assigned_sum += initial_fraction
+                bounds[0][fraction_indices[name]] = 0.0
+                bounds[1][fraction_indices[name]] = 1.0
+
+        # Create an independent model for optimization
+        optimization_model = deepcopy(self)
+
+        def decode_parameters(x):
+            parameter_values = {
+                name: float(value * scale)
+                for name, value, scale in zip(fit_names, x, scales)
+                if name not in fraction_indices
+            }
+            assigned_sum = 0.0
+            for index, name in enumerate(fraction_fit_names):
+                remaining_names = fraction_fit_names[index + 1 :]
+                fraction_lower, fraction_upper = feasible_fraction_interval(
+                    name, assigned_sum, remaining_names
+                )
+                latent_value = np.clip(x[fraction_indices[name]], 0.0, 1.0)
+                parameter_values[name] = float(
+                    fraction_lower
+                    + latent_value * (fraction_upper - fraction_lower)
+                )
+                assigned_sum += parameter_values[name]
+            return parameter_values
+
+        def residual_fn(x):
+            for name, value in decode_parameters(x).items():
+                optimization_model[name].value = value
+
+            # Evaluate forward model
+            predicted = np.asarray(
+                optimization_model._predict_signal(
+                    scheme,
+                    validate_composition=True,
+                ),
+                dtype=float,
+            ).ravel()
+
+            if predicted.shape != signal.shape:
+                raise ValueError(
+                    f"Predicted signal shape {predicted.shape} does not "
+                    f"match measured signal shape {signal.shape}."
+                )
+
+            return predicted - signal
+
+        # Run nonlinear least squares
+        result = least_squares(
+            residual_fn,
+            x0=x0,
+            bounds=bounds,
+            method=method,
+            max_nfev=max_nfev,
+            ftol=1e-5,
+            xtol=1e-5,
+            verbose=2,
+            **fit_options,
+        )
+
+        # Construct fitted model
+        fitted = deepcopy(self)
+
+        for name, value in decode_parameters(result.x).items():
+            fitted[name].value = value
+        fitted._synchronize_dependent_fraction()
+
+        return _FittedMicrotorchModel(fitted, result)
+
+
+class _FittedMicrotorchModel(FittedModelMinimize):
+    @property
+    def fitted_parameters(self) -> Dict[str, np.ndarray]:
+        return {
+            name: parameter.value
+            for name, parameter in self.model.items()
+            if parameter.fit_flag
+        }
+
+    @property
+    def scaled_fitted_parameters(self) -> np.ndarray:
+        return np.asarray(
+            [
+                parameter.value / parameter.scale
+                for parameter in self.model.values()
+                if parameter.fit_flag
+            ],
+            dtype=float,
+        )
 
 
 def make_microtool_tissue_model(

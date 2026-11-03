@@ -4,7 +4,10 @@ from typing import Optional, Dict, Union
 import numpy as np
 
 from .acquisition_scheme import DiffusionAcquisitionScheme
-from .tissue_model import TissueModel, TissueParameter
+from .tissue_model import FittedModelMinimize, TissueModel, TissueParameter
+from scipy.optimize import least_squares
+from copy import deepcopy
+import time
 
 matlab_engine_help = 'https://www.mathworks.com/help/matlab/matlab_external/install-the-matlab-engine-for-python.html'
 
@@ -180,5 +183,74 @@ class MisstTissueModel(TissueModel):
         jac_full *= scales[np.newaxis, :]
 
         return jac_full[:, self.include_optimize]
+    def fit(
+            self,
+            scheme: DiffusionAcquisitionScheme,
+            signal: np.ndarray,
+            method: str = "trf",
+            max_nfev: int = 150,
+            **fit_options,
+        ) -> FittedModelMinimize:
 
-        # TODO: Implement fit method
+            signal = np.asarray(signal, dtype=float).ravel()
+
+            fit_names = [name for name, parameter in self.items() if parameter.fit_flag]
+            if not fit_names:
+                raise ValueError("No parameters have fit_flag=True.")
+
+            scales = np.array([self[name].scale for name in fit_names], dtype=float)
+            initial_values = np.array([self[name].value for name in fit_names], dtype=float)
+            lower = np.array([self[name].fit_bounds[0] for name in fit_names], dtype=float)
+            upper = np.array([self[name].fit_bounds[1] for name in fit_names], dtype=float)
+
+            if np.any(~np.isfinite(scales)) or np.any(scales <= 0):
+                raise ValueError("All fitted parameter scales must be positive.")
+
+            x0 = initial_values / scales
+            bounds = (lower / scales, upper / scales)
+
+            optimization_model = deepcopy(self)
+            misst_parameter_names = [name for name in optimization_model if name != "S0"]
+
+            def residual_fn(x):
+                for name, value, scale in zip(fit_names, x, scales):
+                    optimization_model[name].value = float(value * scale)
+
+                if hasattr(optimization_model, "_model") and "_model" in optimization_model.__dict__:
+                    optimization_model._model["params"] = double(
+                        [optimization_model[name].value for name in misst_parameter_names]
+                    )
+
+                predicted = np.asarray(optimization_model(scheme), dtype=float).ravel()
+
+                if predicted.shape != signal.shape:
+                    raise ValueError(
+                        f"Predicted signal shape {predicted.shape} does not match measured signal shape {signal.shape}."
+                    )
+
+                return predicted - signal
+
+            start_time = time.time()
+
+            result = least_squares(
+                residual_fn,
+                x0=x0,
+                bounds=bounds,
+                method=method,
+                max_nfev=max_nfev,
+                ftol=1e-5,
+                xtol=1e-5,
+                verbose=2,
+                **fit_options,
+            )
+
+            fitted = optimization_model
+            for name, value, scale in zip(fit_names, result.x, scales):
+                fitted[name].value = float(value * scale)
+
+            if hasattr(fitted, "_model") and "_model" in fitted.__dict__:
+                fitted._model["params"] = double(
+                    [fitted[name].value for name in misst_parameter_names]
+                )
+
+            return FittedModelMinimize(fitted, result)

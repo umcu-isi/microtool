@@ -105,7 +105,7 @@ class SOMA(Optimizer):
     def __init__(
         self,
         population_sz: int = 50,
-        max_migrations: int = 200,
+        max_migrations: int =100,
         max_fevals=None,
         PRT: float = 0.1,
         path_length: float = 3.0,
@@ -139,7 +139,9 @@ class SOMA(Optimizer):
     ) -> OptimizeResult:
         self.Nx = len(x0)
         if self.max_fevals is None:
-            self.max_fevals = self.Nx * 10**4
+            self.max_fevals = 60000 
+
+        print("Manually setted max fevals to:", self.max_fevals)
 
         bounds = options["bounds"]
         constraints = options.get("constraints", ())
