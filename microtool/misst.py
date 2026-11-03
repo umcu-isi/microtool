@@ -109,7 +109,7 @@ def convert_acquisition_scheme(scheme):
 
 class MisstTissueModel(TissueModel):
     def __init__(self, name: str, parameters: Dict[str, TissueParameter]):
-        super().__init__()
+        super().__init__(parameters)
 
         # Add the given tissue parameters and S0.
         self.update({**parameters, 'S0': TissueParameter(value=1.0, scale=1.0, optimize=False)})
@@ -144,7 +144,7 @@ class MisstTissueModel(TissueModel):
         engine = _get_matlab_engine()
         misst_scheme = convert_acquisition_scheme(scheme)
 
-        # Create the 'GEN' protocol (see MISST documentation).
+        # Create the GEN protocol.
         protocol = {
             'pulseseq': 'GEN',
             'G': engine.wave_form(misst_scheme),
@@ -152,17 +152,33 @@ class MisstTissueModel(TissueModel):
         }
 
         if misst_scheme['pulseseq'] != 'PGSE':
-            # Add the matrices and other constants necessary for the matrix method (see MISST documentation).
-            # This is not required for pulsed-gradient spin-echo.
             protocol = engine.MMConstants(self._model, protocol)
 
-        # Evaluate the MISST model and obtain the Jacobian (the SynthMeas function returns the Jacobian as the 2nd
-        # output argument).
+        # Evaluate signal and Jacobian.
         s0 = self['S0'].value
         signal, jac = engine.SynthMeas(self._model, protocol, nargout=2)
 
-        # Add the derivative to S0 (the signal itself).
-        # Note: parameter scales are all 1.0
-        return np.concatenate([s0 * np.array(jac), signal], axis=1)[:, self.include_optimize]
+        jac = np.asarray(jac, dtype=float)
+        signal = np.asarray(signal, dtype=float).reshape(-1, 1)
 
-    # TODO: Implement fit method
+        # Jacobian columns: MISST parameters, followed by S0.
+        jac_full = np.concatenate([s0 * jac, signal], axis=1)
+
+        # Scale each column by its corresponding parameter scale.
+        parameter_names = [name for name in self if name != 'S0'] + ['S0']
+        scales = np.array(
+            [self[name].scale for name in parameter_names],
+            dtype=float,
+        )
+
+        if jac_full.shape[1] != len(scales):
+            raise ValueError(
+                f"Jacobian has {jac_full.shape[1]} columns, "
+                f"but {len(scales)} parameter scales were provided."
+            )
+
+        jac_full *= scales[np.newaxis, :]
+
+        return jac_full[:, self.include_optimize]
+
+        # TODO: Implement fit method

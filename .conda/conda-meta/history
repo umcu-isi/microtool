@@ -1,0 +1,26 @@
+==> 2026-11-02 15:00:46 <==
+# cmd: /nfs/rtfs03/storage/home/jgroot34/conda/bin/conda create --yes --prefix /smb/user/jgroot34/DS-Data/Radiotherapie/Research/User/jgroot34/D_Projects/MICROtool/MICROtool_Github/microtool/.conda python
+# conda version: 25.3.1
++conda-forge/linux-64::_openmp_mutex-4.5-20_gnu
++conda-forge/linux-64::bzip2-1.0.8-hda65f42_10
++conda-forge/linux-64::ld_impl_linux-64-2.46.1-default_hbd61a6d_103
++conda-forge/linux-64::libedit-3.1.20260512-pl5321h373387f_0
++conda-forge/linux-64::libexpat-2.9.0-hd2095e1_0
++conda-forge/linux-64::libffi-3.7.0-h81df57d_1
++conda-forge/linux-64::libgcc-16.2.0-ha9f2e26_7
++conda-forge/linux-64::libgomp-16.2.0-he0feb66_7
++conda-forge/linux-64::liblzma-5.8.3-hb03c661_1
++conda-forge/linux-64::libmpdec-4.0.0-hb03c661_2
++conda-forge/linux-64::libsqlite-3.54.1-h0737f62_101
++conda-forge/linux-64::libuuid-2.42.4-hcfc3c73_0
++conda-forge/linux-64::libzlib-1.3.2-h25fd6f3_3
++conda-forge/linux-64::ncurses-6.6-hdb14827_1
++conda-forge/linux-64::openssl-3.6.5-h781a0a9_0
++conda-forge/linux-64::python-3.15.2-h6e52b48_100_cp315
++conda-forge/linux-64::tk-8.6.13-noxft_h1df4ec4_4
++conda-forge/linux-64::zstd-1.5.7-hb78ec9c_7
++conda-forge/noarch::ca-certificates-2026.10.23-hbd8a1cb_0
++conda-forge/noarch::pip-26.2.2-pyh145f28c_0
++conda-forge/noarch::python_abi-3.15-9_cp315
++conda-forge/noarch::tzdata-2026e-h5d301ff_0
+# update specs: ['python']

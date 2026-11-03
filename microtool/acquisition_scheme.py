@@ -379,6 +379,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                  scanner_parameters: Optional[ScannerParameters] = None):
 
         self.scanner_parameters = scanner_parameters or ScannerParameters()
+        self.name = "PGSE"
 
         # TODO: Check constraints here or in b_value_from_diffusion_pulse.
         b_values = b_value_from_diffusion_pulse(pulse_durations, pulse_intervals, pulse_magnitudes,

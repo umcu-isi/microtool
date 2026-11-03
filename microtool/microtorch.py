@@ -17,7 +17,6 @@ from .tissue_model import (
     FittedModelMinimize,
     TissueModel,
     TissueParameter,
-    fit_cost,
 )
 from .utils.unit_registry import cast_to_ndarray
 
@@ -221,8 +220,13 @@ class MicrotorchTissueModel(TissueModel):
             seen[name] = index + 1
         return unique_names
 
-    def __call__(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
-        self._synchronize_dependent_fraction()
+    def _predict_signal(
+        self,
+        scheme: DiffusionAcquisitionScheme,
+        *,
+        validate_composition: bool,
+    ) -> np.ndarray:
+        self._synchronize_dependent_fraction(validate=validate_composition)
         microtorch_scheme = convert_acquisition_scheme(scheme)
         torch, _ = _microtorch_api()
         model_parameters = np.asarray(
@@ -244,6 +248,9 @@ class MicrotorchTissueModel(TissueModel):
         b0_mask = cast_to_ndarray(scheme.b_values, unit_str="s/mm²") == 0
         signal[b0_mask] = 1.0
         return self[BASE_SIGNAL_KEY].value * signal
+
+    def __call__(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
+        return self._predict_signal(scheme, validate_composition=True)
 
     def scaled_jacobian(self, scheme: DiffusionAcquisitionScheme) -> np.ndarray:
         """Return signal derivatives for parameters marked for optimization.
@@ -310,7 +317,7 @@ class MicrotorchTissueModel(TissueModel):
         jacobian[b0_mask, :] = 0.0
         return jacobian
 
-    def _synchronize_dependent_fraction(self) -> None:
+    def _synchronize_dependent_fraction(self, *, validate: bool = True) -> None:
         if self._dependent_fraction_name is None:
             return
 
@@ -322,12 +329,12 @@ class MicrotorchTissueModel(TissueModel):
         )
         value = 1.0 - fraction_sum
         lower, upper = dependent.fit_bounds
-        if value < lower - 1e-8 or value > upper + 1e-8:
+        if validate and (value < lower - 1e-8 or value > upper + 1e-8):
             raise ValueError(
                 "The optimized MicroTorch volume fractions must sum to at most 1; "
                 f"the derived {self._dependent_fraction_name} fraction would be {value}."
             )
-        dependent.value = min(max(value, lower), upper)
+        dependent.value = min(max(value, lower), upper) if validate else value
 
     def set_scaled_parameters(self, new_parameter_values: Sequence[float]) -> None:
         if len(new_parameter_values) != len(self):
@@ -340,6 +347,10 @@ class MicrotorchTissueModel(TissueModel):
     def set_scaled_fit_parameters(self, new_values: np.ndarray) -> None:
         super().set_scaled_fit_parameters(new_values)
         self._synchronize_dependent_fraction()
+
+    def _set_scaled_fit_parameters_for_fit(self, new_values: np.ndarray) -> None:
+        super().set_scaled_fit_parameters(new_values)
+        self._synchronize_dependent_fraction(validate=False)
 
     def fit(
         self,
@@ -356,6 +367,15 @@ class MicrotorchTissueModel(TissueModel):
             raise ValueError("signal must have one value for each measurement.")
         if not np.any(self.include_fit):
             raise ValueError("At least one MicroTorch model parameter must be fit.")
+        if (
+            self._dependent_fraction_name is not None
+            and self[self._dependent_fraction_name].fit_flag
+        ):
+            raise ValueError(
+                f"{self._dependent_fraction_name} is derived from the other "
+                "volume fractions and cannot be fit independently; set its "
+                "fit_flag to False."
+            )
 
         minimize_options = dict(fit_options)
         constraints = list(minimize_options.pop("constraints", ()))
@@ -368,20 +388,39 @@ class MicrotorchTissueModel(TissueModel):
                 for index, name in enumerate(fitted_names)
                 if name in self._fraction_parameter_names
             ]
+            dependent = self[self._dependent_fraction_name]
+            fixed_fraction_sum = sum(
+                self[name].value
+                for name in self._fraction_parameter_names
+                if name != self._dependent_fraction_name
+                and name not in fitted_names
+            )
             fraction_scales = np.asarray(
                 [self[fitted_names[index]].scale for index in fraction_indices],
                 dtype=float,
             )
             constraints.append(
                 NonlinearConstraint(
-                    lambda values: np.dot(values[fraction_indices], fraction_scales),
-                    0.0,
-                    1.0,
+                    lambda values: (
+                        np.dot(values[fraction_indices], fraction_scales)
+                        + fixed_fraction_sum
+                    ),
+                    1.0 - dependent.fit_bounds[1],
+                    1.0 - dependent.fit_bounds[0],
                 )
             )
 
+        def objective(fit_parameter_vector, observed_signal, fit_scheme, model):
+            model._set_scaled_fit_parameters_for_fit(fit_parameter_vector)
+            predicted_signal = model._predict_signal(
+                fit_scheme,
+                validate_composition=False,
+            )
+            square_diff = (observed_signal - predicted_signal) ** 2
+            return np.sum(square_diff)
+
         result = minimize(
-            fit_cost,
+            objective,
             x0=self.scaled_fit_initial_guess,
             args=(signal, scheme, deepcopy(self)),
             bounds=self.scaled_fit_bounds_all,

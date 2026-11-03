@@ -96,44 +96,35 @@ class BruteForce(Optimizer):
 
 
 class SOMA(Optimizer):
-    """ A class for defining a classic all to one soma algorithm. The __call__ method executes the algorithm The
+    """A class for defining a classic all to one soma algorithm. The __call__ method executes the algorithm The
     other class methods are made to initialize all parts of the algorithm with control parameters defined on
     initialization. Visit https://ivanzelinka.eu/somaalgorithm/About.html for the more information on this algorithm
     and codes for which this implementation is the source.
     """
 
-    def __init__(self,
-                 population_sz: int = 50,
-                 max_migrations: int = 200,
-                 max_fevals=None,
-                 PRT: float = 0.1,
-                 path_length: float = 3.0,
-                 step: float = 0.11
-                 ):
-        """Constructor initializes the control parameters and saves them as attributes
-
-        :param population_sz: Number of individuals in the population, defaults to 50
-        :param max_migrations: Stopping condition based on maximum number of individuals, defaults to 100
-        :param max_fevals: Stopping condition based
-                            on maximum number of objective function evaluations, defaults to None
-        :param PRT: probability of stepping, defaults to 0.1
-        :param path_length: length of jumps, defaults to 3.0
-        :param step: steplength along the jump,
-        defaults to 0.11
-        :raise ValueError: if controlparameters are of incorrect value
-        """
-        # Check that parameters are reasonable
+    def __init__(
+        self,
+        population_sz: int = 50,
+        max_migrations: int = 200,
+        max_fevals=None,
+        PRT: float = 0.1,
+        path_length: float = 3.0,
+        step: float = 0.11,
+    ):
         if path_length < step:
-            raise ValueError("SOMA: The following condition is violated step > path_length.")
+            raise ValueError(
+                "SOMA: The following condition is violated step > path_length."
+            )
         if PRT <= 0 or PRT > 1:
-            raise ValueError("SOMA: Acceptance probability PRT needs to be in (0,1].")
+            raise ValueError(
+                "SOMA: Acceptance probability PRT needs to be in (0,1]."
+            )
 
-        # loading the control parameters
-        self.population_sz, self.max_migrations = population_sz, max_migrations
+        self.population_sz = population_sz
+        self.max_migrations = max_migrations
         self.max_fevals = max_fevals
-
-        # defining parameters for the SOMA migration behaviour
-        self.PRT, self.path_length = PRT, path_length
+        self.PRT = PRT
+        self.path_length = path_length
         self.step = step
         self.N_jump = int(np.ceil(path_length / step))
 
@@ -143,31 +134,86 @@ class SOMA(Optimizer):
             message += f"{key} = {val}\n"
         return message
 
-    def __call__(self, fun: callable, x0: np.ndarray, args=(), **options) -> OptimizeResult:
-        """This is where the optimization routine is ran.
-
-        :param fun: Objective function to be minimized
-        :param x0: starting parameters (only used for length)
-        :param args: additional parameters to the objective function, defaults to ()
-        :return: scipy.OptimizeResult object, (really just a dictionary with a wrapper)
-        """
+    def __call__(
+        self, fun: callable, x0: np.ndarray, args=(), **options
+    ) -> OptimizeResult:
         self.Nx = len(x0)
         if self.max_fevals is None:
-            self.max_fevals = self.Nx * 10 ** 4
+            self.max_fevals = self.Nx * 10**4
 
-        # TODO: guarantee bounds in higherlevel functions in tissuemodel
         bounds = options["bounds"]
+        constraints = options.get("constraints", ())
+        if constraints is None:
+            constraints = ()
+        elif not isinstance(constraints, (list, tuple)):
+            constraints = (constraints,)
 
-        constraints = options['constraints']
-        population = Population(self.population_sz, bounds, constraints, fun, args, self.max_fevals)
+        print("=" * 70)
+        print("[SOMA] Starting Optimization")
+        print(f"  Dimension (Nx)     : {self.Nx}")
+        print(f"  Population Size    : {self.population_sz}")
+        print(f"  Max Migrations     : {self.max_migrations}")
+        print(f"  Max Fevals         : {self.max_fevals}")
+        print(f"  Jumps per movement : {self.N_jump}")
+        print("=" * 70)
+
+        population = Population(
+            self.population_sz,
+            bounds,
+            constraints,
+            fun,
+            args,
+            self.max_fevals,
+            #initial_value=np.asarray(x0, dtype=float).ravel(),
+        )
+
+        prev_best = population.best_cost
+        print(
+            f"[SOMA Init] Initial Best Cost: {prev_best:.6e} | Initial Fevals: {population.fevals}"
+        )
+        print("-" * 70)
 
         migration = 0
-        while (population.fevals < self.max_fevals) and (migration < self.max_migrations):
-            migration += 1
+        while (population.fevals < self.max_fevals) and (
+            migration < self.max_migrations
+        ):
+
+
             population.migrate(self.path_length, self.N_jump, self.PRT)
 
-        return OptimizeResult(x=population.best_individual, fun=population.best_cost, nfev=population.fevals,
-                              success=True, message=f"stopped at migration: {migration}")
+            current_best = population.best_cost
+            improvement = prev_best - current_best
+
+            print(
+                f"[SOMA] Mig {migration:03d}/{self.max_migrations:03d} | "
+                f"Fevals: {population.fevals:06d}/{self.max_fevals:06d} | "
+                f"Best Cost: {current_best:.6e} | "
+                f"Delta: {improvement:+.3e} | "
+            )
+
+            prev_best = current_best
+            migration += 1
+
+        print("=" * 70)
+        print(f"  Total Migrations : {migration}")
+        print(f"  Total Fevals      : {population.fevals}")
+        print(f"  Final Best Cost   : {population.best_cost:.6e}")
+        print("=" * 70)
+
+        if population.best_individual is None:
+            raise RuntimeError(
+                "SOMA did not find a feasible candidate with a finite cost. "
+                "Check the bounds, constraints, and objective function."
+            )
+
+        return OptimizeResult(
+            x=population.best_individual,
+            fun=population.best_cost,
+            nfev=population.fevals,
+            nit=migration,
+            success=True,
+            message="Optimization completed.",
+        )
 
 
 class Population:

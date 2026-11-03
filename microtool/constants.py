@@ -9,7 +9,7 @@ GAMMA = 267.5987e3 * unit('1/mT/s')  # Proton gyromagnetic ratio [rad/mT/s].
 
 B_UNIT = 's/mm²'
 B_VAL_LB = 0.0 * unit('s/mm²')
-B_VAL_UB = 3e3 * unit('s/mm²')
+B_VAL_UB = 6e3 * unit('s/mm²')
 B_VAL_SCALE = 1e3 * unit('s/mm²')
 B_MAX = 2000 * unit('s/mm²')  # TODO: what's the difference in usage with B_VAL_UB?
 

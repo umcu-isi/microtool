@@ -267,3 +267,32 @@ def test_composition_rejects_negative_derived_fraction():
 
     with pytest.raises(ValueError, match="must sum to at most 1"):
         wrapped.set_scaled_parameters(scaled_parameters)
+
+
+def test_composition_fit_evaluates_infeasible_optimizer_trials(install_microtorch):
+    wrapped = MicrotorchTissueModel(
+        DummyCompositeMicrotorchModel(),
+        parameters={"diffusivity": 1.5, "f_0": 0.6, "f_1": 0.35, "f_2": 0.05},
+    )
+    scheme = DummyDiffusionScheme()
+    target_parameters = wrapped.scaled_parameter_vector.copy()
+    target_parameters[1:3] = [0.8, 0.19]
+    wrapped.set_scaled_parameters(target_parameters)
+    signal = wrapped(scheme)
+    wrapped["f_0"].value = 0.6
+    wrapped["f_1"].value = 0.35
+    wrapped._synchronize_dependent_fraction()
+
+    fitted = wrapped.fit(scheme, signal, method="trust-constr")
+
+    fractions = fitted.fitted_parameters
+    assert fractions["f_0"] + fractions["f_1"] <= 1.0
+    assert fitted.result.success
+
+
+def test_dependent_fraction_cannot_be_fit_independently(install_microtorch):
+    wrapped = MicrotorchTissueModel(DummyCompositeMicrotorchModel())
+    wrapped["f_2"].fit_flag = True
+
+    with pytest.raises(ValueError, match="is derived.*cannot be fit independently"):
+        wrapped.fit(DummyDiffusionScheme(), np.ones(3))

@@ -196,4 +196,4 @@ def scipy_loss(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noi
 gauss_loss = CrlbLoss(fisher_information_gauss)
 rice_loss = CrlbLoss(fisher_information_rice)
 
-default_loss = gauss_loss
+default_loss = rice_loss
