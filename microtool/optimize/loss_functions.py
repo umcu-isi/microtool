@@ -1,3 +1,4 @@
+from itertools import product
 from typing import Callable
 
 import numpy as np
@@ -17,6 +18,40 @@ CONDITION_THRESHOLD = 1e-2 / np.finfo(np.float32).eps
 ILL_LOSS = 1e30
 
 InformationFunction = Callable[[np.ndarray, np.ndarray, float], np.ndarray]
+
+
+def _sum_over_parameter_values(model: TissueModel, evaluate: Callable):
+    listed_parameters = [
+        (index, parameter)
+        for index, parameter in enumerate(model.values())
+        if parameter.value_list is not None
+    ]
+    if not listed_parameters:
+        return evaluate()
+    if any(not parameter.value_list for _, parameter in listed_parameters):
+        raise ValueError("TissueParameter.value_list must contain at least one value.")
+
+    original_parameters = np.array(model.scaled_parameter_vector, copy=True)
+    listed_values = [
+        [
+            float(cast_to_ndarray(value / parameter.scale))
+            for value in parameter.value_list
+        ]
+        for _, parameter in listed_parameters
+    ]
+
+    results = []
+    try:
+        for values in product(*listed_values):
+            scenario_parameters = original_parameters.copy()
+            for (index, _), value in zip(listed_parameters, values):
+                scenario_parameters[index] = value
+            model.set_scaled_parameters(scenario_parameters)
+            results.append(evaluate())
+    finally:
+        model.set_scaled_parameters(original_parameters)
+
+    return np.sum(results, axis=0)
 
 
 @njit
@@ -142,7 +177,9 @@ def compute_loss(scheme: AcquisitionScheme,
                  noise_var: float,
                  loss: LossFunction) -> float:
     """
-    Computes the loss for the given acquisition scheme and model.
+    Computes the loss for the given acquisition scheme and model. If tissue
+    parameters define ``value_list``, the loss is summed over every listed
+    value combination.
 
     :param model: The tissue model for which you wish to know the loss
     :param scheme: The acquisition scheme for which you wish to know the loss
@@ -150,9 +187,12 @@ def compute_loss(scheme: AcquisitionScheme,
     :param loss: The loss function
     :return: The loss value associated with this model and scheme
     """
-    jac = cast_to_ndarray(model.scaled_jacobian(scheme))  # Make sure the result is a dimensionless numpy array.
-    signal = cast_to_ndarray(model(scheme))  # Make sure the result is a dimensionless numpy array.
-    return loss(jac, signal, noise_var)
+    def evaluate():
+        jac = cast_to_ndarray(model.scaled_jacobian(scheme))
+        signal = cast_to_ndarray(model(scheme))
+        return loss(jac, signal, noise_var)
+
+    return _sum_over_parameter_values(model, evaluate)
 
 
 def compute_crlb(scheme: AcquisitionScheme,
@@ -160,7 +200,9 @@ def compute_crlb(scheme: AcquisitionScheme,
                  noise_var: float,
                  loss: LossFunction) -> np.ndarray:
     """
-    Computes the loss for the given acquisition scheme and model.
+    Computes the per-parameter CRLB for the given acquisition scheme and
+    model. If tissue parameters define ``value_list``, CRLBs are summed over
+    every listed value combination.
 
     :param model: The tissue model for which you wish to know the loss
     :param scheme: The acquisition scheme for which you wish to know the loss
@@ -168,9 +210,12 @@ def compute_crlb(scheme: AcquisitionScheme,
     :param loss: The loss function
     :return: The loss value associated with this model and scheme
     """
-    jac = cast_to_ndarray(model.scaled_jacobian(scheme))  # Make sure the result is a dimensionless numpy array.
-    signal = cast_to_ndarray(model(scheme))  # Make sure the result is a dimensionless numpy array.
-    return loss.crlb(jac, signal, noise_var)
+    def evaluate():
+        jac = cast_to_ndarray(model.scaled_jacobian(scheme))
+        signal = cast_to_ndarray(model(scheme))
+        return loss.crlb(jac, signal, noise_var)
+
+    return _sum_over_parameter_values(model, evaluate)
 
 
 def scipy_loss(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noise_variance: float,

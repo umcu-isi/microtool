@@ -16,7 +16,7 @@ B_MAX = 2000 * unit('s/mm²')  # TODO: what's the difference in usage with B_VAL
 GRADIENT_UNIT = 'mT/mm'
 
 PULSE_TIMING_UNIT = 's'
-PULSE_TIMING_LB = 1e-3 * unit('s')
+PULSE_TIMING_LB = 1e-2 * unit('s')
 PULSE_TIMING_UB = 100e-3 * unit('s')
 PULSE_TIMING_SCALE = 1e-2 * unit('s')
 MAX_TE = 0.05 * unit('s')

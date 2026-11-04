@@ -105,7 +105,7 @@ class SOMA(Optimizer):
     def __init__(
         self,
         population_sz: int = 50,
-        max_migrations: int =100,
+        max_migrations: int = 200,
         max_fevals=None,
         PRT: float = 0.1,
         path_length: float = 3.0,
@@ -139,9 +139,7 @@ class SOMA(Optimizer):
     ) -> OptimizeResult:
         self.Nx = len(x0)
         if self.max_fevals is None:
-            self.max_fevals = 60000 
-
-        print("Manually setted max fevals to:", self.max_fevals)
+            self.max_fevals = self.Nx * 10**4
 
         bounds = options["bounds"]
         constraints = options.get("constraints", ())
@@ -217,13 +215,12 @@ class SOMA(Optimizer):
             message="Optimization completed.",
         )
 
-
 class Population:
     """This class defines the population in the SOMA algorithm
     """
 
     def __init__(self, sz: int, bounds: Bounds, constraint, fun: callable, args: tuple, max_evals: int,
-                 values: np.ndarray = None):
+                 values: np.ndarray = None, initial_value: np.ndarray = None):
         """
         :param sz: The population size
         :param bounds: The parameter bounds (or the search domain if you prefer this terminology)
@@ -234,8 +231,8 @@ class Population:
         self.sz = sz
 
         self.constraints = constraint
-        self.lower_bound = bounds.lb
-        self.upper_bound = bounds.ub
+        self.lower_bound = np.asarray(bounds.lb, dtype=float).ravel()
+        self.upper_bound = np.asarray(bounds.ub, dtype=float).ravel()
         self.Nx = len(bounds.lb)
         self.fun = fun
         self.args = args
@@ -245,18 +242,72 @@ class Population:
         self.best_cost = np.inf
         self.best_individual = None
 
+        if np.any(~np.isfinite(self.lower_bound)) or np.any(~np.isfinite(self.upper_bound)):
+            raise ValueError("SOMA requires finite lower and upper bounds.")
+        if np.any(self.lower_bound > self.upper_bound):
+            raise ValueError("SOMA lower bounds must not exceed upper bounds.")
+
         if values is None:
-            # initializing a randomly distributed population over the provided domains
-            self._values = self.lower_bound + np.random.rand(sz, self.Nx) * (self.upper_bound - self.lower_bound)
+            self._values = self._initialize_population(sz, initial_value)
+        else:
+            self._values = np.asarray(values, dtype=float)
+            if self._values.shape != (sz, self.Nx):
+                raise ValueError(
+                    f"Population values must have shape {(sz, self.Nx)}."
+                )
 
         # computing the starting fitness values
         self._set_fitness()
 
+        best_id = int(np.argmin(self._fitness))
+        if np.isfinite(self._fitness[best_id]):
+            self.best_cost = float(self._fitness[best_id])
+            self.best_individual = self._values[best_id].copy()
+
+    def _initialize_population(self, sz: int, initial_value: np.ndarray = None) -> np.ndarray:
+        candidates = []
+        if initial_value is not None:
+            initial_value = np.asarray(initial_value, dtype=float).ravel()
+            if initial_value.size != self.Nx:
+                raise ValueError("Initial value length does not match the bounds.")
+            if np.all(np.isfinite(initial_value)) and not np.any(
+                (initial_value < self.lower_bound)
+                | (initial_value > self.upper_bound)
+            ) and not is_constrained(initial_value, self.constraints):
+                candidates.append(initial_value.copy())
+
+        max_attempts = max(1000, sz * 100)
+        attempts = 0
+        while len(candidates) < sz and attempts < max_attempts:
+            candidate = self.lower_bound + np.random.rand(self.Nx) * (
+                self.upper_bound - self.lower_bound
+            )
+            attempts += 1
+            if not is_constrained(candidate, self.constraints):
+                candidates.append(candidate)
+
+        if not candidates:
+            raise ValueError(
+                "SOMA could not find a feasible starting point. Check that "
+                "the constraints and bounds have a feasible intersection."
+            )
+
+        while len(candidates) < sz:
+            candidates.append(candidates[np.random.randint(len(candidates))].copy())
+
+        return np.asarray(candidates)
+
     def cost_fun(self, x: np.ndarray):
-        if is_constrained(x, self.constraints):
+        if (
+            np.any(~np.isfinite(x))
+            or np.any(x < self.lower_bound)
+            or np.any(x > self.upper_bound)
+            or is_constrained(x, self.constraints)
+        ):
             return np.inf
-        else:
-            return self.fun(x, *self.args)
+
+        cost = float(self.fun(x, *self.args))
+        return cost if np.isfinite(cost) else np.inf
 
     def migrate(self, path_length: float, N_jump: int, PRT: float):
         """Executes a single population migration
@@ -344,14 +395,19 @@ def is_constrained(x: np.ndarray, constraints: List[NonlinearConstraint]) -> boo
     :param x: Parameter combination
     :return: boolean that is true if the parameter combination breaks the constraint
     """
-    for constraint in constraints:
+    if constraints is None:
+        return False
 
-        if constraints is None or constraints == ():
-            continue
-        else:
-            fun = constraint.fun
-            constraint_value = fun(x)
-            if np.any(constraint_value < constraint.lb) or np.any(constraint_value > constraint.ub):
-                return True
+    if not isinstance(constraints, (list, tuple)):
+        constraints = (constraints,)
+
+    for constraint in constraints:
+        constraint_value = np.asarray(constraint.fun(x), dtype=float)
+        if not np.all(np.isfinite(constraint_value)):
+            return True
+        if np.any(constraint_value < constraint.lb) or np.any(
+            constraint_value > constraint.ub
+        ):
+            return True
 
     return False
