@@ -217,7 +217,6 @@ class SOMA(Optimizer):
             message="Optimization completed.",
         )
 
-
 class Population:
     """This class defines the population in the SOMA algorithm."""
 

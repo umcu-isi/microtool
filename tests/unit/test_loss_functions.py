@@ -1,7 +1,10 @@
 import numpy as np
 
 from microtool.optimize.loss_functions import fisher_information_gauss, fisher_information_rice, gauss_loss, \
-    rice_loss, ILL_LOSS
+    rice_loss, ILL_LOSS, compute_loss, compute_crlb
+from microtool.acquisition_scheme import EchoScheme
+from microtool.tissue_model import ExponentialTissueModel, TissueParameter
+from microtool.utils.unit_registry import unit
 
 
 def test_fisher_information_gauss():
@@ -67,3 +70,31 @@ def test_eigenvalue_versions():
         crlb_eig = loss(jac, signal, noise_var)
         crlb_inv = loss.crlb(jac, signal, noise_var).sum()
         assert np.allclose(crlb_eig, crlb_inv)
+
+
+def test_loss_and_crlb_sum_over_parameter_value_combinations():
+    scheme = EchoScheme(te=np.array([0.01, 0.02, 0.03]) * unit('s'))
+    model = ExponentialTissueModel(t2=0.02 * unit('s'))
+    assert model["T2"].value_list is None
+    t2_values = [0.01 * unit('s'), 0.04 * unit('s')]
+    s0_values = [0.8, 1.2]
+    model["T2"].value_list = t2_values
+    model["S0"].value_list = s0_values
+
+    original_values = model.scaled_parameter_vector.copy()
+    expected_loss = 0.0
+    expected_crlb = np.zeros(2)
+    for t2 in t2_values:
+        for s0 in s0_values:
+            scenario = ExponentialTissueModel(t2=t2, s0=s0)
+            expected_loss += compute_loss(scheme, scenario, 1.0, gauss_loss)
+            expected_crlb += compute_crlb(scheme, scenario, 1.0, gauss_loss)
+
+    assert np.allclose(compute_loss(scheme, model, 1.0, gauss_loss), expected_loss)
+    assert np.allclose(compute_crlb(scheme, model, 1.0, gauss_loss), expected_crlb)
+    assert np.allclose(model.scaled_parameter_vector, original_values)
+
+
+def test_tissue_parameter_value_list_must_not_be_empty():
+    with np.testing.assert_raises(ValueError):
+        TissueParameter(value=1.0, scale=1.0, value_list=[])

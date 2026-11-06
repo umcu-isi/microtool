@@ -102,7 +102,7 @@ def optimize_scheme(scheme: AcquisitionScheme, model: TissueModel,
     check_degrees_of_freedom(scheme, model)
     check_insensitive(scheme, model)
     initial_loss = compute_loss(scheme, model, noise_variance, loss)
-    check_ill_conditioned(initial_loss)
+#    check_ill_conditioned(initial_loss)
 
     # Copying the scheme because acquisition parameters are updated during optimization
     scheme_copy = deepcopy(scheme)

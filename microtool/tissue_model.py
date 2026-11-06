@@ -39,19 +39,26 @@ class TissueParameter:
                     If we don't optimize the scheme we assume the parameter is known and exclude it from fitting too.
     :param fit_flag: Specifies if the parameter should be included in the fitting process.
     :param fit_bounds: Specifies the domain in which to attempt the fitting of this parameter.
+    :param value_list: Optional discrete values to include when calculating acquisition-design loss.
     """
     value: float
     scale: float
     optimize: bool = True
     fit_flag: bool = True
     fit_bounds: tuple = (0.0, np.inf)
+    value_list: Optional[Sequence[float]] = None
 
     def __post_init__(self):
         self.fit_guess = self.scale
+        if self.value_list is not None:
+            self.value_list = list(self.value_list)
+            if not self.value_list:
+                raise ValueError("value_list must contain at least one parameter value.")
 
     def __str__(self):
+        value_list = f', value_list:{self.value_list}' if self.value_list is not None else ''
         return (f'{self.value} (scale: {self.scale}, optimize: {self.optimize}, fit:{self.fit_flag}, '
-                f'bounds:{self.fit_bounds})')
+                f'bounds:{self.fit_bounds}{value_list})')
 
 
 class TissueModel(Dict[str, TissueParameter], ABC):
