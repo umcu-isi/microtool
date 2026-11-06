@@ -16,7 +16,7 @@ from typing import Dict, Union, List, Optional, Sequence
 import numpy as np
 from numpy.random import default_rng
 from scipy.optimize import minimize, Bounds, OptimizeResult, curve_fit, differential_evolution, LinearConstraint, \
-    basinhopping
+    basinhopping, least_squares
 from tabulate import tabulate
 
 from .acquisition_scheme import AcquisitionScheme, InversionRecoveryAcquisitionScheme, EchoScheme, \
@@ -331,6 +331,11 @@ class MultiTissueModel(TissueModel):
         if isinstance(new_values, dict):
             new_values = np.array(list(new_values.values()))
 
+        fit_parameter_indices = {
+            parameter_index: fit_index
+            for fit_index, parameter_index in enumerate(np.flatnonzero(self.include_fit))
+        }
+
         # We also update the parameters on the models in this object
         for j, model in enumerate(self._models):
             parameter_update = []            
@@ -344,7 +349,9 @@ class MultiTissueModel(TissueModel):
                     raise ValueError(f"Parameter {key} for {MODEL_PREFIX}{j} update is missing")
                 else: 
                     if self.include_fit[index_param]:
-                        parameter_update.append(new_values[index_param])
+                        parameter_update.append(
+                            new_values[fit_parameter_indices[index_param]]
+                        )
              
             model.set_scaled_fit_parameters(np.array(parameter_update))
         
@@ -356,6 +363,48 @@ class MultiTissueModel(TissueModel):
         # use the call functions of the models
         compartment_signals = np.stack([model(scheme) for model in self._models], axis=-1)
         return np.sum(compartment_signals * self.volume_fractions, axis=-1)
+
+    def scaled_jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
+        compartment_signals = [
+            model(scheme) for model in self._models
+        ]
+        jacobian = np.zeros((scheme.pulse_count, len(self)), dtype=float)
+
+        for model_index, (model, volume_fraction) in enumerate(
+            zip(self._models, self.volume_fractions)
+        ):
+            optimized = np.asarray(model.include_optimize, dtype=bool)
+            expected_columns = int(np.count_nonzero(optimized))
+            if expected_columns:
+                model_jacobian = cast_to_ndarray(model.scaled_jacobian(scheme))
+            else:
+                model_jacobian = np.zeros((scheme.pulse_count, 0))
+            if model_jacobian.shape != (scheme.pulse_count, expected_columns):
+                raise ValueError(
+                    f"Model {model_index} scaled_jacobian returned shape "
+                    f"{model_jacobian.shape}; expected "
+                    f"({scheme.pulse_count}, {expected_columns})."
+                )
+
+            model_column = 0
+            for name, is_optimized in zip(model.parameter_names, optimized):
+                if not is_optimized:
+                    continue
+                parameter_index = self._param_location.get(
+                    f"{MODEL_PREFIX}{model_index}_{name}"
+                )
+                if parameter_index is not None:
+                    jacobian[:, parameter_index] = (
+                        volume_fraction * model_jacobian[:, model_column]
+                    )
+                model_column += 1
+
+            fraction_name = f"{VOLUME_FRACTION_PREFIX}{model_index}"
+            if fraction_name in self:
+                fraction_index = self.parameter_names.index(fraction_name)
+                jacobian[:, fraction_index] = compartment_signals[model_index]
+
+        return jacobian[:, self.include_optimize]
 
     def check_dependencies(self, scheme: AcquisitionScheme):        
         """
@@ -472,6 +521,7 @@ class RelaxationTissueModel(TissueModel):
         else:
             parameters.update({T2_KEY: TissueParameter(value=t2, scale=1e-3 * unit('s'), optimize=True),
                               T1_KEY: TissueParameter(value=t1, scale=1e-3 * unit('s'), optimize=False)})
+        parameters[T2_KEY].fit_guess = t2
                
         parameters.update({BASE_SIGNAL_KEY: TissueParameter(value=base_signal, scale=1.0, optimize=False, 
                                                             fit_flag=False, fit_bounds=(0.0, 2.0))})
@@ -479,37 +529,70 @@ class RelaxationTissueModel(TissueModel):
         super().__init__(parameters)
                 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
-        # Signal from tissue model
+        # 1. Base diffusion attenuation A_diff(b)
+        # If wrapped model is a bare TissueModel (pure relaxometry), baseline is 1.0;
+        # otherwise evaluate microstructural attenuation from MicroTorch/MultiTissueModel.
         if type(self._model) is TissueModel:
-            model_signal = self[BASE_SIGNAL_KEY].value
+            model_signal = 1.0
         else:
             model_signal = self._model(scheme)
-     
-        if isinstance(scheme, (DiffusionAcquisitionScheme, 
-                               DiffusionAcquisitionSchemeBValue, 
-                               DiffusionAcquisitionSchemeDelta)):
-            te = scheme.echo_times  # [s]
-            t2 = self[T2_KEY].value
-            te_t2 = np.exp(- te / t2)
-            
-            signal = model_signal * te_t2  # S0 * exp(-TE/T2)
-        
+
+        # 2. Extract baseline signal S0 (handles BASE_SIGNAL_KEY, "S0", or "s0")
+        s0_param = None
+        for key in (BASE_SIGNAL_KEY, "S0", "s0"):
+            if key in self:
+                s0_param = self[key]
+                break
+
+        if s0_param is not None:
+            s0 = getattr(s0_param, "value", s0_param)
+        else:
+            s0 = 1.0
+
+        # Strip pint units if present to ensure clean float ndarray math
+        s0 = float(s0.magnitude) if hasattr(s0, "magnitude") else float(s0)
+
+        # 3. Apply relaxation & scaling
+        if isinstance(
+            scheme,
+            (
+                DiffusionAcquisitionScheme,
+                DiffusionAcquisitionSchemeBValue,
+                DiffusionAcquisitionSchemeDelta,
+            ),
+        ):
+            te = getattr(scheme.echo_times, "magnitude", scheme.echo_times)
+            t2 = getattr(self[T2_KEY], "value", self[T2_KEY])
+            t2 = getattr(t2, "magnitude", t2)
+
+            te_t2 = np.exp(-np.asarray(te, dtype=float) / float(t2))
+
+            # Full signal: S0 * A_diff(b) * exp(-TE / T2)
+            signal = s0 * model_signal * te_t2
+
         elif isinstance(scheme, InversionRecoveryAcquisitionScheme):
-            if self['T1'] is None:
-                raise ValueError("Expected T1 values for Inversion Recovery scheme")
-            ti = scheme.inversion_times  # [s]
-            tr = scheme.repetition_times  # [s]
-            te = scheme.echo_times  # [s]
+            if T1_KEY not in self or self[T1_KEY] is None:
+                raise ValueError("Expected T1 values for Inversion Recovery scheme.")
 
-            ti_t1 = np.exp(-ti / self[T1_KEY].value)
-            tr_t1 = np.exp(-tr / self[T1_KEY].value)
-            te_t2 = np.exp(-te / self[T2_KEY].value)
+            ti = getattr(scheme.inversion_times, "magnitude", scheme.inversion_times)
+            tr = getattr(scheme.repetition_times, "magnitude", scheme.repetition_times)
+            te = getattr(scheme.echo_times, "magnitude", scheme.echo_times)
 
-            signal = model_signal * (1 - 2 * ti_t1 + tr_t1) * te_t2
+            t1 = getattr(self[T1_KEY], "value", self[T1_KEY])
+            t1 = getattr(t1, "magnitude", t1)
+            t2 = getattr(self[T2_KEY], "value", self[T2_KEY])
+            t2 = getattr(t2, "magnitude", t2)
+
+            ti_t1 = np.exp(-np.asarray(ti, dtype=float) / float(t1))
+            tr_t1 = np.exp(-np.asarray(tr, dtype=float) / float(t1))
+            te_t2 = np.exp(-np.asarray(te, dtype=float) / float(t2))
+
+            # Full signal: S0 * A_diff(b) * (1 - 2*exp(-TI/T1) + exp(-TR/T1)) * exp(-TE/T2)
+            signal = s0 * model_signal * (1.0 - 2.0 * ti_t1 + tr_t1) * te_t2
 
         else:
-            raise ValueError("Unsupported scheme type")
-                         
+            raise ValueError(f"Unsupported scheme type: {type(scheme)}")
+
         return signal
    
     def get_dependencies(self):       
@@ -541,6 +624,144 @@ class RelaxationTissueModel(TissueModel):
         # Push the updated wrapped-model parameters into dmipy itself.
         self._model.set_scaled_parameters(self._model.scaled_parameter_vector)
 
+    def set_scaled_fit_parameters(self, new_values: np.ndarray) -> None:
+        super().set_scaled_fit_parameters(new_values)
+
+        # Wrapped backends may cache parameter values instead of reading the
+        # shared TissueParameter objects directly.
+        self._model.set_scaled_parameters(self._model.scaled_parameter_vector)
+
+    def scaled_jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
+        def seconds_as_array(value) -> np.ndarray:
+            to_seconds = getattr(value, "to", None)
+            if to_seconds is not None:
+                value = to_seconds("s").magnitude
+            return np.asarray(value, dtype=float)
+
+        if isinstance(
+            scheme,
+            (
+                DiffusionAcquisitionScheme,
+                DiffusionAcquisitionSchemeBValue,
+                DiffusionAcquisitionSchemeDelta,
+                InversionRecoveryAcquisitionScheme,
+            ),
+        ):
+            echo_times = seconds_as_array(scheme.echo_times)
+        else:
+            raise ValueError(f"Unsupported scheme type: {type(scheme).__name__}.")
+
+        # -------------------------------------------------------------
+        # 1. Base S0 value and scale
+        # -------------------------------------------------------------
+        s0_key = next((k for k in (BASE_SIGNAL_KEY, "S0", "s0") if k in self), None)
+        if s0_key is not None:
+            s0_val = getattr(self[s0_key], "value", 1.0)
+            s0_val = float(getattr(s0_val, "magnitude", s0_val))
+            s0_scale = getattr(self[s0_key], "scale", 1.0)
+            s0_scale = float(getattr(s0_scale, "magnitude", s0_scale))
+        else:
+            s0_val = 1.0
+            s0_scale = 1.0
+
+        # -------------------------------------------------------------
+        # 2. T2 decay and Inversion Recovery factors
+        # -------------------------------------------------------------
+        t2 = float(seconds_as_array(self[T2_KEY].value))
+        t2_scale = float(seconds_as_array(self[T2_KEY].scale))
+        t2_decay = np.exp(-echo_times / t2)
+
+        if isinstance(scheme, InversionRecoveryAcquisitionScheme):
+            if T1_KEY not in self or self[T1_KEY] is None:
+                raise ValueError("Expected T1 values for Inversion Recovery scheme.")
+            inversion_times = seconds_as_array(scheme.inversion_times)
+            repetition_times = seconds_as_array(scheme.repetition_times)
+            t1 = float(seconds_as_array(self[T1_KEY].value))
+            inversion_factor = (
+                1.0
+                - 2.0 * np.exp(-inversion_times / t1)
+                + np.exp(-repetition_times / t1)
+            )
+            relaxation_factor = inversion_factor * t2_decay
+        else:
+            inversion_factor = None
+            relaxation_factor = t2_decay
+
+        # -------------------------------------------------------------
+        # 3. Model Diffusion Attenuation & Jacobian
+        # -------------------------------------------------------------
+        if type(self._model) is TissueModel:
+            model_signal = np.ones(scheme.pulse_count, dtype=float)
+            model_jacobian = np.zeros((scheme.pulse_count, 0), dtype=float)
+        else:
+            model_signal = np.asarray(self._model(scheme), dtype=float)
+            model_optimize = np.asarray(self._model.include_optimize, dtype=bool)
+            expected_columns = int(np.count_nonzero(model_optimize))
+
+            if expected_columns:
+                model_jacobian = cast_to_ndarray(self._model.scaled_jacobian(scheme))
+            else:
+                model_jacobian = np.zeros((scheme.pulse_count, 0), dtype=float)
+
+            if model_jacobian.shape != (scheme.pulse_count, expected_columns):
+                raise ValueError(
+                    f"Wrapped model scaled_jacobian returned shape {model_jacobian.shape}; "
+                    f"expected ({scheme.pulse_count}, {expected_columns})."
+                )
+
+        # Full forward signal: S = S0 * model_signal * relaxation_factor
+        current_signal = s0_val * model_signal * relaxation_factor
+
+        # -------------------------------------------------------------
+        # 4. Fill Full Jacobian Matrix
+        # -------------------------------------------------------------
+        jacobian = np.zeros((scheme.pulse_count, len(self)), dtype=float)
+
+        # A. Diffusion parameters from underlying model
+        if type(self._model) is not TissueModel:
+            model_column = 0
+            for name, optimized in zip(self._model.parameter_names, model_optimize):
+                if not optimized:
+                    continue
+                wrapper_name = MODEL_PREFIX + name
+                if wrapper_name in self:
+                    wrapper_column = self.parameter_names.index(wrapper_name)
+                    # Chain rule: d(S0 * R * A)/d(p) = S0 * R * dA/dp
+                    jacobian[:, wrapper_column] = (
+                        s0_val * relaxation_factor * model_jacobian[:, model_column]
+                    )
+                model_column += 1
+
+        # B. Baseline parameter (S0)
+        if s0_key is not None and s0_key in self.parameter_names:
+            s0_column = self.parameter_names.index(s0_key)
+            # dS / d(S0_scaled) = (dS / dS0) * S0_scale = (model_signal * relaxation_factor) * S0_scale
+            jacobian[:, s0_column] = model_signal * relaxation_factor * s0_scale
+
+        # C. T2 relaxation parameter
+        if T2_KEY in self.parameter_names:
+            t2_column = self.parameter_names.index(T2_KEY)
+            # dS / d(T2_scaled) = (dS / dT2) * T2_scale = (S * TE / T2^2) * T2_scale
+            jacobian[:, t2_column] = (
+                current_signal * echo_times / (t2**2) * t2_scale
+            )
+
+        # D. T1 relaxation parameter (Inversion Recovery)
+        if inversion_factor is not None and T1_KEY in self.parameter_names:
+            # d(1 - 2*exp(-TI/T1) + exp(-TR/T1)) / dT1
+            t1_derivative = (
+                -2.0 * inversion_times * np.exp(-inversion_times / t1)
+                + repetition_times * np.exp(-repetition_times / t1)
+            ) / (t1**2)
+            t1_column = self.parameter_names.index(T1_KEY)
+            t1_scale = float(seconds_as_array(self[T1_KEY].scale))
+            # dS / d(T1_scaled) = S0 * model_signal * t2_decay * (d(inv_factor)/dT1) * T1_scale
+            jacobian[:, t1_column] = (
+                s0_val * model_signal * t2_decay * t1_derivative * t1_scale
+            )
+
+        return jacobian[:, self.include_optimize]
+
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
         if not isinstance(
             scheme,
@@ -555,6 +776,37 @@ class RelaxationTissueModel(TissueModel):
         signal = np.asarray(signal, dtype=float)
         if signal.shape != scheme.echo_times.shape:
             raise ValueError("signal must have one value for each measurement.")
+
+        if self[T2_KEY].fit_flag:
+            fit_parameters = [
+                parameter for parameter in self.values() if parameter.fit_flag
+            ]
+            if not fit_parameters:
+                raise ValueError("At least one tissue parameter must be fit.")
+
+            bounds = self.scaled_fit_bounds_all
+            initial_values = np.asarray(
+                [parameter.value / parameter.scale for parameter in fit_parameters],
+                dtype=float,
+            )
+            if np.any(initial_values < bounds.lb) or np.any(initial_values > bounds.ub):
+                raise ValueError("Initial fit parameters must lie within their fit bounds.")
+
+            method = fit_options.pop("method", "trf")
+            fitting_model = deepcopy(self)
+
+            def residual(scaled_parameters):
+                fitting_model.set_scaled_fit_parameters(scaled_parameters)
+                return fitting_model(scheme) - signal
+
+            result = least_squares(
+                residual,
+                x0=initial_values,
+                bounds=(bounds.lb, bounds.ub),
+                method=method,
+                **fit_options,
+            )
+            return FittedModelMinimize(self, result)
 
         # Undo the known factor exp(-TE/T2) before fitting the diffusion model.
         decay = np.exp(-scheme.echo_times / self[T2_KEY].value)

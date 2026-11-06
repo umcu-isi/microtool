@@ -58,6 +58,80 @@ def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: floa
     #  2) z and signal have different units.
     return (1 / noise_var ** 2) * np.sum(derivative_term * (z - signal ** 2), axis=-1)
 
+@njit(cache=True)
+def fisher_information_rice_2(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
+    """
+    Fisher information matrix for Rician noise.
+
+    I_ij = sum_k  xi(nu_k/sigma) / sigma^2 * J_ki * J_kj
+
+    xi(theta) = int_0^inf m^3 exp(-(m-theta)^2/2) * ive(1, m*theta)^2 / ive(0, m*theta) dm - theta^2
+
+    :param jac: N x M Jacobian (N measurements, M parameters)
+    :param signal: N-element vector of noise-free signal values (nu)
+    :param noise_var: noise variance (sigma^2)
+    :return: M x M information matrix
+    """
+    N, M = jac.shape
+    sigma = np.sqrt(noise_var)
+    n_grid = 600
+    info = np.zeros((M, M))
+
+    for k in range(N):
+        theta = signal[k] / sigma
+
+        # xi -> 1 (Gaussian limit) at high SNR, xi(0) = 0
+        if theta > 20.0:
+            xi = 1.0
+        elif theta <= 0.0:
+            xi = 0.0
+        else:
+            lo = max(0.0, theta - 10.0)
+            hi = theta + 10.0
+            h = (hi - lo) / (n_grid - 1)
+            acc = 0.0
+            for i in range(n_grid):
+                m = lo + i * h
+                x = m * theta
+                if x < 1e-12:
+                    f = 0.0
+                else:
+                    # exponentially scaled Bessel I0, I1 (A&S 9.8.1-9.8.4)
+                    if x < 3.75:
+                        t = (x / 3.75) ** 2
+                        i0 = 1.0 + t * (3.5156229 + t * (3.0899424 + t * (1.2067492
+                             + t * (0.2659732 + t * (0.0360768 + t * 0.0045813)))))
+                        i1 = x * (0.5 + t * (0.87890594 + t * (0.51498869 + t * (0.15084934
+                             + t * (0.02658733 + t * (0.00301532 + t * 0.00032411))))))
+                        e = np.exp(-x)
+                        ive0 = i0 * e
+                        ive1 = i1 * e
+                    else:
+                        t = 3.75 / x
+                        sq = np.sqrt(x)
+                        ive0 = (0.39894228 + t * (0.01328592 + t * (0.00225319 + t * (-0.00157565
+                               + t * (0.00916281 + t * (-0.02057706 + t * (0.02635537
+                               + t * (-0.01647633 + t * 0.00392377)))))))) / sq
+                        ive1 = (0.39894228 + t * (-0.03988024 + t * (-0.00362018 + t * (0.00163801
+                               + t * (-0.01031555 + t * (0.02282967 + t * (-0.02895312
+                               + t * (0.01787654 + t * (-0.00420059)))))))))  / sq
+                    f = m ** 3 * np.exp(-0.5 * (m - theta) ** 2) * ive1 ** 2 / ive0
+
+                w_trap = 0.5 if (i == 0 or i == n_grid - 1) else 1.0
+                acc += w_trap * f
+            xi = acc * h - theta ** 2
+            xi = min(max(xi, 0.0), 1.0)   # numerical guard: 0 <= xi <= 1
+
+        w = xi / noise_var
+        for a in range(M):
+            for b in range(a, M):
+                info[a, b] += w * jac[k, a] * jac[k, b]
+
+    # symmetrize
+    for a in range(M):
+        for b in range(a + 1, M):
+            info[b, a] = info[a, b]
+    return info
 
 class LossFunction:
     """
@@ -195,5 +269,6 @@ def scipy_loss(x: np.ndarray, scheme: AcquisitionScheme, model: TissueModel, noi
 # ---------- Current loss function selection.
 gauss_loss = CrlbLoss(fisher_information_gauss)
 rice_loss = CrlbLoss(fisher_information_rice)
+rice_loss_2 = CrlbLoss(fisher_information_rice_2)
 
 default_loss = gauss_loss

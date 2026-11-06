@@ -1,8 +1,10 @@
 from typing import List, Tuple
 
 import numpy as np
-from scipy.optimize import OptimizeResult, Bounds, NonlinearConstraint
+from scipy.optimize import OptimizeResult, Bounds, NonlinearConstraint, minimize
 from tqdm.contrib.itertools import product
+from scipy.stats import qmc
+import logging
 
 
 class Optimizer:
@@ -105,7 +107,7 @@ class SOMA(Optimizer):
     def __init__(
         self,
         population_sz: int = 50,
-        max_migrations: int =100,
+        max_migrations: int = 200,
         max_fevals=None,
         PRT: float = 0.1,
         path_length: float = 3.0,
@@ -139,9 +141,7 @@ class SOMA(Optimizer):
     ) -> OptimizeResult:
         self.Nx = len(x0)
         if self.max_fevals is None:
-            self.max_fevals = 60000 
-
-        print("Manually setted max fevals to:", self.max_fevals)
+            self.max_fevals = self.Nx * 10**4
 
         bounds = options["bounds"]
         constraints = options.get("constraints", ())
@@ -166,7 +166,7 @@ class SOMA(Optimizer):
             fun,
             args,
             self.max_fevals,
-            #initial_value=np.asarray(x0, dtype=float).ravel(),
+            initial_value=np.asarray(x0, dtype=float).ravel(),
         )
 
         prev_best = population.best_cost
@@ -219,23 +219,24 @@ class SOMA(Optimizer):
 
 
 class Population:
-    """This class defines the population in the SOMA algorithm
-    """
+    """This class defines the population in the SOMA algorithm."""
 
     def __init__(self, sz: int, bounds: Bounds, constraint, fun: callable, args: tuple, max_evals: int,
-                 values: np.ndarray = None):
+                 values: np.ndarray = None, initial_value: np.ndarray = None):
         """
         :param sz: The population size
         :param bounds: The parameter bounds (or the search domain if you prefer this terminology)
+        :param constraint: Constraints of the optimization problem
         :param fun: Objective function to be optimized
         :param max_evals: Maximum allowed function evaluation before stopping the SOMA algorithm
         :param values: Starting parameter values of the population, defaults to None
+        :param initial_value: A known-feasible point, used as the start of the random walk
         """
         self.sz = sz
 
         self.constraints = constraint
-        self.lower_bound = bounds.lb
-        self.upper_bound = bounds.ub
+        self.lower_bound = np.asarray(bounds.lb, dtype=float).ravel()
+        self.upper_bound = np.asarray(bounds.ub, dtype=float).ravel()
         self.Nx = len(bounds.lb)
         self.fun = fun
         self.args = args
@@ -245,18 +246,152 @@ class Population:
         self.best_cost = np.inf
         self.best_individual = None
 
+        if np.any(~np.isfinite(self.lower_bound)) or np.any(~np.isfinite(self.upper_bound)):
+            raise ValueError("SOMA requires finite lower and upper bounds.")
+        if np.any(self.lower_bound > self.upper_bound):
+            raise ValueError("SOMA lower bounds must not exceed upper bounds.")
+
         if values is None:
-            # initializing a randomly distributed population over the provided domains
-            self._values = self.lower_bound + np.random.rand(sz, self.Nx) * (self.upper_bound - self.lower_bound)
+            self._values = self._initialize_population(sz, initial_value)
+        else:
+            self._values = np.asarray(values, dtype=float)
 
         # computing the starting fitness values
         self._set_fitness()
 
+        best_id = int(np.argmin(self._fitness))
+        if np.isfinite(self._fitness[best_id]):
+            self.best_cost = float(self._fitness[best_id])
+            self.best_individual = self._values[best_id].copy()
+
+    # ------------------------------------------------------------------
+    # feasibility
+    # ------------------------------------------------------------------
+    def _is_feasible(self, x):
+        """Errors from constraint functions (e.g. 'Pulse interval too short') count as infeasible."""
+        try:
+            return bool(np.all(np.isfinite(x))
+                        and np.all(x >= self.lower_bound)
+                        and np.all(x <= self.upper_bound)
+                        and not is_constrained(x, self.constraints))
+        except Exception:
+            return False
+
+    def _ray_extent(self, x, d, n=20, bisect=12):
+        """Largest s >= 0 such that x + s*d stays feasible (march along the ray, then bisect the first break)."""
+        with np.errstate(divide="ignore", invalid="ignore"):
+            s_lim = np.where(d > 0, (self.upper_bound - x) / d,
+                    np.where(d < 0, (self.lower_bound - x) / d, np.inf))
+        s_box = np.min(s_lim)
+        if not np.isfinite(s_box) or s_box <= 0:
+            return 0.0
+
+        ok, bad = 0.0, None
+        for s in np.linspace(0, s_box, n + 1)[1:]:
+            if self._is_feasible(x + s * d):
+                ok = s
+            else:
+                bad = s
+                break
+        if bad is None:
+            return ok
+
+        for _ in range(bisect):
+            mid = 0.5 * (ok + bad)
+            if self._is_feasible(x + mid * d):
+                ok = mid
+            else:
+                bad = mid
+        return ok
+
+    # ------------------------------------------------------------------
+    # initialization: hit-and-run from a known-feasible point
+    # ------------------------------------------------------------------
+    def _initialize_population(self, sz, initial_value=None, burn_in=30, thin=5,
+                               n_active=None, include_start=True):
+        """
+        Random walk inside the feasible region, starting at initial_value.
+
+        :param burn_in: steps taken before points are collected (moves away from x0)
+        :param thin: collect every `thin`-th step (reduces correlation between points)
+        :param n_active: number of coordinates moved per step. None = all coordinates.
+                         Use 1-3 if segments are very short (thin feasible region).
+        :param include_start: also put the starting point itself in the population
+        """
+        if initial_value is None:
+            raise ValueError("Hit-and-run initialization needs a feasible initial_value (x0).")
+
+        rng = np.random.default_rng()
+        span = self.upper_bound - self.lower_bound
+
+        x = np.asarray(initial_value, float).ravel()
+        if x.size != self.Nx:
+            raise ValueError("Initial value length does not match the bounds.")
+        if not self._is_feasible(x):
+            raise ValueError("initial_value is not feasible; cannot start the random walk.")
+
+        candidates = [x.copy()] if include_start else []
+        steps, stuck, moved = 0, 0, 0
+        max_steps = burn_in + thin * sz * 10
+        print(f"[Init] hit-and-run from x0 | Nx={self.Nx}, target={sz}, "
+              f"burn_in={burn_in}, thin={thin}, n_active={n_active}")
+
+        while len(candidates) < sz and steps < max_steps:
+            steps += 1
+
+            # random direction (optionally sparse), scaled per parameter range
+            d = rng.normal(size=self.Nx)
+            if n_active is not None and n_active < self.Nx:
+                mask = np.zeros(self.Nx, dtype=bool)
+                mask[rng.choice(self.Nx, size=n_active, replace=False)] = True
+                d[~mask] = 0.0
+            d = d * span
+            norm = np.linalg.norm(d / span)
+            if norm == 0:
+                continue
+            d /= norm
+
+            s_pos = self._ray_extent(x, d)
+            s_neg = self._ray_extent(x, -d)
+            seg = s_pos + s_neg
+            if seg < 1e-9:
+                stuck += 1                       # blocked in both directions
+                continue
+
+            # uniform point on the feasible segment (interior, not the boundary)
+            s = rng.uniform(-s_neg, s_pos)
+            x_new = x + s * d
+            if self._is_feasible(x_new):
+                x = x_new
+                moved += 1
+
+            if steps > burn_in and steps % thin == 0:
+                candidates.append(x.copy())
+                print(f"[Init] {len(candidates):3d}/{sz} | step={steps} "
+                      f"| segment (rel)={np.linalg.norm(seg * d / span):.3e} "
+                      f"| dist from x0 (rel)={np.linalg.norm((x - np.asarray(initial_value, float).ravel()) / span):.3e}")
+
+        pop = np.asarray(candidates)
+        print("=" * 60)
+        print(f"[Init] Done: {len(pop)}/{sz} points, {steps} steps, moved={moved}, stuck={stuck}, ")
+        print(f"[Init] Per-coordinate spread (std/range): {np.round(pop.std(axis=0) / span, 3)}")
+        print("=" * 60)
+
+        if len(pop) < sz:
+            logging.warning(f"Only {len(pop)} of {sz} feasible points found.")
+        return pop
+
     def cost_fun(self, x: np.ndarray):
-        if is_constrained(x, self.constraints):
+        if (
+            np.any(~np.isfinite(x))
+            or np.any(x < self.lower_bound)
+            or np.any(x > self.upper_bound)
+            or is_constrained(x, self.constraints)
+        ):
             return np.inf
-        else:
-            return self.fun(x, *self.args)
+
+        cost = float(self.fun(x, *self.args))
+        return cost if np.isfinite(cost) else np.inf
 
     def migrate(self, path_length: float, N_jump: int, PRT: float):
         """Executes a single population migration
@@ -344,14 +479,41 @@ def is_constrained(x: np.ndarray, constraints: List[NonlinearConstraint]) -> boo
     :param x: Parameter combination
     :return: boolean that is true if the parameter combination breaks the constraint
     """
-    for constraint in constraints:
+    if constraints is None:
+        return False
 
-        if constraints is None or constraints == ():
-            continue
-        else:
-            fun = constraint.fun
-            constraint_value = fun(x)
-            if np.any(constraint_value < constraint.lb) or np.any(constraint_value > constraint.ub):
-                return True
+    if not isinstance(constraints, (list, tuple)):
+        constraints = (constraints,)
+    
+
+    for constraint in constraints:
+        constraint_value = np.asarray(constraint.fun(x), dtype=float)
+        if not np.all(np.isfinite(constraint_value)):
+            return True
+        if np.any(constraint_value < constraint.lb) or np.any(
+            constraint_value > constraint.ub
+        ):
+            return True
 
     return False
+
+def build_idx(scheme, x0):
+    """Map parameter names to their indices in the scaled free-parameter vector."""
+    names = {
+        "delta": "DiffusionPulseDuration",
+        "Delta": "DiffusionPulseInterval",
+        "G":     "DiffusionPulseMagnitude",
+        "TE":    "EchoTime",
+    }
+    x0 = np.asarray(x0, float)
+    base = {k: np.asarray(scheme._copy_and_update_scaled_parameter(n, x0), float)
+            for k, n in names.items()}
+    idx = {k: [] for k in names}
+    for j in range(len(x0)):
+        xp = x0.copy()
+        xp[j] += 1.0
+        for k, n in names.items():
+            new = np.asarray(scheme._copy_and_update_scaled_parameter(n, xp), float)
+            if not np.allclose(new, base[k]):
+                idx[k].append(j)
+    return {k: np.array(v, dtype=int) for k, v in idx.items()}

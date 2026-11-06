@@ -349,9 +349,15 @@ class AcquisitionScheme(Dict[str, AcquisitionParameters], ABC):
         if self[parameter].fixed:
             return copy(self[parameter].values)
 
+        acquisition_parameter = self[parameter]
         update_values = self.get_parameter_from_scaled_parameter_vector(parameter, x)
-        value_array = copy(self[parameter].values)
-        value_array[self[parameter].optimize_mask] = update_values
+        value_array = copy(acquisition_parameter.values)
+        value_array[acquisition_parameter.optimize_mask] = update_values
+
+        if acquisition_parameter._repetition_groups is not None:
+            for group in acquisition_parameter._repetition_groups:
+                value_array[group[1:]] = value_array[group[0]]
+
         return value_array
 
 
@@ -405,7 +411,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             # TODO: Change DiffusionPulseMagnitude scale to 1000 or 10000?
             'DiffusionPulseMagnitude': AcquisitionParameters(
                 values=pulse_magnitudes, unit=GRADIENT_UNIT, scale=1. * unit('mT/mm'), symbol="|G|", lower_bound=0.0,
-                upper_bound=0.065 * unit('mT/mm')
+                upper_bound=0.078 * unit('mT/mm')
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
