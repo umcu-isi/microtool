@@ -32,3 +32,16 @@
 
 # dont push log files
 *.log
+
+# Virtual environments
+.conda/
+/.conda/
+/venv
+/.venv
+/env/
+/.env/
+
+# Python cache & build
+__pycache__/
+*.py[cod]
+*$py.class

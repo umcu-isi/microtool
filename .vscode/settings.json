@@ -1,0 +1,4 @@
+{
+    "git.autorefresh": false,
+    "git.autoRepositoryDetection": "openEditors"
+}
