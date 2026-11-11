@@ -314,6 +314,7 @@ class MicrotorchTissueModel(TissueModel):
             [self[name].optimize for name in self._model_parameter_names],
             dtype=bool,
         )
+
         jacobian = (jacobian * scales[np.newaxis, :])[:, optimize_mask]
         b0_mask = cast_to_ndarray(scheme.b_values, unit_str="s/mm²") == 0
         jacobian[b0_mask, :] = 0.0

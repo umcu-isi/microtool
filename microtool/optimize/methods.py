@@ -109,7 +109,7 @@ class SOMA(Optimizer):
         population_sz: int = 50,
         max_migrations: int = 200,
         max_fevals=None,
-        PRT: float = 0.1,
+        PRT: float = 0.7,
         path_length: float = 3.0,
         step: float = 0.11,
     ):
@@ -306,7 +306,7 @@ class Population:
     # ------------------------------------------------------------------
     # initialization: hit-and-run from a known-feasible point
     # ------------------------------------------------------------------
-    def _initialize_population(self, sz, initial_value=None, burn_in=30, thin=5,
+    def _initialize_population(self, sz, initial_value=None, burn_in=2000, thin=100,
                                n_active=None, include_start=True):
         """
         Random walk inside the feasible region, starting at initial_value.

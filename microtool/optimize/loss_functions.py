@@ -8,6 +8,7 @@ from ..acquisition_scheme import AcquisitionScheme
 from ..tissue_model import TissueModel
 from ..utils.math import cartesian_product, diagonal
 from ..utils.unit_registry import cast_to_ndarray
+from scipy.special import ive
 
 # As a rule of thumb, if the condition number is 10^k, then you may lose up to k digits of accuracy on top of what would
 # be lost to the numerical method. Allow loosing 1% of 32-bit floating point precision (approx. 5 of 7 digits
@@ -88,85 +89,70 @@ def fisher_information_rice(jac: np.ndarray, signal: np.ndarray, noise_var: floa
     # Computing the cross term derivatives
     derivative_term = cartesian_product(jac)
 
-    # TODO: there is probably some mistake here, since:
-    #  1) this can become negative (e.g. with jac=1, signal=2, noise var=1).
-    #  2) z and signal have different units.
+
     return (1 / noise_var ** 2) * np.sum(derivative_term * (z - signal ** 2), axis=-1)
 
+def _build_xi_table(theta_max=15.0, h=0.01, n_quad=100):
+    """xi(theta) on a uniform grid via Gauss-Legendre. Runs once at import."""
+    n = int(round(theta_max / h)) + 1
+    thetas = np.linspace(0.0, theta_max, n)
+    x_gl, w_gl = np.polynomial.legendre.leggauss(n_quad)
+    xi = np.zeros(n)                                  # xi(0) = 0
+    for i in range(1, n):
+        th = thetas[i]
+        lo, hi = max(0.0, th - 12.0), th + 12.0
+        m = 0.5 * (hi - lo) * x_gl + 0.5 * (hi + lo)
+        w = 0.5 * (hi - lo) * w_gl
+        z = m * th
+        f = m**3 * np.exp(-0.5 * (m - th) ** 2) * ive(1, z) ** 2 / ive(0, z)
+        xi[i] = np.sum(w * f) - th**2
+    return thetas[1] - thetas[0], np.clip(xi, 0.0, 1.0)
+
+
+_H, _XI = _build_xi_table()
+_THETA_MAX = _H * (len(_XI) - 1)
+
+
 @njit(cache=True)
-def fisher_information_rice_2(jac: np.ndarray, signal: np.ndarray, noise_var: float) -> np.ndarray:
+def fisher_information_rice_2(jac, signal, noise_var):
     """
-    Fisher information matrix for Rician noise.
+    Rician FIM: I = J^T diag(xi(nu/sigma) / sigma^2) J   (sigma known)
 
-    I_ij = sum_k  xi(nu_k/sigma) / sigma^2 * J_ki * J_kj
-
-    xi(theta) = int_0^inf m^3 exp(-(m-theta)^2/2) * ive(1, m*theta)^2 / ive(0, m*theta) dm - theta^2
-
-    :param jac: N x M Jacobian (N measurements, M parameters)
-    :param signal: N-element vector of noise-free signal values (nu)
-    :param noise_var: noise variance (sigma^2)
-    :return: M x M information matrix
+    :param jac:       N x M Jacobian
+    :param signal:    N-element noise-free signal vector
+    :param noise_var: noise variance sigma^2 (same units as signal^2)
+    :return:          M x M information matrix
     """
     N, M = jac.shape
-    sigma = np.sqrt(noise_var)
-    n_grid = 600
+    inv_var = 1.0 / noise_var
+    inv_sigma = np.sqrt(inv_var)
+    inv_h = 1.0 / _H
+    last = len(_XI) - 2
     info = np.zeros((M, M))
 
     for k in range(N):
-        theta = signal[k] / sigma
-
-        # xi -> 1 (Gaussian limit) at high SNR, xi(0) = 0
-        if theta > 20.0:
-            xi = 1.0
-        elif theta <= 0.0:
-            xi = 0.0
+        theta = signal[k] * inv_sigma
+        if not theta > 0.0:                    # xi(0)=0; also skips NaN
+            continue
+        if theta >= _THETA_MAX:                # asymptotic tail
+            t2 = 1.0 / (theta * theta)
+            xi = 1.0 - 0.5 * t2 - 0.25 * t2 * t2
         else:
-            lo = max(0.0, theta - 10.0)
-            hi = theta + 10.0
-            h = (hi - lo) / (n_grid - 1)
-            acc = 0.0
-            for i in range(n_grid):
-                m = lo + i * h
-                x = m * theta
-                if x < 1e-12:
-                    f = 0.0
-                else:
-                    # exponentially scaled Bessel I0, I1 (A&S 9.8.1-9.8.4)
-                    if x < 3.75:
-                        t = (x / 3.75) ** 2
-                        i0 = 1.0 + t * (3.5156229 + t * (3.0899424 + t * (1.2067492
-                             + t * (0.2659732 + t * (0.0360768 + t * 0.0045813)))))
-                        i1 = x * (0.5 + t * (0.87890594 + t * (0.51498869 + t * (0.15084934
-                             + t * (0.02658733 + t * (0.00301532 + t * 0.00032411))))))
-                        e = np.exp(-x)
-                        ive0 = i0 * e
-                        ive1 = i1 * e
-                    else:
-                        t = 3.75 / x
-                        sq = np.sqrt(x)
-                        ive0 = (0.39894228 + t * (0.01328592 + t * (0.00225319 + t * (-0.00157565
-                               + t * (0.00916281 + t * (-0.02057706 + t * (0.02635537
-                               + t * (-0.01647633 + t * 0.00392377)))))))) / sq
-                        ive1 = (0.39894228 + t * (-0.03988024 + t * (-0.00362018 + t * (0.00163801
-                               + t * (-0.01031555 + t * (0.02282967 + t * (-0.02895312
-                               + t * (0.01787654 + t * (-0.00420059)))))))))  / sq
-                    f = m ** 3 * np.exp(-0.5 * (m - theta) ** 2) * ive1 ** 2 / ive0
-
-                w_trap = 0.5 if (i == 0 or i == n_grid - 1) else 1.0
-                acc += w_trap * f
-            xi = acc * h - theta ** 2
-            xi = min(max(xi, 0.0), 1.0)   # numerical guard: 0 <= xi <= 1
-
-        w = xi / noise_var
+            p = theta * inv_h
+            i = min(int(p), last)
+            f = p - i
+            xi = _XI[i] + f * (_XI[i + 1] - _XI[i])
+        w = xi * inv_var
         for a in range(M):
+            wa = w * jac[k, a]
             for b in range(a, M):
-                info[a, b] += w * jac[k, a] * jac[k, b]
+                info[a, b] += wa * jac[k, b]
 
-    # symmetrize
     for a in range(M):
         for b in range(a + 1, M):
             info[b, a] = info[a, b]
     return info
+
 
 class LossFunction:
     """
@@ -316,4 +302,4 @@ gauss_loss = CrlbLoss(fisher_information_gauss)
 rice_loss = CrlbLoss(fisher_information_rice)
 rice_loss_2 = CrlbLoss(fisher_information_rice_2)
 
-default_loss = gauss_loss
+default_loss = rice_loss_2

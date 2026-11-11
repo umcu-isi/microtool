@@ -367,25 +367,47 @@ class MultiTissueModel(TissueModel):
             self[VOLUME_FRACTION_PREFIX + "0"].value = 1 - np.sum(self.volume_fractions[1:])
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
-        # use the call functions of the models
-        compartment_signals = np.stack([model(scheme) for model in self._models], axis=-1)
-        return np.sum(compartment_signals * self.volume_fractions, axis=-1)
+        compartment_signals = np.stack(
+            [model(scheme) for model in self._models],
+            axis=-1,
+        )
+        mixture_signal = np.sum(
+            compartment_signals * self.volume_fractions,
+            axis=-1,
+        )
+        return self[BASE_SIGNAL_KEY].value * mixture_signal
 
     def scaled_jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
         compartment_signals = [
-            model(scheme) for model in self._models
+            np.asarray(model(scheme), dtype=float)
+            for model in self._models
         ]
+        volume_fractions = self.volume_fractions
+        mixture_signal = np.sum(
+            np.stack(compartment_signals, axis=-1) * volume_fractions,
+            axis=-1,
+        )
+
+        s0_parameter = self[BASE_SIGNAL_KEY]
+        s0 = float(getattr(s0_parameter.value, "magnitude", s0_parameter.value))
+        s0_scale = float(
+            getattr(s0_parameter.scale, "magnitude", s0_parameter.scale)
+        )
+
         jacobian = np.zeros((scheme.pulse_count, len(self)), dtype=float)
 
+        # Compartment-parameter derivatives.
         for model_index, (model, volume_fraction) in enumerate(
-            zip(self._models, self.volume_fractions)
+            zip(self._models, volume_fractions)
         ):
             optimized = np.asarray(model.include_optimize, dtype=bool)
             expected_columns = int(np.count_nonzero(optimized))
+
             if expected_columns:
                 model_jacobian = cast_to_ndarray(model.scaled_jacobian(scheme))
             else:
-                model_jacobian = np.zeros((scheme.pulse_count, 0))
+                model_jacobian = np.zeros((scheme.pulse_count, 0), dtype=float)
+
             if model_jacobian.shape != (scheme.pulse_count, expected_columns):
                 raise ValueError(
                     f"Model {model_index} scaled_jacobian returned shape "
@@ -397,19 +419,44 @@ class MultiTissueModel(TissueModel):
             for name, is_optimized in zip(model.parameter_names, optimized):
                 if not is_optimized:
                     continue
+
                 parameter_index = self._param_location.get(
                     f"{MODEL_PREFIX}{model_index}_{name}"
                 )
                 if parameter_index is not None:
                     jacobian[:, parameter_index] = (
-                        volume_fraction * model_jacobian[:, model_column]
+                        s0 * volume_fraction * model_jacobian[:, model_column]
                     )
                 model_column += 1
 
-            fraction_name = f"{VOLUME_FRACTION_PREFIX}{model_index}"
-            if fraction_name in self:
-                fraction_index = self.parameter_names.index(fraction_name)
-                jacobian[:, fraction_index] = compartment_signals[model_index]
+            # Use the last compartment's fraction as dependent:
+            # vf_last = 1 - sum(vf_i for i < last).
+            dependent_index = len(self._models) - 1
+
+            for model_index in range(len(self._models)):
+                if model_index == dependent_index:
+                    continue
+
+                fraction_name = f"{VOLUME_FRACTION_PREFIX}{model_index}"
+                if fraction_name in self:
+                    fraction_index = self.parameter_names.index(fraction_name)
+                    fraction_scale = float(
+                        getattr(
+                            self[fraction_name].scale,
+                            "magnitude",
+                            self[fraction_name].scale,
+                        )
+                    )
+                    jacobian[:, fraction_index] = (
+                        s0
+                        * (compartment_signals[model_index]
+                        - compartment_signals[dependent_index])
+                        * fraction_scale
+                    )
+
+        # Top-level S0 derivative.
+        s0_index = self.parameter_names.index(BASE_SIGNAL_KEY)
+        jacobian[:, s0_index] = mixture_signal * s0_scale
 
         return jacobian[:, self.include_optimize]
 
