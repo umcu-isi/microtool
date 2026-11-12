@@ -11,7 +11,7 @@ B_UNIT = 's/mm²'
 B_VAL_LB = 0.0 * unit('s/mm²')
 B_VAL_UB = 3e3 * unit('s/mm²')
 B_VAL_SCALE = 1e3 * unit('s/mm²')
-B_MAX = 2000 * unit('s/mm²')  # TODO: what's the difference in usage with B_VAL_UB?
+B_MAX = 25000 * unit('s/mm²')  # TODO: what's the difference in usage with B_VAL_UB?
 
 GRADIENT_UNIT = 'mT/mm'
 

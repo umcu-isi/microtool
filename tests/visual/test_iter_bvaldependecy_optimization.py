@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from dmipy.signal_models.gaussian_models import G2Zeppelin
+from dmipy_fit.signal_models.gaussian_models import G2Zeppelin
 
 from microtool.dmipy import DmipyMultiTissueModel
 from microtool.acquisition_scheme import DiffusionAcquisitionSchemeBValue

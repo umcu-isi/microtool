@@ -182,6 +182,16 @@ class TissueModel(Dict[str, TissueParameter], ABC):
         for parameter, new_value in zip(self.values(), new_parameter_values):
             parameter.value = new_value * parameter.scale
 
+    def is_valid_scaled_parameters(self, parameter_values: Sequence[float]) -> bool:
+        """Return whether a complete scaled parameter vector is valid for this model."""
+        values = np.asarray(parameter_values, dtype=float)
+        if values.shape != (len(self),):
+            raise ValueError(
+                f"Expected {len(self)} scaled parameter values, received shape "
+                f"{values.shape}."
+            )
+        return bool(np.all(np.isfinite(values)))
+
     def set_scaled_fit_parameters(self, new_values: np.ndarray) -> None:
         """
         Sets the TissueParameters that are flagged for fitting to the provided values.
@@ -329,6 +339,47 @@ class MultiTissueModel(TissueModel):
         # Update MultiTissue instance lastly
         super().set_scaled_parameters(new_parameter_values)
 
+    def is_valid_scaled_parameters(self, parameter_values: Sequence[float]) -> bool:
+        values = np.asarray(parameter_values, dtype=float)
+        if not super().is_valid_scaled_parameters(values):
+            return False
+
+        fraction_values = []
+        for name, parameter in self.items():
+            if not name.startswith(VOLUME_FRACTION_PREFIX):
+                continue
+            index = self.parameter_names.index(name)
+            fraction = values[index] * float(
+                getattr(parameter.scale, "magnitude", parameter.scale)
+            )
+            lower, upper = parameter.fit_bounds
+            if (
+                not np.isfinite(fraction)
+                or fraction < lower - 1e-8
+                or fraction > upper + 1e-8
+            ):
+                return False
+            fraction_values.append(fraction)
+
+        if fraction_values and not np.isclose(
+            np.sum(fraction_values), 1.0, rtol=0.0, atol=1e-8
+        ):
+            return False
+
+        for model_index, model in enumerate(self._models):
+            model_values = np.array(model.scaled_parameter_vector, copy=True)
+            for parameter_index, name in enumerate(model.parameter_names):
+                parent_name = f"{MODEL_PREFIX}{model_index}_{name}"
+                parent_index = self._param_location.get(parent_name)
+                if parent_index is not None:
+                    model_values[parameter_index] = values[parent_index]
+                elif name == BASE_SIGNAL_KEY:
+                    model_values[parameter_index] = 1.0
+            if not model.is_valid_scaled_parameters(model_values):
+                return False
+
+        return True
+
     def set_scaled_fit_parameters(self, new_values: np.ndarray) -> None:
         """
         New definition of parameter values for fitting both in compartment models and MultiTissueModel
@@ -364,7 +415,8 @@ class MultiTissueModel(TissueModel):
         
         # update volume fraction 0 if necessary
         if len(self._models) > 1:
-            self[VOLUME_FRACTION_PREFIX + "0"].value = 1 - np.sum(self.volume_fractions[1:])
+            last = f"{VOLUME_FRACTION_PREFIX}{len(self._models) - 1}"
+            self[last].value = 1.0 - np.sum(self.volume_fractions[:-1])
 
     def __call__(self, scheme: AcquisitionScheme) -> np.ndarray:
         compartment_signals = np.stack(
@@ -677,6 +729,18 @@ class RelaxationTissueModel(TissueModel):
 
         # Push the updated wrapped-model parameters into dmipy itself.
         self._model.set_scaled_parameters(self._model.scaled_parameter_vector)
+
+    def is_valid_scaled_parameters(self, parameter_values: Sequence[float]) -> bool:
+        values = np.asarray(parameter_values, dtype=float)
+        if not super().is_valid_scaled_parameters(values):
+            return False
+
+        model_values = np.array(self._model.scaled_parameter_vector, copy=True)
+        for model_index, name in enumerate(self._model.parameter_names):
+            wrapper_name = f"{MODEL_PREFIX}{name}"
+            if wrapper_name in self:
+                model_values[model_index] = values[self.parameter_names.index(wrapper_name)]
+        return self._model.is_valid_scaled_parameters(model_values)
 
     def set_scaled_fit_parameters(self, new_values: np.ndarray) -> None:
         super().set_scaled_fit_parameters(new_values)
@@ -1085,6 +1149,9 @@ class TissueModelDecorator(TissueModel, ABC):
 
     def scaled_jacobian(self, scheme: AcquisitionScheme) -> np.ndarray:
         return self._original.scaled_jacobian(scheme)
+
+    def is_valid_scaled_parameters(self, parameter_values: Sequence[float]) -> bool:
+        return self._original.is_valid_scaled_parameters(parameter_values)
 
     def fit(self, scheme: AcquisitionScheme, signal: np.ndarray, **fit_options) -> FittedModel:
         return self._original.fit(scheme, signal, **fit_options)

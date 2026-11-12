@@ -79,7 +79,7 @@ class TestDiffusionAcquisitionSchemeOGSEMethods:
         [0, 1, 0],
     ])
 
-    pulse_durations = np.array([0.007, 0.007]) * unit("s")
+    pulse_durations = np.array([0.011, 0.011]) * unit("s")
     pulse_intervals = np.array([0.035, 0.035]) * unit("s")
 
     scheme = DiffusionAcquisitionScheme_OGSE(

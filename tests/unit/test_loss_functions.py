@@ -3,7 +3,7 @@ import numpy as np
 from microtool.optimize.loss_functions import fisher_information_gauss, fisher_information_rice, gauss_loss, \
     rice_loss, ILL_LOSS, compute_loss, compute_crlb
 from microtool.acquisition_scheme import EchoScheme
-from microtool.tissue_model import ExponentialTissueModel, TissueParameter
+from microtool.tissue_model import ExponentialTissueModel, MultiTissueModel, TissueParameter
 from microtool.utils.unit_registry import unit
 
 
@@ -98,3 +98,19 @@ def test_loss_and_crlb_sum_over_parameter_value_combinations():
 def test_tissue_parameter_value_list_must_not_be_empty():
     with np.testing.assert_raises(ValueError):
         TissueParameter(value=1.0, scale=1.0, value_list=[])
+
+
+def test_multi_tissue_scaled_parameter_validation_checks_fractions():
+    model = MultiTissueModel(
+        [
+            ExponentialTissueModel(t2=0.02 * unit("s")),
+            ExponentialTissueModel(t2=0.04 * unit("s")),
+        ],
+        volume_fractions=[0.6, 0.4],
+    )
+    candidate = model.scaled_parameter_vector.copy()
+
+    assert model.is_valid_scaled_parameters(candidate)
+
+    candidate[model.parameter_names.index("vf_1")] = 0.5
+    assert not model.is_valid_scaled_parameters(candidate)

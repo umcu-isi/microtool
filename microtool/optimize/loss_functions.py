@@ -47,10 +47,18 @@ def _sum_over_parameter_values(model: TissueModel, evaluate: Callable):
             scenario_parameters = original_parameters.copy()
             for (index, _), value in zip(listed_parameters, values):
                 scenario_parameters[index] = value
+
+            if not model.is_valid_scaled_parameters(scenario_parameters):
+                continue
+
             model.set_scaled_parameters(scenario_parameters)
             results.append(evaluate())
     finally:
         model.set_scaled_parameters(original_parameters)
+    if not results:
+        raise ValueError(
+            "No valid parameter-value combinations for the model constraints."
+        )
 
     return np.sum(results, axis=0)
 
@@ -302,4 +310,4 @@ gauss_loss = CrlbLoss(fisher_information_gauss)
 rice_loss = CrlbLoss(fisher_information_rice)
 rice_loss_2 = CrlbLoss(fisher_information_rice_2)
 
-default_loss = rice_loss_2
+default_loss = gauss_loss

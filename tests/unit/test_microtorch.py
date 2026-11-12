@@ -9,6 +9,9 @@ from microtool.microtorch import (
     MicrotorchTissueModel,
     convert_acquisition_scheme,
 )
+from microtool.optimize.loss_functions import _sum_over_parameter_values
+from microtool.tissue_model import RelaxationTissueModel
+from microtool.utils.unit_registry import unit
 
 
 class DummyDiffusionScheme(DiffusionAcquisitionScheme):
@@ -267,6 +270,29 @@ def test_composition_rejects_negative_derived_fraction():
 
     with pytest.raises(ValueError, match="must sum to at most 1"):
         wrapped.set_scaled_parameters(scaled_parameters)
+
+
+def test_parameter_value_combinations_filter_invalid_wrapped_fractions():
+    microtorch_model = MicrotorchTissueModel(
+        DummyCompositeMicrotorchModel(),
+        parameters={"f_0": 0.6, "f_1": 0.3, "f_2": 0.1},
+    )
+    model = RelaxationTissueModel(microtorch_model, t2=0.1 * unit("s"))
+    model["model_f_0"].value_list = [0.5, 0.6, 0.7]
+    model["model_f_1"].value_list = [0.4, 0.3, 0.2]
+
+    original_fraction = microtorch_model["f_2"].value
+    valid_dependent_fractions = []
+
+    def evaluate():
+        valid_dependent_fractions.append(microtorch_model["f_2"].value)
+        return microtorch_model["f_2"].value
+
+    summed_result = _sum_over_parameter_values(model, evaluate)
+
+    assert len(valid_dependent_fractions) == 8
+    assert summed_result == pytest.approx(1.0)
+    assert microtorch_model["f_2"].value == pytest.approx(original_fraction)
 
 
 def test_composition_fit_keeps_optimizer_trials_feasible(install_microtorch):

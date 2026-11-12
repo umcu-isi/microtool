@@ -51,7 +51,7 @@ if os.environ.get('MICROTOOL_USE_UNITS') == '1':
                 if isinstance(elem, unit.Quantity) and elem.units != unit(unit_str):
                     raise ValueError(f"Casted array has units '{elem.units}', but expected '{unit_str}'")
 
-        return np.array(x, copy=False)
+        return np.asarray(x)
 
 else:
     def unit(_: str):
@@ -67,4 +67,4 @@ else:
         When pytest is loaded, this function will check if the argument has the proper units before (down)casting
          it to a numpy array.
         """
-        return np.array(x, copy=False)
+        return np.asarray(x)

@@ -1,8 +1,8 @@
 from typing import List, Union
 
 import numpy as np
-from dmipy.core.modeling_framework import MultiCompartmentModel
-from dmipy.signal_models import cylinder_models, gaussian_models, sphere_models
+from dmipy_fit.core.modeling_framework import MultiCompartmentModel
+from dmipy_fit.signal_models import cylinder_models, gaussian_models, sphere_models
 
 from ..dmipy import DmipyMultiTissueModel
 

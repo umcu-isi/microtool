@@ -339,6 +339,40 @@ class MicrotorchTissueModel(TissueModel):
             )
         dependent.value = min(max(value, lower), upper) if validate else value
 
+    def is_valid_scaled_parameters(self, parameter_values: Sequence[float]) -> bool:
+        values = np.asarray(parameter_values, dtype=float)
+        if not super().is_valid_scaled_parameters(values):
+            return False
+        if self._dependent_fraction_name is None:
+            return True
+
+        independent_fraction_values = []
+        for name in self._fraction_parameter_names:
+            if name == self._dependent_fraction_name:
+                continue
+
+            index = self.parameter_names.index(name)
+            parameter = self[name]
+            fraction = values[index] * float(
+                getattr(parameter.scale, "magnitude", parameter.scale)
+            )
+            lower, upper = parameter.fit_bounds
+            if (
+                not np.isfinite(fraction)
+                or fraction < lower - 1e-8
+                or fraction > upper + 1e-8
+            ):
+                return False
+            independent_fraction_values.append(fraction)
+
+        dependent_value = 1.0 - sum(independent_fraction_values)
+        dependent = self[self._dependent_fraction_name]
+        lower, upper = dependent.fit_bounds
+        return bool(
+            np.isfinite(dependent_value)
+            and lower - 1e-8 <= dependent_value <= upper + 1e-8
+        )
+
     def set_scaled_parameters(self, new_parameter_values: Sequence[float]) -> None:
         if len(new_parameter_values) != len(self):
             raise ValueError(

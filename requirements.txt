@@ -1,4 +1,4 @@
-dmipy~=1.0
+dmipy~=3.0
 matlab
 matplotlib~=3.7
 numba~=0.58

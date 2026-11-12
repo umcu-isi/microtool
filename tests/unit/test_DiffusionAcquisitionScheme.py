@@ -44,7 +44,7 @@ class TestDiffusionAcquisitionSchemeConstruction:
 class TestDiffusionAcquisitionSchemeMethods:
     magnitudes = np.array([0, 0.2]) * unit('mT/mm')
     directions = np.array([[0, 0, 1], [0, 1, 0]])
-    pulse_durations = np.array([0.007, 0.007]) * unit('s')
+    pulse_durations = np.array([0.0011, 0.011]) * unit('s')
     pulse_intervals = np.array([0.035, 0.035]) * unit('s')
     scheme = DiffusionAcquisitionScheme(magnitudes, directions, pulse_durations=pulse_durations,
                                         pulse_intervals=pulse_intervals)

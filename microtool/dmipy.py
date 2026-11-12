@@ -5,10 +5,10 @@ from copy import deepcopy
 from typing import Dict, List, Optional, Union, Tuple, Sequence
 
 import numpy as np
-from dmipy.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
-from dmipy.core.fitted_modeling_framework import FittedMultiCompartmentModel
-from dmipy.core.modeling_framework import ModelProperties as SingleDmipyModel
-from dmipy.core.modeling_framework import MultiCompartmentModel
+from dmipy_fit.core.acquisition_scheme import DmipyAcquisitionScheme, acquisition_scheme_from_bvalues
+from dmipy_fit.core.fitted_modeling_framework import FittedMultiCompartmentModel
+from dmipy_fit.core.modeling_framework import ModelProperties as SingleDmipyModel
+from dmipy_fit.core.modeling_framework import MultiCompartmentModel
 
 from .acquisition_scheme import DiffusionAcquisitionScheme, \
     DiffusionAcquisitionSchemeBValue, DiffusionAcquisitionSchemeDelta

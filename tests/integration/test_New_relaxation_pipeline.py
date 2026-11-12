@@ -1,7 +1,7 @@
 
 import numpy as np
-from dmipy.signal_models.gaussian_models import G1Ball
-from dmipy.signal_models import sphere_models, cylinder_models, gaussian_models
+from dmipy_fit.signal_models.gaussian_models import G1Ball
+from dmipy_fit.signal_models import sphere_models, cylinder_models, gaussian_models
 
 
 from microtool.dmipy import DmipyMultiTissueModel
@@ -11,26 +11,28 @@ from microtool.utils.unit_registry import unit
 sphere_dmipy = sphere_models.S4SphereGaussianPhaseApproximation(diffusion_constant=2.0e-9, diameter=10e-6)
 sphere = DmipyMultiTissueModel(sphere_dmipy)
 sphere._dmipy_fix_parameters('S4SphereGaussianPhaseApproximation_1_diameter', 2.0e-9)
-sphere_relax = RelaxationTissueModel(sphere, t2=0.020 * unit('s'))
+sphere_relax = RelaxationTissueModel(sphere, t2=0.080 * unit('s'))
 
 
 stick_dmipy = cylinder_models.C1Stick(mu=[np.pi / 2, np.pi / 2], lambda_par=8.0e-9)
 stick = DmipyMultiTissueModel(stick_dmipy)
 stick._dmipy_fix_parameters('C1Stick_1_lambda_par', 8.0e-9)
 stick._dmipy_fix_parameters('C1Stick_1_mu', [np.pi / 2, np.pi / 2])
-stick_relax = RelaxationTissueModel(stick, t2=0.020 * unit('s'))
+stick_relax = RelaxationTissueModel(stick, t2=0.080 * unit('s'))
 
 model = MultiTissueModel([sphere_relax, stick_relax], volume_fractions=[0.3, 0.7])
+model["vf_1"].optimize = False
+model["vf_1"].fit_flag = False
 
 from microtool.acquisition_scheme import DiffusionAcquisitionScheme, InversionRecoveryAcquisitionScheme
 from microtool.gradient_sampling import sample_uniform_half_sphere
 
 M = 10
-N = 30
+N = 60
 
-b_vals = np.concatenate([np.repeat(0, M), np.repeat(1000, M), np.repeat(3000, M)]) * unit('s/mm²')
-pulse_durations = np.concatenate([np.repeat(0.019, M), np.repeat(0.016, M), np.repeat(0.007, M)]) * unit('s')
-pulse_intervals = np.concatenate([np.repeat(0.030, M), np.repeat(0.027, M), np.repeat(0.020, M)]) * unit('s')
+b_vals = np.concatenate([np.repeat(0, M), np.repeat(1000, M),np.repeat(1000, M),np.repeat(2000, M), np.repeat(3000, M), np.repeat(3000, M)]) * unit('s/mm²')
+pulse_durations = np.concatenate([np.repeat(0.019, M), np.repeat(0.016, M), np.repeat(0.016, M), np.repeat(0.014, M), np.repeat(0.016, M), np.repeat(0.014, M)]) * unit('s')
+pulse_intervals = np.concatenate([np.repeat(0.030, M), np.repeat(0.027, M), np.repeat(0.045, M), np.repeat(0.030, M), np.repeat(0.035, M), np.repeat(0.040, M)]) * unit('s')
 
 directions = sample_uniform_half_sphere(N)
 initial_scheme = DiffusionAcquisitionScheme.from_bvals(b_values=b_vals, b_vectors=directions, pulse_durations=pulse_durations,

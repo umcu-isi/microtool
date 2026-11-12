@@ -15,7 +15,7 @@ class ScannerParameters:
                  t_90: float = 4e-3 * unit('s'),
                  t_180: float = 6e-3 * unit('s'),
                  t_half: float = 14e-3 * unit('s'),
-                 g_max: float = 400e-3 * unit('mT/mm'),  # TODO: moet dit geen 40 mT/mm zijn (human MRI of small bore)?
+                 g_max: float = 1000e-3 * unit('mT/mm'),  # TODO: moet dit geen 40 mT/mm zijn (human MRI of small bore)?
                  s_max: float = 1300 * unit('mT/mm/s')):
         # TODO: check values? e.g. all positive and t_half >= t_90/2?
         self.t_90 = t_90
