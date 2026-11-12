@@ -10,22 +10,22 @@ setuptools.setup(
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: Other/Proprietary License",
-        "Operating System :: Microsoft :: Windows",
-        "Development Status :: 3 - Alpha"
+        "Operating System :: OS Independent",
+        "Development Status :: 3 - Alpha",
     ],
     python_requires='>=3.11',
     install_requires=[
-        'numpy~=1.24',
-        'scipy~=1.9',
+        'numpy>=1.24,<2.0',
+        'scipy>=1.9,<1.14',
         'tabulate~=0.9',
-        'numba~=0.58',
+        'numba>=0.58,<0.60',
         'tqdm~=4.66',
-        'pandas~=2.0',
-        'matplotlib~=3.7',
+        'pandas>=2.0,<2.2.3',
+        'matplotlib>=3.7,<3.9',
     ],
     extras_require={
-        'dmipy support': ['dmipy~=1.0'],
+        'dmipy': ['dmipy~=3.0'],
         'microtorch': ['microtorch-mri~=0.1.1'],
         'testing': ['pint~=0.21'],
-    }
+    },
 )
