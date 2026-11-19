@@ -16,7 +16,7 @@ setuptools.setup(
     python_requires='==3.8.*',
     install_requires=[
         'numpy~=1.24',
-        'scipy~=1.9',
+        'scipy~=1.10',
         'tabulate~=0.9',
         'numba~=0.58',
         'tqdm~=4.66',

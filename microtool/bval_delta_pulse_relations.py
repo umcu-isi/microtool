@@ -21,10 +21,12 @@ def constrained_dependencies(dependency: list, parameters: dict, scanner_paramet
         # Constrain b-values to TE. This computation is based on maximal G.
         pulse_duration, pulse_interval, pulse_magnitude = diffusion_pulse_from_echo_time(
             parameters['echo_times'], scanner_parameters)
-        b_from_te = b_value_from_diffusion_pulse(pulse_duration, pulse_interval, pulse_magnitude, scanner_parameters)
-        constraints &= parameters['b_values'] < b_from_te
+        b_values = b_value_from_diffusion_pulse(pulse_duration, pulse_interval, pulse_magnitude, scanner_parameters)
+        constraints &= parameters['b_values'] < b_values
 
     else:
+        # TODO: If the goal is to constrain the diffusion pulse to parameters['echo_times'], then we should just compute
+        #  the optimal TE from the pulse parameters and check if it is smaller than parameters['echo_times']?
         # Constrain deltas to TE.
         # In this case deltas are optimize and used directly to compute b_val.
 

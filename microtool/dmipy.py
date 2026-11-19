@@ -21,6 +21,7 @@ from .utils.unit_registry import unit, cast_to_ndarray
 warnings.filterwarnings('ignore', 'No b0 measurements were detected.*')
 
 
+# TODO: consequent use of upper- or lower-case b (B-Values, b-vectors).
 dmipy_to_microtool_name = {
     "bvalues": "B-Values",
     "delta": "DiffusionPulseDuration",
@@ -34,7 +35,7 @@ dmipy_to_microtool_name = {
 def get_parameters(multi_model: MultiCompartmentModel) -> Dict[str, TissueParameter]:
     """
     Compiles a dictionary of all tissue parameters present in the given multi-compartment model.
-    These are wrapped in the microtool TissueParameter wrapper. Parameter linking and optimization flags are extracted.
+    These are wrapped in the MICROtool TissueParameter wrapper. Parameter linking and optimization flags are extracted.
 
     :param multi_model: A dmipy multi-compartment model.
     :return: A dictionary of tissue parameters

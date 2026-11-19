@@ -236,8 +236,9 @@ def make_de_callback(scheme: AcquisitionScheme, model: TissueModel, noise_var: f
 def bounds_tuple2scipy(microtool_bounds: List[Tuple[float, float]]) -> Bounds:
     lb_array = np.array([bound[0] for bound in microtool_bounds])
     ub_array = np.array([bound[1] for bound in microtool_bounds])
-    # keep feasible is required to ensure that the optimizer doesn't step out of the search space
-    return Bounds(lb_array, ub_array, keep_feasible=True)
+    # keep_feasible=False (default) allows out-of-bounds points for calculating finite differences. It does not make the
+    # optimizer return results that are out of bounds.
+    return Bounds(lb_array, ub_array)
 
 
 def warn_early_termination(result: OptimizeResult):
