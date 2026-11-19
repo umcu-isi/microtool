@@ -7,6 +7,43 @@ from .unit_registry import unit
 from ..constants import GAMMA
 from ..scanner_parameters import ScannerParameters
 
+def total_echo_time(
+    scanner_parameters: ScannerParameters,
+    diffusion_pulse_duration: float,
+    diffusion_pulse_interval: float,
+):
+    """
+    Calculate the minimum echo time in seconds, including diffusion
+    pulse duration and interval.
+
+    Parameters
+    ----------
+    scanner_parameters : ScannerParameters
+        Scanner parameters.
+    diffusion_pulse_duration : float
+        Diffusion pulse duration (delta), in seconds.
+    diffusion_pulse_interval : float
+        Diffusion pulse interval (Delta), in seconds.
+
+    Returns
+    -------
+    float
+        Minimum echo time in seconds.
+    """
+    g_max = scanner_parameters.g_max
+    t90 = scanner_parameters.t_90
+    t180 = scanner_parameters.t_180
+    s_max = scanner_parameters.s_max
+
+    t_rise = g_max / s_max
+
+    te_min = (
+        t90
+        + diffusion_pulse_interval
+        + diffusion_pulse_duration
+    )
+
+    return te_min
 
 def New_minimal_echo_time(scanner_parameters: ScannerParameters):
     """

@@ -14,7 +14,7 @@ from .gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
 from .gradient_sampling import sample_uniform_half_sphere
 from .scanner_parameters import ScannerParameters, default_scanner
 from .utils.math import is_smaller_than_with_tolerance, is_higher_than_with_tolerance, random_uniform
-from .utils.solve_echo_time import minimal_echo_time, New_minimal_echo_time
+from .utils.solve_echo_time import minimal_echo_time, New_minimal_echo_time, total_echo_time
 from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT, PULSE_TIMING_LB, PULSE_TIMING_UB, \
     PULSE_TIMING_SCALE,  B_VAL_LB, B_VAL_UB, B_VAL_SCALE, MAX_TE, B_MAX
 from .pulse_relations import b_value_from_diffusion_pulse, pulse_magnitude_from_b_value, diffusion_pulse_from_echo_time
@@ -393,7 +393,9 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         if echo_times is None:
             # offset to prevent being to close to actual minimal echo times
             offset = 1e-6 * unit('s')
-            echo_times = minimal_echo_time(b_values, self.scanner_parameters) + offset
+            echo_times = total_echo_time(self.scanner_parameters,
+                                    self.pulse_durations,
+                                    self.pulse_intervals)
 
         # converting to np array of correct type
         gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
@@ -408,7 +410,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             # TODO: Change DiffusionPulseMagnitude scale to 1000 or 10000?
             'DiffusionPulseMagnitude': AcquisitionParameters(
                 values=pulse_magnitudes, unit=GRADIENT_UNIT, scale=1. * unit('mT/mm'), symbol="|G|", lower_bound=0.0,
-                upper_bound=5e3 * unit('mT/mm')
+                upper_bound=0.528 * unit('mT/mm')
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -592,6 +594,33 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 return (echo_time - t_min) / self['EchoTime'].scale
 
             echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
+            constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
+
+        if not (
+            self['DiffusionPulseDuration'].fixed and
+            self['DiffusionPulseInterval'].fixed and
+            self['EchoTime'].fixed
+            ):
+            def echo_constraint_fun(x: np.ndarray):
+                self.set_scaled_free_parameter_vector(x)
+
+                echo_time = self._copy_and_update_scaled_parameter("EchoTime", x)
+
+                echo_total = total_echo_time(
+                    self.scanner_parameters,
+                    self.pulse_durations,
+                    self.pulse_intervals
+                )
+
+                return (echo_time - echo_total) / self['EchoTime'].scale
+
+            echo_time_constraint = NonlinearConstraint(
+                echo_constraint_fun,
+                0.0,
+                np.inf,
+                keep_feasible=True
+            )
+
             constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
 
         return constraints

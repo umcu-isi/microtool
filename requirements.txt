@@ -2,7 +2,7 @@ dmipy~=1.0
 matlab
 matplotlib~=3.7
 numba~=0.58
-numpy~=1.24
+numpy
 pandas~=2.0
 pytest
 scipy~=1.9  # TODO: dmipy requires scipy 1.4.1
