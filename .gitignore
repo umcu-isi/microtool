@@ -3,6 +3,7 @@
 /MICROtool.egg-info
 *.pyc
 .ipynb_checkpoints
+__pycache__/
 
 # Results and images
 /scripts/MonteCarlo/results

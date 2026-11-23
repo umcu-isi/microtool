@@ -1,7 +1,7 @@
 import numpy as np
 
 from microtool.scanner_parameters import ScannerParameters
-from microtool.utils.solve_echo_time import minimal_echo_time
+from microtool.pulse_relations import minimal_echo_time
 from microtool.utils.unit_registry import unit
 
 

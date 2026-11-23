@@ -14,10 +14,10 @@ from .gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
 from .gradient_sampling import sample_uniform_half_sphere
 from .scanner_parameters import ScannerParameters, default_scanner
 from .utils.math import is_smaller_than_with_tolerance, is_higher_than_with_tolerance, random_uniform
-from .utils.solve_echo_time import minimal_echo_time, New_minimal_echo_time, total_echo_time
+#from .utils.solve_echo_time import Minimal_echo_time
 from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT, PULSE_TIMING_LB, PULSE_TIMING_UB, \
     PULSE_TIMING_SCALE,  B_VAL_LB, B_VAL_UB, B_VAL_SCALE, MAX_TE, B_MAX
-from .pulse_relations import b_value_from_diffusion_pulse, pulse_magnitude_from_b_value, diffusion_pulse_from_echo_time, b_value_from_diffusion_pulse_OGSE, pulse_magnitude_from_b_value_OGSE
+from .pulse_relations import b_value_from_diffusion_pulse, pulse_magnitude_from_b_value, diffusion_pulse_from_echo_time, echo_time_from_diffusion_pulse, minimal_echo_time, b_value_from_diffusion_pulse_OGSE, pulse_magnitude_from_b_value_OGSE
 from .utils.unit_registry import unit, cast_to_ndarray
 
 
@@ -392,10 +392,12 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         # set default echo times to minimal echo time based on scan parameters and b values
         if echo_times is None:
             # offset to prevent being to close to actual minimal echo times
-            offset = 1e-6 * unit('s')
-            echo_times = total_echo_time(self.scanner_parameters,
-                                    pulse_durations,
-                                    pulse_intervals)
+            echo_times = echo_time_from_diffusion_pulse(
+                    pulse_durations,
+                    pulse_intervals,
+                    pulse_magnitudes,
+                    self.scanner_parameters
+                )
 
         # converting to np array of correct type
         gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
@@ -410,7 +412,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             # TODO: Change DiffusionPulseMagnitude scale to 1000 or 10000?
             'DiffusionPulseMagnitude': AcquisitionParameters(
                 values=pulse_magnitudes, unit=GRADIENT_UNIT, scale=1. * unit('mT/mm'), symbol="|G|", lower_bound=0.0,
-                upper_bound=0.528 * unit('mT/mm')
+                upper_bound=self.scanner_parameters.g_max
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -596,27 +598,32 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
 
+#       Enforce TE >= minimum sequence duration whenever timing parameters are free
         if not (
             self['DiffusionPulseDuration'].fixed and
             self['DiffusionPulseInterval'].fixed and
             self['EchoTime'].fixed
-            ):
+        ):
             def echo_constraint_fun(x: np.ndarray):
+                # Sync free parameters (delta, Delta) to current optimizer candidate x
                 self.set_scaled_free_parameter_vector(x)
 
                 echo_time = self._copy_and_update_scaled_parameter("EchoTime", x)
 
-                echo_total = total_echo_time(
-                    self.scanner_parameters,
+                # Compute actual minimum TE required to fit RF, readout, and current (delta, Delta)
+                echo_total = echo_time_from_diffusion_pulse(
                     self.pulse_durations,
-                    self.pulse_intervals
+                    self.pulse_intervals,
+                    self.pulse_magnitude,
+                    self.scanner_parameters
                 )
 
+                # Normalized constraint: >= 0 ensures echo_time >= echo_total
                 return (echo_time - echo_total) / self['EchoTime'].scale
 
             echo_time_constraint = NonlinearConstraint(
                 echo_constraint_fun,
-                0.0,
+                -1e-12,
                 np.inf,
                 keep_feasible=True
             )
@@ -709,7 +716,7 @@ class DiffusionAcquisitionSchemeDelta(AcquisitionScheme):
         if echo_times is None:
             # # offset to prevent being to close to actual minimal echo times
             offset = 1e-6
-            min_echo_time = New_minimal_echo_time(scanner_parameters) + offset
+            min_echo_time = minimal_echo_time(scanner_parameters) + offset
             echo_times = random_uniform(min_echo_time, MAX_TE, size=len(b_values))
 
         # checking for b0 values and setting vector to zero for these values
@@ -740,7 +747,7 @@ class DiffusionAcquisitionSchemeDelta(AcquisitionScheme):
             ),
             'EchoTime': AcquisitionParameters(
                 values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
-                lower_bound=New_minimal_echo_time(self.scanner_parameters),
+                lower_bound=minimal_echo_time(self.scanner_parameters),
                 upper_bound=MAX_TE
             )
         })
@@ -919,7 +926,7 @@ class DiffusionAcquisitionSchemeDelta(AcquisitionScheme):
 
             echo_time = self._copy_and_update_scaled_parameter("EchoTime", x)
             
-            t_min = New_minimal_echo_time(self.scanner_parameters)
+            t_min = minimal_echo_time(self.scanner_parameters)
             
             return (echo_time - t_min) / self['EchoTime'].scale
 
@@ -998,7 +1005,7 @@ class DiffusionAcquisitionSchemeBValue(AcquisitionScheme):
             # Cristina 09-05
             'EchoTime': AcquisitionParameters(
                 values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
-                lower_bound=New_minimal_echo_time(self.scanner_parameters),
+                lower_bound=minimal_echo_time(self.scanner_parameters),
                 upper_bound=MAX_TE
             ),
             'B-Values': AcquisitionParameters(
@@ -1184,536 +1191,7 @@ class DiffusionAcquisitionSchemeBValue(AcquisitionScheme):
             new_mask = np.logical_or(b0_mask, old_mask)
             self[par].set_fixed_mask(new_mask)
 
-class DiffusionAcquisitionScheme_OGSE(AcquisitionScheme):
-    """
-    OGSE diffusion MRI acquisition scheme.
 
-    Primary acquisition parameters:
-        G: Gradient magnitude
-        delta: Pulse duration
-        Delta: Pulse interval
-        N: Number of oscillation periods (fixed)
-
-    Frequency is derived as:
-        f = N / delta
-
-    The b-value is calculated from G, delta, and the derived frequency.
-
-    During optimization, G, delta, and Delta can vary, while N remains fixed.
-    """
-
-    def __init__(
-        self,
-        n_periods: Union[List[int], List[float], np.ndarray],
-        pulse_magnitude: Union[List[float], np.ndarray],
-        gradient_directions: Union[
-            List[Tuple[float, float, float]], np.ndarray
-        ],
-        pulse_durations: Union[List[float], np.ndarray],
-        pulse_intervals: Union[List[float], np.ndarray],
-        echo_times: Optional[Union[List[float], np.ndarray]] = None,
-        scanner_parameters: Optional[ScannerParameters] = None,
-    ):
-        self.name = "OGSE"
-        self.scanner_parameters = scanner_parameters or ScannerParameters()
-
-        pulse_magnitude = np.asarray(pulse_magnitude, dtype=np.float64)
-        pulse_durations = np.asarray(pulse_durations, dtype=np.float64)
-        pulse_intervals = np.asarray(pulse_intervals, dtype=np.float64)
-        n_periods = np.asarray(n_periods)
-
-        gradient_directions = np.asarray(
-            gradient_directions, dtype=np.float64
-        )
-
-        # --------------------------------------------------------------
-        # Validate the acquisition parameter arrays
-        # --------------------------------------------------------------
-        arrays = {
-            "pulse_magnitude": pulse_magnitude,
-            "pulse_durations": pulse_durations,
-            "pulse_intervals": pulse_intervals,
-            "n_periods": n_periods,
-        }
-
-        for name, values in arrays.items():
-            if values.ndim != 1:
-                raise ValueError(f"{name} must be a one-dimensional array.")
-
-        lengths = {name: len(values) for name, values in arrays.items()}
-
-        if len(set(lengths.values())) != 1:
-            raise ValueError(
-                f"Acquisition parameter arrays must have equal lengths: "
-                f"{lengths}"
-            )
-
-        if np.any(n_periods < 0):
-            raise ValueError("The number of periods N must be non-negative.")
-
-        if np.any(n_periods != np.floor(n_periods)):
-            raise ValueError("The number of periods N must be integer-valued.")
-
-        if np.any(pulse_durations <= 0):
-            raise ValueError("Pulse durations must be positive.")
-
-        if np.any(pulse_intervals <= 0):
-            raise ValueError("Pulse intervals must be positive.")
-
-        if gradient_directions.shape != (len(n_periods), 3):
-            raise ValueError(
-                "gradient_directions must have shape (n_measurements, 3)."
-            )
-
-        self._n_periods = n_periods.astype(np.int64)
-
-        # --------------------------------------------------------------
-        # Calculate the initial frequency and b-values
-        # --------------------------------------------------------------
-        frequency = self._frequency_from_parameters(
-            pulse_durations, self._n_periods
-        )
-
-        b_values = b_value_from_diffusion_pulse_OGSE(
-            pulse_magnitude,
-            pulse_durations,
-            frequency,
-            self.scanner_parameters,
-        )
-
-        # --------------------------------------------------------------
-        # Default echo times
-        # --------------------------------------------------------------
-        if echo_times is None:
-            offset = 1e-6 * unit("s")
-            echo_times = (
-                minimal_echo_time(b_values, self.scanner_parameters)
-                + offset
-            )
-        else:
-            echo_times = np.asarray(echo_times, dtype=np.float64)
-
-        if len(echo_times) != len(n_periods):
-            raise ValueError(
-                "echo_times must have the same length as the other parameters."
-            )
-
-        # --------------------------------------------------------------
-        # Gradient directions
-        # --------------------------------------------------------------
-        theta, phi = unitvector_to_angles(gradient_directions).T
-
-        self._check_b_vectors(b_values, gradient_directions)
-
-        # --------------------------------------------------------------
-        # Initialize the acquisition parameter dictionary
-        # --------------------------------------------------------------
-        super().__init__(
-            {
-                "DiffusionPulseMagnitude": AcquisitionParameters(
-                    values=pulse_magnitude,
-                    unit=GRADIENT_UNIT,
-                    scale=1.0 * unit("mT/mm"),
-                    symbol="|G|",
-                    lower_bound=0.0,
-                    upper_bound=5e3 * unit("mT/mm"),
-                    fixed=False,
-                ),
-                "Periods": AcquisitionParameters(
-                    values=self._n_periods,
-                    unit="",
-                    scale=1.0,
-                    symbol="N",
-                    lower_bound=0.0,
-                    upper_bound=50.0,
-                    fixed=True,
-                ),
-                "DiffusionGradientAnglePhi": AcquisitionParameters(
-                    values=phi,
-                    unit="rad",
-                    scale=1.0,
-                    symbol=r"$\phi$",
-                    lower_bound=None,
-                    fixed=True,
-                ),
-                "DiffusionGradientAngleTheta": AcquisitionParameters(
-                    values=theta,
-                    unit="rad",
-                    scale=1.0,
-                    symbol=r"$\theta$",
-                    lower_bound=None,
-                    fixed=True,
-                ),
-                "DiffusionPulseDuration": AcquisitionParameters(
-                    values=pulse_durations,
-                    unit=PULSE_TIMING_UNIT,
-                    scale=PULSE_TIMING_SCALE,
-                    symbol=r"$\delta$",
-                    fixed=False,
-                    lower_bound=PULSE_TIMING_LB,
-                    upper_bound=PULSE_TIMING_UB,
-                ),
-                "DiffusionPulseInterval": AcquisitionParameters(
-                    values=pulse_intervals,
-                    unit=PULSE_TIMING_UNIT,
-                    scale=PULSE_TIMING_SCALE,
-                    symbol=r"$\Delta$",
-                    fixed=False,
-                    lower_bound=PULSE_TIMING_LB,
-                    upper_bound=PULSE_TIMING_UB,
-                ),
-                "EchoTime": AcquisitionParameters(
-                    values=echo_times,
-                    unit=PULSE_TIMING_UNIT,
-                    scale=PULSE_TIMING_SCALE,
-                    symbol=r"$T_E$",
-                    fixed=False,
-                    lower_bound=PULSE_TIMING_LB,
-                    upper_bound=PULSE_TIMING_UB,
-                ),
-            }
-        )
-
-        self._check_constraints()
-
-    # ------------------------------------------------------------------
-    # Frequency calculation
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _frequency_from_parameters(
-        pulse_durations: np.ndarray,
-        n_periods: np.ndarray,
-    ) -> np.ndarray:
-        """Calculate frequency in Hz from N and delta in seconds."""
-        pulse_durations = np.asarray(pulse_durations, dtype=np.float64)
-        n_periods = np.asarray(n_periods)
-
-        if np.any(pulse_durations <= 0):
-            raise ValueError("Pulse durations must be positive.")
-
-        if pulse_durations.shape != n_periods.shape:
-            raise ValueError(
-                "pulse_durations and n_periods must have equal shapes."
-            )
-
-        return n_periods / pulse_durations
-
-    # ------------------------------------------------------------------
-    # Alternative constructor from b-values
-    # ------------------------------------------------------------------
-    @classmethod
-    def from_bvals(
-        cls,
-        b_values: np.ndarray,
-        b_vectors: np.ndarray,
-        pulse_durations: np.ndarray,
-        pulse_intervals: np.ndarray,
-        n_periods: np.ndarray,
-        echo_times: Optional[Union[List[float], np.ndarray]] = None,
-        scanner_parameters: Optional[ScannerParameters] = None,
-    ):
-        """
-        Construct an OGSE scheme from b-values, delta, Delta, and N.
-
-        Gradient magnitude and frequency are derived from these inputs.
-        """
-        scanner_parameters = scanner_parameters or default_scanner
-
-        b_values = np.asarray(b_values, dtype=np.float64)
-        pulse_durations = np.asarray(pulse_durations, dtype=np.float64)
-        n_periods = np.asarray(n_periods)
-
-        if not (
-            b_values.shape
-            == pulse_durations.shape
-            == n_periods.shape
-            == np.asarray(pulse_intervals).shape
-        ):
-            raise ValueError(
-                "b_values, pulse_durations, pulse_intervals, and "
-                "n_periods must have equal shapes."
-            )
-
-        frequency = cls._frequency_from_parameters(
-            pulse_durations, n_periods
-        )
-
-        pulse_magnitude = pulse_magnitude_from_b_value_OGSE(
-            b_values,
-            pulse_durations,
-            frequency,
-            scanner_parameters,
-        )
-
-        return cls(
-            n_periods=n_periods,
-            pulse_magnitude=pulse_magnitude,
-            gradient_directions=b_vectors,
-            pulse_durations=pulse_durations,
-            pulse_intervals=pulse_intervals,
-            echo_times=echo_times,
-            scanner_parameters=scanner_parameters,
-        )
-
-    # ------------------------------------------------------------------
-    # Validation
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _check_b_vectors(
-        b_values: np.ndarray,
-        b_vectors: np.ndarray,
-    ) -> None:
-        """Validate unit vectors and set b=0 directions to zero."""
-        b0 = np.asarray(b_values) == 0
-
-        if not np.allclose(
-            np.linalg.norm(b_vectors[~b0], axis=1), 1
-        ):
-            raise ValueError("b-vectors are not unit vectors.")
-
-        # Avoid modifying the caller's input array.
-        b_vectors[b0] = 0
-
-    def _check_constraints(self):
-        """Check acquisition constraints at initialization."""
-        for desc, constraint in self.constraints.items():
-            fun_val = constraint.fun(self.scaled_free_parameter_vector)
-
-            lower_than_lb = is_smaller_than_with_tolerance(
-                fun_val, constraint.lb
-            )
-            higher_than_ub = is_higher_than_with_tolerance(
-                fun_val, constraint.ub
-            )
-
-            if lower_than_lb.any() or higher_than_ub.any():
-                raise ValueError(
-                    "DiffusionAcquisitionScheme: constraint violated, "
-                    f"scheme does not satisfy {desc}"
-                )
-
-    # ------------------------------------------------------------------
-    # Derived quantities
-    # ------------------------------------------------------------------
-    @property
-    def n_periods(self) -> np.ndarray:
-        """Fixed number of oscillation periods for each measurement."""
-        return self._n_periods.copy()
-
-    @property
-    def frequency(self) -> np.ndarray:
-        """Current OGSE frequency in Hz, derived from N / delta."""
-        return self._frequency_from_parameters(
-            self.pulse_durations, self.n_periods
-        )
-
-    @property
-    def b_values(self) -> np.ndarray:
-        """Current b-values in s/mm²."""
-        return b_value_from_diffusion_pulse_OGSE(
-            self.pulse_magnitude,
-            self.pulse_durations,
-            self.frequency,
-            self.scanner_parameters,
-        )
-
-    @property
-    def phi(self) -> np.ndarray:
-        return self["DiffusionGradientAnglePhi"].values
-
-    @property
-    def theta(self) -> np.ndarray:
-        return self["DiffusionGradientAngleTheta"].values
-
-    @property
-    def pulse_durations(self) -> np.ndarray:
-        return self["DiffusionPulseDuration"].values
-
-    @property
-    def pulse_intervals(self) -> np.ndarray:
-        return self["DiffusionPulseInterval"].values
-
-    @property
-    def pulse_magnitude(self) -> np.ndarray:
-        return self["DiffusionPulseMagnitude"].values
-
-    @property
-    def b_vectors(self) -> np.ndarray:
-        """Return an N_measurements x 3 array of gradient directions."""
-        b_vectors = angles_to_unitvectors(
-            np.array([self.theta, self.phi]).T
-        )
-
-        b_vectors[self.b_values == 0] = 0
-
-        return b_vectors
-
-    @property
-    def echo_times(self) -> np.ndarray:
-        return self["EchoTime"].values
-
-    # ------------------------------------------------------------------
-    # Constraints
-    # ------------------------------------------------------------------
-    @property
-    def constraints(self) -> Dict[str, NonlinearConstraint]:
-        constraints = {}
-
-        # Frequency is derived from N and delta, so there is no
-        # independent period-frequency coupling constraint.
-
-        # Enforce Delta > delta + t_rise + t_180.
-        if not (
-            self["DiffusionPulseDuration"].fixed
-            and self["DiffusionPulseInterval"].fixed
-        ):
-
-            def delta_constraint_fun(x: np.ndarray):
-                pulse_duration = (
-                    self._copy_and_update_scaled_parameter(
-                        "DiffusionPulseDuration", x
-                    )
-                )
-                pulse_interval = (
-                    self._copy_and_update_scaled_parameter(
-                        "DiffusionPulseInterval", x
-                    )
-                )
-
-                t_rise = self.scanner_parameters.t_rise_max
-                t_180 = self.scanner_parameters.t_180
-
-                return (
-                    pulse_interval
-                    - (pulse_duration + t_rise + t_180)
-                ) / self["DiffusionPulseInterval"].scale
-
-            constraints["PulseIntervalLargerThanPulseDuration"] = (
-                NonlinearConstraint(
-                    delta_constraint_fun,
-                    0.0,
-                    np.inf,
-                    keep_feasible=True,
-                )
-            )
-
-        # Enforce the scanner's maximum gradient magnitude.
-        if not self["DiffusionPulseMagnitude"].fixed:
-
-            def gradient_constraint_fun(x: np.ndarray):
-                g = self._copy_and_update_scaled_parameter(
-                    "DiffusionPulseMagnitude", x
-                )
-                g_max = self.scanner_parameters.g_max
-
-                return (
-                    g_max - g
-                ) / self["DiffusionPulseMagnitude"].scale
-
-            constraints["PulseMagnitudeSmallerThanMaxMagnitude"] = (
-                NonlinearConstraint(
-                    gradient_constraint_fun,
-                    0.0,
-                    np.inf,
-                    keep_feasible=True,
-                )
-            )
-
-        # Enforce TE >= minimum TE.
-        if not (
-            self["DiffusionPulseDuration"].fixed
-            and self["DiffusionPulseInterval"].fixed
-            and self["EchoTime"].fixed
-        ):
-
-            def echo_constraint_fun(x: np.ndarray):
-                # Update the scheme so b-values use the current delta.
-                self.set_scaled_free_parameter_vector(x)
-
-                echo_time = self._copy_and_update_scaled_parameter(
-                    "EchoTime", x
-                )
-
-                t_min = minimal_echo_time(
-                    self.b_values,
-                    self.scanner_parameters,
-                )
-
-                return (
-                    echo_time - t_min
-                ) / self["EchoTime"].scale
-
-            constraints["EchoTimeLargerThanMinEchoTime"] = (
-                NonlinearConstraint(
-                    echo_constraint_fun,
-                    0.0,
-                    np.inf,
-                    keep_feasible=True,
-                )
-            )
-
-        return constraints
-
-    # ------------------------------------------------------------------
-    # Fix b0 measurements
-    # ------------------------------------------------------------------
-    def fix_b0_measurements(self) -> None:
-        """Prevent b0 measurements from being optimized."""
-        b0_mask = self.b_values == 0
-
-        for par in [
-            "DiffusionPulseMagnitude",
-            "DiffusionPulseDuration",
-            "DiffusionPulseInterval",
-            "EchoTime",
-        ]:
-            old_mask = ~self[par].optimize_mask
-            new_mask = np.logical_or(b0_mask, old_mask)
-            self[par].set_fixed_mask(new_mask)
-
-    # ------------------------------------------------------------------
-    # FSL export
-    # ------------------------------------------------------------------
-    def write_bval(self, file: Union[str, bytes, PathLike]) -> None:
-        """Write b-values to an FSL .bval file."""
-        file = Path(file)
-
-        if (
-            not file.name.endswith("_dwi.bval")
-            and file.name != "dwi.bval"
-        ):
-            warnings.warn(
-                "BIDS specifies that FSL b-value files should be named "
-                "like: [*_]dwi.bval"
-            )
-
-        with file.open(
-            "w", encoding="latin-1", newline="\n"
-        ) as f:
-            f.write(
-                " ".join(f"{x:.6e}" for x in self.b_values)
-            )
-
-    def write_bvec(self, file) -> None:
-        """Write gradient directions to an FSL .bvec file."""
-        file = Path(file)
-
-        if (
-            not file.name.endswith("_dwi.bvec")
-            and file.name != "dwi.bvec"
-        ):
-            warnings.warn(
-                "BIDS specifies that FSL b-vector files should be named "
-                "like: [*_]dwi.bvec"
-            )
-
-        with file.open(
-            "w", encoding="latin-1", newline="\n"
-        ) as f:
-            for bvec in self.b_vectors:
-                f.write(
-                    " ".join(f"{x:.6e}" for x in bvec) + "\n"
-                )
 class InversionRecoveryAcquisitionScheme(AcquisitionScheme):
     """
     Defines an inversion-recovery MR acquisition scheme.
@@ -1870,14 +1348,14 @@ def random_parameter_definition(required_params: List, randomization_constraints
         # Based on B-Value dependency uniquely
         if 'DiffusionPulseDuration' and 'DiffusionPulseInterval' not in randomization_constraints:
             scheme_params['b_values'][mask] = random_uniform(B_VAL_LB, B_VAL_UB, size=np.sum(mask))
-            scheme_params['echo_times'][mask] = random_uniform(New_minimal_echo_time(default_scanner), MAX_TE, 
+            scheme_params['echo_times'][mask] = random_uniform(minimal_echo_time(default_scanner), MAX_TE,
                                                                   size=np.sum(mask))
             
         elif 'DiffusionPulseDuration' and 'DiffusionPulseInterval' in randomization_constraints:
             
             # scheme_params['pulse_magnitudes'][mask] = random_uniform(0, default_scanner.g_max,
             #                                                     size=np.sum(mask))
-            scheme_params['echo_times'][mask] = random_uniform(New_minimal_echo_time(default_scanner), MAX_TE,
+            scheme_params['echo_times'][mask] = random_uniform(minimal_echo_time(default_scanner), MAX_TE,
                                                                   size=np.sum(mask))
             scheme_params['pulse_durations'][mask] = random_uniform(PULSE_TIMING_LB, PULSE_TIMING_UB,
                                                                        size=np.sum(mask))
@@ -1904,7 +1382,7 @@ def random_parameter_definition(required_params: List, randomization_constraints
 def param_initialization_bounds(parameter: str):
         
     parameter_bound_dict = {
-        'echo_times': [New_minimal_echo_time(default_scanner), MAX_TE],
+        'echo_times': [minimal_echo_time(default_scanner), MAX_TE],
         'b_values': [B_VAL_LB, B_VAL_UB],
         'pulse_intervals': [PULSE_TIMING_LB, PULSE_TIMING_UB],
         'pulse_durations': [PULSE_TIMING_LB, PULSE_TIMING_UB],

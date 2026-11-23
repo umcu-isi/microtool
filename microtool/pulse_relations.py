@@ -287,13 +287,32 @@ def diffusion_pulse_from_echo_time(echo_time: np.ndarray, scanner_parameters: Sc
     return pulse_duration, pulse_interval, pulse_magnitude
 
 
+def minimal_echo_time(scanner_parameters: ScannerParameters):
+    """
+    :param scanner_parameters: Scan parameters
+    :return: The minimal echo time in seconds
+    """
+    # extracting the scan parameters
+    g_max = scanner_parameters.g_max
+    t90 = scanner_parameters.t_90
+    t180 = scanner_parameters.t_180
+    s_max = scanner_parameters.s_max
+
+    t_rise = g_max / s_max  # rise time
+
+    te_min = t90 + t180 + 4 * t_rise
+
+    return te_min
+
+
+
 def pulse_magnitude_from_b_value_OGSE(b_values: Union[np.ndarray, float],
                                      pulse_durations: Union[np.ndarray, float],
                                      frequencies: Union[np.ndarray, float],
                                      scanner_parameters: ScannerParameters) -> Union[np.ndarray, float]:
     """
     Compute gradient magnitude for an idealized, simplified cosine-modulated OGSE sequence.
-    Note: This analytical formula assumes a pure cosine modulation without accounting for 
+    Note: This analytical formula assumes a pure cosine modulation without accounting for
     hardware-specific trapezoidal ramp times, slew rates, or filter delays.
 
     :param b_values: b-values in s/mm²
@@ -304,7 +323,7 @@ def pulse_magnitude_from_b_value_OGSE(b_values: Union[np.ndarray, float],
 
     G = sqrt( (b * 4*pi^2*f^2) / (gamma^2 * delta))
     """
-    g_max = scanner_parameters.g_max 
+    g_max = scanner_parameters.g_max
     s_max = scanner_parameters.s_max
     t_rise = g_max / s_max
 
