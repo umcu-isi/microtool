@@ -14,10 +14,10 @@ from .gradient_sampling.utils import unitvector_to_angles, angles_to_unitvectors
 from .gradient_sampling import sample_uniform_half_sphere
 from .scanner_parameters import ScannerParameters, default_scanner
 from .utils.math import is_smaller_than_with_tolerance, is_higher_than_with_tolerance, random_uniform
-from .utils.solve_echo_time import minimal_echo_time, New_minimal_echo_time, total_echo_time
+#from .utils.solve_echo_time import Minimal_echo_time
 from .constants import ConstraintTypes, GAMMA, GRADIENT_UNIT, PULSE_TIMING_UNIT, PULSE_TIMING_LB, PULSE_TIMING_UB, \
     PULSE_TIMING_SCALE,  B_VAL_LB, B_VAL_UB, B_VAL_SCALE, MAX_TE, B_MAX
-from .pulse_relations import b_value_from_diffusion_pulse, pulse_magnitude_from_b_value, diffusion_pulse_from_echo_time
+from .pulse_relations import b_value_from_diffusion_pulse, pulse_magnitude_from_b_value, diffusion_pulse_from_echo_time, echo_time_from_diffusion_pulse, Minimal_echo_time
 from .utils.unit_registry import unit, cast_to_ndarray
 
 
@@ -392,10 +392,12 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
         # set default echo times to minimal echo time based on scan parameters and b values
         if echo_times is None:
             # offset to prevent being to close to actual minimal echo times
-            offset = 1e-6 * unit('s')
-            echo_times = total_echo_time(self.scanner_parameters,
-                                    self.pulse_durations,
-                                    self.pulse_intervals)
+            echo_times = echo_time_from_diffusion_pulse(
+                    pulse_durations,
+                    pulse_intervals,
+                    pulse_magnitudes,
+                    self.scanner_parameters
+                )
 
         # converting to np array of correct type
         gradient_directions = np.asarray(gradient_directions, dtype=np.float64)
@@ -410,7 +412,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             # TODO: Change DiffusionPulseMagnitude scale to 1000 or 10000?
             'DiffusionPulseMagnitude': AcquisitionParameters(
                 values=pulse_magnitudes, unit=GRADIENT_UNIT, scale=1. * unit('mT/mm'), symbol="|G|", lower_bound=0.0,
-                upper_bound=scanner_parameters.g_max * unit('mT/mm')
+                upper_bound=self.scanner_parameters.g_max
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
@@ -589,34 +591,39 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
                 # TODO: What is the purpose of updating the parameters here?
                 self.set_scaled_free_parameter_vector(x)
                 echo_time = self._copy_and_update_scaled_parameter("EchoTime", x)
-                t_min = minimal_echo_time(self.b_values, self.scanner_parameters)
+                t_min = Minimal_echo_time(self.b_values, self.scanner_parameters)
 
                 return (echo_time - t_min) / self['EchoTime'].scale
 
             echo_time_constraint = NonlinearConstraint(echo_constraint_fun, 0.0, np.inf, keep_feasible=True)
             constraints["EchoTimeLargerThanMinEchoTime"] = echo_time_constraint
 
+#       Enforce TE >= minimum sequence duration whenever timing parameters are free
         if not (
             self['DiffusionPulseDuration'].fixed and
             self['DiffusionPulseInterval'].fixed and
             self['EchoTime'].fixed
-            ):
+        ):
             def echo_constraint_fun(x: np.ndarray):
+                # Sync free parameters (delta, Delta) to current optimizer candidate x
                 self.set_scaled_free_parameter_vector(x)
 
                 echo_time = self._copy_and_update_scaled_parameter("EchoTime", x)
 
-                echo_total = total_echo_time(
-                    self.scanner_parameters,
+                # Compute actual minimum TE required to fit RF, readout, and current (delta, Delta)
+                echo_total = echo_time_from_diffusion_pulse(
                     self.pulse_durations,
-                    self.pulse_intervals
+                    self.pulse_intervals,
+                    self.pulse_magnitude,
+                    self.scanner_parameters
                 )
 
+                # Normalized constraint: >= 0 ensures echo_time >= echo_total
                 return (echo_time - echo_total) / self['EchoTime'].scale
 
             echo_time_constraint = NonlinearConstraint(
                 echo_constraint_fun,
-                0.0,
+                -1e-12,
                 np.inf,
                 keep_feasible=True
             )
@@ -709,7 +716,7 @@ class DiffusionAcquisitionSchemeDelta(AcquisitionScheme):
         if echo_times is None:
             # # offset to prevent being to close to actual minimal echo times
             offset = 1e-6
-            min_echo_time = New_minimal_echo_time(scanner_parameters) + offset
+            min_echo_time = Minimal_echo_time(scanner_parameters) + offset
             echo_times = random_uniform(min_echo_time, MAX_TE, size=len(b_values))
 
         # checking for b0 values and setting vector to zero for these values
@@ -740,7 +747,7 @@ class DiffusionAcquisitionSchemeDelta(AcquisitionScheme):
             ),
             'EchoTime': AcquisitionParameters(
                 values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
-                lower_bound=New_minimal_echo_time(self.scanner_parameters),
+                lower_bound=Minimal_echo_time(self.scanner_parameters),
                 upper_bound=MAX_TE
             )
         })
@@ -919,7 +926,7 @@ class DiffusionAcquisitionSchemeDelta(AcquisitionScheme):
 
             echo_time = self._copy_and_update_scaled_parameter("EchoTime", x)
             
-            t_min = New_minimal_echo_time(self.scanner_parameters)
+            t_min = Minimal_echo_time(self.scanner_parameters)
             
             return (echo_time - t_min) / self['EchoTime'].scale
 
@@ -998,7 +1005,7 @@ class DiffusionAcquisitionSchemeBValue(AcquisitionScheme):
             # Cristina 09-05
             'EchoTime': AcquisitionParameters(
                 values=echo_times, unit=PULSE_TIMING_UNIT, scale=PULSE_TIMING_SCALE, symbol=r"$T_E$", fixed=False,
-                lower_bound=New_minimal_echo_time(self.scanner_parameters),
+                lower_bound=Minimal_echo_time(self.scanner_parameters),
                 upper_bound=MAX_TE
             ),
             'B-Values': AcquisitionParameters(
@@ -1341,14 +1348,14 @@ def random_parameter_definition(required_params: List, randomization_constraints
         # Based on B-Value dependency uniquely
         if 'DiffusionPulseDuration' and 'DiffusionPulseInterval' not in randomization_constraints:
             scheme_params['b_values'][mask] = random_uniform(B_VAL_LB, B_VAL_UB, size=np.sum(mask))
-            scheme_params['echo_times'][mask] = random_uniform(New_minimal_echo_time(default_scanner), MAX_TE, 
+            scheme_params['echo_times'][mask] = random_uniform(Minimal_echo_time(default_scanner), MAX_TE, 
                                                                   size=np.sum(mask))
             
         elif 'DiffusionPulseDuration' and 'DiffusionPulseInterval' in randomization_constraints:
             
             # scheme_params['pulse_magnitudes'][mask] = random_uniform(0, default_scanner.g_max,
             #                                                     size=np.sum(mask))
-            scheme_params['echo_times'][mask] = random_uniform(New_minimal_echo_time(default_scanner), MAX_TE,
+            scheme_params['echo_times'][mask] = random_uniform(Minimal_echo_time(default_scanner), MAX_TE,
                                                                   size=np.sum(mask))
             scheme_params['pulse_durations'][mask] = random_uniform(PULSE_TIMING_LB, PULSE_TIMING_UB,
                                                                        size=np.sum(mask))
@@ -1375,7 +1382,7 @@ def random_parameter_definition(required_params: List, randomization_constraints
 def param_initialization_bounds(parameter: str):
         
     parameter_bound_dict = {
-        'echo_times': [New_minimal_echo_time(default_scanner), MAX_TE],
+        'echo_times': [Minimal_echo_time(default_scanner), MAX_TE],
         'b_values': [B_VAL_LB, B_VAL_UB],
         'pulse_intervals': [PULSE_TIMING_LB, PULSE_TIMING_UB],
         'pulse_durations': [PULSE_TIMING_LB, PULSE_TIMING_UB],

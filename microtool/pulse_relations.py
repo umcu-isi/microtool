@@ -285,3 +285,22 @@ def diffusion_pulse_from_echo_time(echo_time: np.ndarray, scanner_parameters: Sc
         raise ValueError("Echo time too short.")
 
     return pulse_duration, pulse_interval, pulse_magnitude
+
+
+
+def Minimal_echo_time(scanner_parameters: ScannerParameters):
+    """
+    :param scanner_parameters: Scan parameters
+    :return: The minimal echo time in seconds
+    """
+    # extracting the scan parameters
+    g_max = scanner_parameters.g_max
+    t90 = scanner_parameters.t_90
+    t180 = scanner_parameters.t_180
+    s_max = scanner_parameters.s_max
+    
+    t_rise = g_max / s_max  # rise time
+    
+    te_min = t90 + t180 + 4 * t_rise
+
+    return te_min
