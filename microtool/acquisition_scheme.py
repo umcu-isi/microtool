@@ -1294,7 +1294,11 @@ class DiffusionAcquisitionScheme_OGSE(AcquisitionScheme):
         if echo_times is None:
             offset = 1e-6 * unit("s")
             echo_times = (
-                minimal_echo_time(self.scanner_parameters)
+                echo_time_from_diffusion_pulse(pulse_durations,
+                    pulse_intervals,
+                    pulse_magnitude,
+                    self.scanner_parameters
+                )
                 + offset
             )
         else:
@@ -1323,7 +1327,7 @@ class DiffusionAcquisitionScheme_OGSE(AcquisitionScheme):
                     scale=1.0 * unit("mT/mm"),
                     symbol="|G|",
                     lower_bound=0.0,
-                    upper_bound=5e3 * unit("mT/mm"),
+                    upper_bound= default_scanner.g_max,
                     fixed=False,
                 ),
                 "Periods": AcquisitionParameters(
