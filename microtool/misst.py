@@ -3,8 +3,9 @@ from typing import Optional, Dict, Union
 
 import numpy as np
 
-from .acquisition_scheme import DiffusionAcquisitionScheme
+from .acquisition_scheme import DiffusionAcquisitionScheme, DiffusionAcquisitionScheme_OGSE
 from .tissue_model import TissueModel, TissueParameter
+from .scanner_parameters import ScannerParameters
 
 matlab_engine_help = 'https://www.mathworks.com/help/matlab/matlab_external/install-the-matlab-engine-for-python.html'
 
@@ -50,17 +51,63 @@ def set_misst_path(path: str):
         raise ValueError('The given path does not exist.')
 
 
-def convert_acquisition_scheme(scheme: DiffusionAcquisitionScheme) -> Dict[str, Union[str, double, float]]:
-    # Create a MISST acquisition scheme.
-    return {
-        'pulseseq': 'PGSE',  # Standard pulsed-gradient spin-echo. TODO: support more through DiffusionAcquisitionScheme
-        'G': double((scheme.pulse_magnitude * 1e-3).tolist()),  # Convert from [mT/m] to [mT/mm].
-        'grad_dirs': double(scheme.b_vectors.tolist()),
-        'smalldel': double(scheme.pulse_durations.tolist()),  # [s]
-        'delta': double(scheme.pulse_intervals.tolist()),  # [s]
-        'tau': 1e-4,  # Time interval for waveform discretization in seconds.
+def convert_acquisition_scheme(
+    scheme: Union[DiffusionAcquisitionScheme, DiffusionAcquisitionScheme_OGSE],
+) -> Dict[str, Union[str, double, float, int]]:
+    """Convert a diffusion acquisition scheme into a MATLAB-compatible protocol dictionary."""
+    seq_name = scheme.name
+
+    # Extract core gradient parameters as flat Python lists
+    g_vals = (
+        scheme["DiffusionPulseMagnitude"]
+        .values.astype(float).ravel().tolist()
+    )
+    smalldel_array = np.asarray(scheme.pulse_durations, dtype=float).ravel()
+    smalldel_vals = smalldel_array.tolist()
+    delta_vals = (
+        scheme["DiffusionPulseInterval"]
+        .values.astype(float).ravel().tolist()
+    )
+    grad_dirs = scheme.b_vectors.astype(float).tolist()
+
+    m_meas = len(g_vals)
+
+    # Assemble base protocol dictionary for MATLAB engine
+    protocol = {
+        "pulseseq": "TWOGSE" if seq_name == "OGSE" else seq_name,
+        "G": double(g_vals),
+        "grad_dirs": double(grad_dirs),
+        "smalldel": double(smalldel_vals),
+        "delta": double(delta_vals),
+        "tau": 1e-4,
     }
 
+    if seq_name == "OGSE":
+        n_periods = np.asarray(scheme.n_periods, dtype=float).ravel()
+
+        if len(n_periods) != m_meas:
+            raise ValueError(
+                "n_periods must have one value per measurement."
+            )
+
+        if len(smalldel_array) != m_meas:
+            raise ValueError(
+                "pulse_durations must have one value per measurement."
+            )
+
+        # Compute angular frequency (rad/s), leaving b0 measurements at 0
+        freq = np.zeros(m_meas, dtype=float)
+        valid = smalldel_array > 0
+        freq[valid] = n_periods[valid] / smalldel_array[valid]
+        omega = 2.0 * np.pi * freq
+
+        # Add trapezoidal-wave OGSE (TWOGSE) parameters
+        protocol["omega"] = double(omega.tolist())
+        protocol["slew_rate"] = double([ScannerParameters.s_max] * m_meas)
+        protocol["apodisedcos"] = 1
+        protocol["mirror"] = 0
+
+    return protocol
 
 class MisstTissueModel(TissueModel):
     def __init__(self, name: str, parameters: Dict[str, TissueParameter]):

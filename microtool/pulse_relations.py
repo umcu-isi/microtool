@@ -297,9 +297,90 @@ def minimal_echo_time(scanner_parameters: ScannerParameters):
     t90 = scanner_parameters.t_90
     t180 = scanner_parameters.t_180
     s_max = scanner_parameters.s_max
-    
+
     t_rise = g_max / s_max  # rise time
-    
+
     te_min = t90 + t180 + 4 * t_rise
 
     return te_min
+
+
+
+def pulse_magnitude_from_b_value_OGSE(b_values: Union[np.ndarray, float],
+                                     pulse_durations: Union[np.ndarray, float],
+                                     frequencies: Union[np.ndarray, float],
+                                     scanner_parameters: ScannerParameters) -> Union[np.ndarray, float]:
+    """
+    Compute gradient magnitude for an idealized, simplified cosine-modulated OGSE sequence.
+    Note: This analytical formula assumes a pure cosine modulation without accounting for
+    hardware-specific trapezoidal ramp times, slew rates, or filter delays.
+
+    :param b_values: b-values in s/mm²
+    :param pulse_durations: Pulse durations delta in seconds [s]
+    :param frequencies: Oscillation frequencies in Hz
+    :param scanner_parameters: ScannerParameters object containing hardware limits
+    :return: Gradient magnitude G in T/m
+
+    G = sqrt( (b * 4*pi^2*f^2) / (gamma^2 * delta))
+    """
+    g_max = scanner_parameters.g_max
+    s_max = scanner_parameters.s_max
+    t_rise = g_max / s_max
+
+    n = pulse_durations/(1/frequencies)
+
+    platue_time =(pulse_durations - (6 * n + 1 ) * t_rise) / 4 / n
+
+    term_1 = (91 * n * (t_rise**3)) / 15
+    term_2 = (8*n*(platue_time**3)) / 3
+    term_3 = (t_rise **3)/30
+    term_4 = 12 * n * t_rise * (platue_time**2)
+    term_5 = (46 * n * (t_rise**2)* platue_time)/ 3
+
+    denominator = term_1 + term_2 + term_3 + term_4 + term_5
+
+    g_magnitude = np.sqrt(b_values / denominator) / GAMMA
+
+    if np.any(g_magnitude > scanner_parameters.g_max):
+        raise ValueError("Required gradient magnitude exceeds scanner maximum gradient (g_max).")
+
+    return g_magnitude
+
+
+def b_value_from_diffusion_pulse_OGSE(
+    g_magnitudes: Union[np.ndarray, float],
+    pulse_durations: Union[np.ndarray, float],
+    frequencies: Union[np.ndarray, float],
+    scanner_parameters: ScannerParameters,
+) -> Union[np.ndarray, float]:
+    """Compute the b-value for a trapezoidal-approximated cosine-modulated OGSE sequence.
+
+    :param g_magnitudes: Gradient magnitude G in T/m
+    :param pulse_durations: Pulse duration delta in seconds [s]
+    :param frequencies: Oscillation frequency in Hz
+    :param scanner_parameters: ScannerParameters containing hardware limits
+    :return: b-values in s/mm² (or matching SI units based on GAMMA definition)
+    """
+    if np.any(g_magnitudes > scanner_parameters.g_max):
+        raise ValueError(
+            "Gradient magnitude exceeds scanner maximum gradient (g_max)."
+        )
+
+    g_max = scanner_parameters.g_max
+    s_max = scanner_parameters.s_max
+    t_rise = g_max / s_max
+
+    n = pulse_durations * frequencies
+    plateau_time = (pulse_durations - (6 * n + 1) * t_rise) / (4 * n)
+
+    term_1 = (91 * n * (t_rise**3)) / 15
+    term_2 = (8 * n * (plateau_time**3)) / 3
+    term_3 = (t_rise**3) / 30
+    term_4 = 12 * n * t_rise * (plateau_time**2)
+    term_5 = (46 * n * (t_rise**2) * plateau_time) / 3
+
+    factor = term_1 + term_2 + term_3 + term_4 + term_5
+
+    b_values = (g_magnitudes * GAMMA) ** 2 * factor
+
+    return b_values
