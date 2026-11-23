@@ -287,8 +287,7 @@ def diffusion_pulse_from_echo_time(echo_time: np.ndarray, scanner_parameters: Sc
     return pulse_duration, pulse_interval, pulse_magnitude
 
 
-
-def Minimal_echo_time(scanner_parameters: ScannerParameters):
+def minimal_echo_time(scanner_parameters: ScannerParameters):
     """
     :param scanner_parameters: Scan parameters
     :return: The minimal echo time in seconds
