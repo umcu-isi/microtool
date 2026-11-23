@@ -410,7 +410,7 @@ class DiffusionAcquisitionScheme(AcquisitionScheme):
             # TODO: Change DiffusionPulseMagnitude scale to 1000 or 10000?
             'DiffusionPulseMagnitude': AcquisitionParameters(
                 values=pulse_magnitudes, unit=GRADIENT_UNIT, scale=1. * unit('mT/mm'), symbol="|G|", lower_bound=0.0,
-                upper_bound=0.528 * unit('mT/mm')
+                upper_bound=scanner_parameters.g_max * unit('mT/mm')
             ),
             'DiffusionGradientAnglePhi': AcquisitionParameters(
                 values=phi, unit='rad', scale=1., symbol=r"$\phi$", lower_bound=None, fixed=True
